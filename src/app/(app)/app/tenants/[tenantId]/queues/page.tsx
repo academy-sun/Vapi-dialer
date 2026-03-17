@@ -135,8 +135,8 @@ function QueueFormFields({
           </select>
         </div>
       )}
-      <div className={isEdit ? "col-span-1" : ""}>
-        <div className="grid grid-cols-2 gap-3">
+      <div className="col-span-2">
+        <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="form-label">Concorrência</label>
             <input className="form-input" type="number" min="1" max="10" value={form.concurrency}
@@ -148,6 +148,23 @@ function QueueFormFields({
             <input className="form-input" type="number" min="1" max="10" value={form.max_attempts}
               onChange={(e) => update("max_attempts", e.target.value)} />
             <p className="text-xs text-gray-400 mt-1">Por lead</p>
+          </div>
+          <div>
+            <label className="form-label">Espera entre tentativas</label>
+            <div className="relative">
+              <input
+                className="form-input pr-16"
+                type="number"
+                min="1"
+                max="10080"
+                value={form.retry_delay_minutes ?? "30"}
+                onChange={(e) => update("retry_delay_minutes", e.target.value)}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+                min
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Após não atender</p>
           </div>
         </div>
       </div>
@@ -244,7 +261,8 @@ function CreateQueueModal({
 }) {
   const [form, setForm] = useState({
     name: "", assistant_id: "", phone_number_id: "",
-    lead_list_id: "", concurrency: "3", max_attempts: "3", webhook_url: "",
+    lead_list_id: "", concurrency: "3", max_attempts: "3",
+    retry_delay_minutes: "30", webhook_url: "",
     allowed_days: "1,2,3,4,5", time_start: "09:00", time_end: "18:00",
     timezone: "America/Sao_Paulo",
   });
@@ -660,6 +678,10 @@ export default function QueuesPage() {
                         <span className="text-gray-200">·</span>
                         <span className="text-xs text-gray-500">
                           Tentativas: <span className="font-medium text-gray-700">{q.max_attempts}</span>
+                        </span>
+                        <span className="text-gray-200">·</span>
+                        <span className="text-xs text-gray-500">
+                          Intervalo: <span className="font-medium text-gray-700">{q.retry_delay_minutes ?? 30} min</span>
                         </span>
                         {(() => {
                           const days = Array.isArray(q.allowed_days) ? (q.allowed_days as unknown as number[]) : [];
