@@ -118,24 +118,24 @@ async function handleScheduleCallback(
 
   // Inserir callback_request
   await service.from("callback_requests").insert({
-    tenant_id: tenantId,
-    lead_id: lead.id,
+    tenant_id:     tenantId,
+    lead_id:       lead.id,
     dial_queue_id: queue.id,
-    callback_at: callbackAtIso,
-    timezone: timezone ?? "America/Sao_Paulo",
-    reason: reason ?? null,
-    source: "assistant",
-    status: "scheduled",
-    vapi_call_id: vapiCallId ?? null,
+    callback_at:   callbackAtIso,
+    timezone:      timezone ?? "America/Sao_Paulo",
+    reason:        reason ?? null,
+    source:        "assistant",
+    status:        "scheduled",
+    vapi_call_id:  vapiCallId ?? null,
   });
 
   // Atualizar lead
   await service
     .from("leads")
     .update({
-      status: "callbackScheduled",
+      status:          "callbackScheduled",
       next_attempt_at: callbackAtIso,
-      last_outcome: "callback",
+      last_outcome:    "callback",
     })
     .eq("id", lead.id);
 
@@ -147,14 +147,23 @@ async function handleEndOfCallReport(
   message: Record<string, unknown>,
   service: ReturnType<typeof createServiceClient>
 ) {
-  const call = message.call as Record<string, unknown> | undefined;
+  const call       = message.call as Record<string, unknown> | undefined;
   const vapiCallId = call?.id as string | undefined;
   if (!vapiCallId) return;
 
   const endedReason = (message.endedReason as string) ?? null;
-  const cost        = (message.cost as number)        ?? null;
-  const transcript  = (message.transcript as string)  ?? null;
-  const summary     = (message.analysis as Record<string, unknown>)?.summary as string ?? null;
+  const cost        = (message.cost        as number) ?? null;
+  const transcript  = (message.transcript  as string) ?? null;
+  const summary     = (message.analysis    as Record<string, unknown>)?.summary as string ?? null;
+
+  // Dados completos para repassar ao webhook de saída
+  const callData = {
+    vapiCallId,
+    transcript,
+    summary,
+    cost,
+    vapiMessage: message, // payload completo do Vapi
+  };
 
   // ── Idempotência: verificar se call_record já existe ──
   const { data: existing } = await service
@@ -178,13 +187,12 @@ async function handleEndOfCallReport(
       tenantId,
       endedReason,
       service,
-      { vapiCallId, transcript, summary, cost },
+      callData,
     );
     return;
   }
 
   // ── Fallback: call_record não encontrado (race condition ou teste manual) ──
-  // Tentar localizar o lead pelo número de telefone do cliente
   const customerNumber = (call?.customer as Record<string, unknown>)?.number as string | undefined;
   if (!customerNumber) return;
 
@@ -199,7 +207,6 @@ async function handleEndOfCallReport(
 
   if (!lead) return;
 
-  // Buscar a dial_queue associada
   const { data: queue } = await service
     .from("dial_queues")
     .select("id")
@@ -212,7 +219,6 @@ async function handleEndOfCallReport(
 
   if (!queue) return;
 
-  // Inserir call_record tardio e atualizar lead
   await service.from("call_records").insert({
     tenant_id:     tenantId,
     dial_queue_id: queue.id,
@@ -225,21 +231,24 @@ async function handleEndOfCallReport(
     summary,
   });
 
-  await updateLeadAfterCall(lead.id, queue.id, tenantId, endedReason, service, { vapiCallId, transcript, summary, cost });
+  await updateLeadAfterCall(lead.id, queue.id, tenantId, endedReason, service, callData);
+}
+
+interface CallData {
+  vapiCallId?:  string;
+  transcript?:  string | null;
+  summary?:     string | null;
+  cost?:        number | null;
+  vapiMessage?: Record<string, unknown>; // payload completo do end-of-call-report
 }
 
 async function updateLeadAfterCall(
-  leadId: string,
-  queueId: string,
-  tenantId: string,
+  leadId:      string,
+  queueId:     string,
+  tenantId:    string,
   endedReason: string | null,
-  service: ReturnType<typeof createServiceClient>,
-  callData?: {
-    vapiCallId?: string;
-    transcript?: string | null;
-    summary?: string | null;
-    cost?: number | null;
-  }
+  service:     ReturnType<typeof createServiceClient>,
+  callData?:   CallData
 ) {
   // Verificar se há callback scheduled futuro
   const { data: pendingCallback } = await service
@@ -254,12 +263,10 @@ async function updateLeadAfterCall(
     .single();
 
   if (pendingCallback) {
-    // Não sobrescrever — callback já agendado
     await service
       .from("leads")
       .update({ status: "callbackScheduled", last_outcome: endedReason })
       .eq("id", leadId);
-    // Disparar webhook de saída mesmo em callback
     await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "callbackScheduled", service, callData);
     return;
   }
@@ -281,24 +288,22 @@ async function updateLeadAfterCall(
       .eq("tenant_id", tenantId)
       .single();
 
-    const attempts = (lead?.attempt_count ?? 0);
-    const maxAttempts = queueInfo?.max_attempts ?? 3;
-    const retryDelay = queueInfo?.retry_delay_minutes ?? 30;
+    const attempts    = lead?.attempt_count       ?? 0;
+    const maxAttempts = queueInfo?.max_attempts   ?? 3;
+    const retryDelay  = queueInfo?.retry_delay_minutes ?? 30;
 
     if (attempts >= maxAttempts) {
-      // Esgotou todas as tentativas → marcar como falha definitiva
       await service
         .from("leads")
         .update({ status: "failed", last_outcome: endedReason })
         .eq("id", leadId);
       await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
-      // Ainda tem tentativas → volta para fila com delay de retry
       const nextAt = new Date(Date.now() + retryDelay * 60 * 1000).toISOString();
       await service
         .from("leads")
         .update({
-          status:          "queued",  // volta para fila (não "failed")
+          status:          "queued",
           last_outcome:    endedReason,
           next_attempt_at: nextAt,
         })
@@ -314,20 +319,15 @@ async function updateLeadAfterCall(
   }
 }
 
-// ── Outbound webhook: envia resultado da chamada para URL externa (n8n, Zapier, etc.) ──
+// ── Outbound webhook: envia resultado rico da chamada para URL externa (n8n, Zapier, etc.) ──
 async function fireOutboundWebhook(
-  leadId: string,
-  queueId: string,
-  tenantId: string,
+  leadId:      string,
+  queueId:     string,
+  tenantId:    string,
   endedReason: string | null,
-  leadStatus: string,
-  service: ReturnType<typeof createServiceClient>,
-  callData?: {
-    vapiCallId?: string;
-    transcript?: string | null;
-    summary?: string | null;
-    cost?: number | null;
-  }
+  leadStatus:  string,
+  service:     ReturnType<typeof createServiceClient>,
+  callData?:   CallData
 ) {
   // Buscar webhook_url da fila
   const { data: queueInfo } = await service
@@ -346,22 +346,107 @@ async function fireOutboundWebhook(
     .eq("id", leadId)
     .single();
 
+  // ── Extrair campos ricos do payload completo do Vapi ──
+  const msg      = callData?.vapiMessage ?? {};
+  const artifact = (msg.artifact ?? {})   as Record<string, unknown>;
+  const call     = (msg.call     ?? {})   as Record<string, unknown>;
+  const customer = (msg.customer ?? call.customer ?? {}) as Record<string, unknown>;
+  const assistant= (msg.assistant ?? {}) as Record<string, unknown>;
+
+  // Recordings
+  const recordingUrl       = (artifact.recordingUrl       ?? msg.recordingUrl)       as string | null ?? null;
+  const stereoRecordingUrl = (artifact.stereoRecordingUrl ?? msg.stereoRecordingUrl) as string | null ?? null;
+  const recording          = (artifact.recording          ?? null) as Record<string, unknown> | null;
+
+  // Transcript
+  const transcript = (artifact.transcript ?? callData?.transcript ?? msg.transcript) as string | null ?? null;
+
+  // Messages (conversa completa)
+  const messages              = (artifact.messages              ?? msg.messages              ?? []) as unknown[];
+  const messagesOpenAIFormatted = (artifact.messagesOpenAIFormatted ?? []) as unknown[];
+
+  // Analysis / structured outputs
+  const structuredOutputs = (artifact.structuredOutputs ?? {}) as Record<string, unknown>;
+  const analysis          = (msg.analysis ?? {}) as Record<string, unknown>;
+  const summary           = (analysis.summary ?? callData?.summary ?? null) as string | null;
+
+  // Timing & duration
+  const startedAt       = (msg.startedAt       ?? null) as string | null;
+  const endedAt         = (msg.endedAt         ?? null) as string | null;
+  const durationSeconds = (msg.durationSeconds ?? null) as number | null;
+  const durationMinutes = (msg.durationMinutes ?? null) as number | null;
+
+  // Cost
+  const cost          = (msg.cost ?? callData?.cost ?? null) as number | null;
+  const costBreakdown = (msg.costBreakdown ?? null) as Record<string, unknown> | null;
+  const costs         = (msg.costs ?? []) as unknown[];
+
+  // Timestamp do payload original
+  const timestamp = (msg.timestamp ?? null) as number | null;
+
   const payload = {
+    // ── Metadados do sistema ──
     event:          "call.completed",
+    fired_at:       new Date().toISOString(),
     tenant_id:      tenantId,
     queue_id:       queueId,
     queue_name:     queueInfo.name,
     lead_id:        leadId,
-    phone_e164:     lead?.phone_e164 ?? null,
-    lead_data:      lead?.data_json ?? {},
-    attempt_count:  lead?.attempt_count ?? 0,
     lead_status:    leadStatus,
-    ended_reason:   endedReason,
-    vapi_call_id:   callData?.vapiCallId ?? null,
-    transcript:     callData?.transcript ?? null,
-    summary:        callData?.summary ?? null,
-    cost:           callData?.cost ?? null,
-    fired_at:       new Date().toISOString(),
+    attempt_count:  lead?.attempt_count ?? 0,
+
+    // ── Dados do lead ──
+    lead: {
+      phone_e164: lead?.phone_e164 ?? null,
+      data:       lead?.data_json  ?? {},
+    },
+
+    // ── Resultado da chamada ──
+    call: {
+      vapi_call_id:    callData?.vapiCallId ?? null,
+      ended_reason:    endedReason,
+      started_at:      startedAt,
+      ended_at:        endedAt,
+      duration_seconds: durationSeconds,
+      duration_minutes: durationMinutes,
+      timestamp,
+      id:              call.id        ?? callData?.vapiCallId ?? null,
+      type:            call.type      ?? null,
+      status:          call.status    ?? null,
+      metadata:        call.metadata  ?? null,
+    },
+
+    // ── Cliente ──
+    customer: {
+      number: customer.number ?? lead?.phone_e164 ?? null,
+      name:   customer.name   ?? lead?.data_json?.name ?? null,
+    },
+
+    // ── Assistente ──
+    assistant: {
+      id:   (assistant.id   ?? null) as string | null,
+      name: (assistant.name ?? null) as string | null,
+    },
+
+    // ── Conteúdo da chamada ──
+    transcript,
+    summary,
+    messages,
+    messages_openai_formatted: messagesOpenAIFormatted,
+
+    // ── Gravações ──
+    recording_url:        recordingUrl,
+    stereo_recording_url: stereoRecordingUrl,
+    recording,
+
+    // ── Custo ──
+    cost,
+    cost_breakdown: costBreakdown,
+    costs,
+
+    // ── Análise estruturada (structuredOutputs do Vapi) ──
+    structured_outputs: structuredOutputs,
+    analysis,
   };
 
   try {
@@ -369,11 +454,9 @@ async function fireOutboundWebhook(
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(payload),
-      // Timeout: não bloquear o webhook do Vapi por mais de 5s
-      signal:  AbortSignal.timeout(5000),
+      signal:  AbortSignal.timeout(8000), // 8s — payload maior, mais tempo
     });
   } catch {
-    // Logar mas não falhar — o resultado já foi salvo no banco
     console.error("[outbound-webhook] Erro ao enviar para", queueInfo.webhook_url);
   }
 }
