@@ -31,23 +31,36 @@ export async function POST(req: NextRequest, { params }: Params) {
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "Campo 'file' obrigatório" }, { status: 400 });
 
-  const csvText = await file.text();
-  const lines = csvText.split(/\r?\n/).filter(Boolean);
+  const rawText = await file.text();
+  // Remove BOM (Excel UTF-8 salva com \uFEFF no início)
+  const csvText = rawText.replace(/^\uFEFF/, "");
+  const lines = csvText.split(/\r?\n/).filter((l) => l.trim() !== "");
   if (lines.length < 2) {
     return NextResponse.json({ error: "CSV vazio ou sem dados" }, { status: 400 });
   }
 
-  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
-  const phoneIdx = headers.findIndex((h) => h.toLowerCase() === "phone");
+  // Auto-detectar separador: Excel BR usa ";" por padrão, internacional usa ","
+  const firstLine = lines[0];
+  const sep = firstLine.includes(";") && firstLine.split(";").length > firstLine.split(",").length
+    ? ";"
+    : ",";
+
+  const headers = firstLine.split(sep).map((h) => h.trim().replace(/^"|"$/g, "").toLowerCase());
+  const phoneIdx = headers.findIndex((h) => h === "phone" || h === "telefone" || h === "fone" || h === "celular");
   if (phoneIdx === -1) {
-    return NextResponse.json({ error: "CSV deve ter coluna 'phone'" }, { status: 400 });
+    return NextResponse.json({
+      error: `Coluna de telefone não encontrada. O CSV deve ter uma coluna chamada "phone", "telefone", "fone" ou "celular". Colunas encontradas: ${headers.join(", ")}`,
+    }, { status: 400 });
   }
+
+  // Recriar headers com capitalização original para data_json
+  const headersOriginal = firstLine.split(sep).map((h) => h.trim().replace(/^"|"$/g, ""));
 
   const toInsert: object[] = [];
   const errors: string[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+    const cols = lines[i].split(sep).map((c) => c.trim().replace(/^"|"$/g, ""));
     const rawPhone = cols[phoneIdx];
     if (!rawPhone) continue;
 
@@ -58,7 +71,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     const dataJson: Record<string, string> = {};
-    headers.forEach((h, idx) => {
+    headersOriginal.forEach((h, idx) => {
       if (idx !== phoneIdx && cols[idx]) dataJson[h] = cols[idx];
     });
 

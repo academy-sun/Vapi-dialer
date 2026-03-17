@@ -15,6 +15,8 @@ import {
   Download,
   UserPlus,
   Loader2,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 interface LeadList {
@@ -241,6 +243,9 @@ export default function LeadsPage() {
   const [showAddLead, setShowAddLead]       = useState(false);
   const [dragOver, setDragOver]             = useState(false);
   const [selectedFile, setSelectedFile]     = useState<File | null>(null);
+  // Edição inline de nome da lista
+  const [editingListId, setEditingListId]   = useState<string | null>(null);
+  const [editingListName, setEditingListName] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const { toasts, show: showToast } = useToast();
 
@@ -273,6 +278,33 @@ export default function LeadsPage() {
       setLists((prev) => [data.leadList, ...prev]);
       setSelectedListId(data.leadList.id);
       showToast(`Lista "${data.leadList.name}" criada!`);
+    }
+  }
+
+  async function renameList(listId: string, newName: string) {
+    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ name: newName }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error ?? "Erro ao renomear", "error"); return; }
+    setLists((prev) => prev.map((l) => l.id === listId ? { ...l, name: newName } : l));
+    setEditingListId(null);
+    showToast("Lista renomeada!");
+  }
+
+  async function deleteList(listId: string, listName: string) {
+    if (!confirm(`Apagar a lista "${listName}"? Todos os leads serão removidos.`)) return;
+    const res = await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}`, { method: "DELETE" });
+    if (res.ok) {
+      setLists((prev) => prev.filter((l) => l.id !== listId));
+      if (selectedListId === listId) {
+        const remaining = lists.filter((l) => l.id !== listId);
+        setSelectedListId(remaining[0]?.id ?? "");
+        setLeads([]);
+      }
+      showToast("Lista removida.");
     }
   }
 
@@ -378,34 +410,92 @@ export default function LeadsPage() {
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Suas Listas</h2>
             {lists.map((list) => (
-              <button
+              <div
                 key={list.id}
-                onClick={() => setSelectedListId(list.id)}
-                className={`w-full text-left card px-4 py-4 transition-all ${
+                className={`card transition-all ${
                   list.id === selectedListId
                     ? "ring-2 ring-indigo-500 bg-indigo-50/50"
                     : "hover:shadow-md hover:border-gray-200"
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                      list.id === selectedListId ? "bg-indigo-100" : "bg-gray-100"
-                    }`}>
-                      <Users className={`w-4 h-4 ${list.id === selectedListId ? "text-indigo-600" : "text-gray-500"}`} />
+                {editingListId === list.id ? (
+                  /* ── Modo edição inline ── */
+                  <div className="px-4 py-3 flex items-center gap-2">
+                    <input
+                      type="text"
+                      className="form-input flex-1 text-sm py-1.5"
+                      value={editingListName}
+                      onChange={(e) => setEditingListName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") renameList(list.id, editingListName);
+                        if (e.key === "Escape") setEditingListId(null);
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => renameList(list.id, editingListName)}
+                      disabled={!editingListName.trim()}
+                      className="btn-primary btn-sm px-2 py-1"
+                      title="Salvar"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setEditingListId(null)}
+                      className="btn-secondary btn-sm px-2 py-1"
+                      title="Cancelar"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  /* ── Modo normal ── */
+                  <div
+                    className="px-4 py-4 flex items-center justify-between cursor-pointer"
+                    onClick={() => setSelectedListId(list.id)}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        list.id === selectedListId ? "bg-indigo-100" : "bg-gray-100"
+                      }`}>
+                        <Users className={`w-4 h-4 ${list.id === selectedListId ? "text-indigo-600" : "text-gray-500"}`} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 truncate">{list.name}</p>
+                        <p className="text-xs text-gray-400">
+                          {new Date(list.created_at).toLocaleDateString("pt-BR")}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{list.name}</p>
-                      <p className="text-xs text-gray-400">
-                        {new Date(list.created_at).toLocaleDateString("pt-BR")}
-                      </p>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingListId(list.id);
+                          setEditingListName(list.name);
+                        }}
+                        className="w-7 h-7 flex items-center justify-center rounded hover:bg-indigo-100 text-gray-400 hover:text-indigo-600 transition-colors"
+                        title="Renomear lista"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteList(list.id, list.name);
+                        }}
+                        className="w-7 h-7 flex items-center justify-center rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+                        title="Apagar lista"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <ChevronRight className={`w-4 h-4 ${
+                        list.id === selectedListId ? "text-indigo-500" : "text-gray-300"
+                      }`} />
                     </div>
                   </div>
-                  <ChevronRight className={`w-4 h-4 ${
-                    list.id === selectedListId ? "text-indigo-500" : "text-gray-300"
-                  }`} />
-                </div>
-              </button>
+                )}
+              </div>
             ))}
           </div>
 

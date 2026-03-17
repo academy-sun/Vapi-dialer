@@ -12,6 +12,8 @@ import {
   DollarSign,
   Calendar,
   Filter,
+  Info,
+  Loader2,
 } from "lucide-react";
 
 interface Call {
@@ -85,6 +87,14 @@ export default function CallsPage() {
 
   useEffect(() => { loadCalls(); }, [tenantId]);
 
+  // Auto-refresh a cada 8s enquanto houver chamadas sem ended_reason (em andamento)
+  useEffect(() => {
+    const hasInProgress = calls.some((c) => !c.ended_reason);
+    if (!hasInProgress) return;
+    const id = setInterval(() => loadCalls(), 8_000);
+    return () => clearInterval(id);
+  }, [calls, tenantId]);
+
   async function loadCalls(showRefresh = false) {
     if (showRefresh) setRefreshing(true);
     else setLoading(true);
@@ -108,7 +118,8 @@ export default function CallsPage() {
     return matchReason && matchPhone;
   });
 
-  const totalCost = calls.reduce((sum, c) => sum + (c.cost ?? 0), 0);
+  const totalCost   = calls.reduce((sum, c) => sum + (c.cost ?? 0), 0);
+  const inProgress  = calls.filter((c) => !c.ended_reason).length;
 
   return (
     <div>
@@ -129,6 +140,26 @@ export default function CallsPage() {
           Atualizar
         </button>
       </div>
+
+      {/* Aviso: chamadas em andamento sem webhook configurado */}
+      {inProgress > 0 && (
+        <div className="alert-warning mb-5 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold">
+              {inProgress} {inProgress === 1 ? "chamada aparece" : "chamadas aparecem"} como "Em andamento"
+            </p>
+            <p className="text-sm text-amber-700 mt-0.5">
+              O status só atualiza quando o Vapi envia o evento <code className="bg-amber-100 px-1 rounded font-mono text-xs">end-of-call-report</code> via webhook.
+              {" "}Confirme que a URL do webhook está configurada no painel Vapi{" "}
+              (<strong>Settings → Webhooks</strong>). Acesse{" "}
+              <strong>Configuração Vapi</strong> no menu para ver e copiar a URL correta.
+              A página atualiza automaticamente a cada 8s.{" "}
+              <Loader2 className="w-3 h-3 inline animate-spin text-amber-600" />
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       {calls.length > 0 && (
