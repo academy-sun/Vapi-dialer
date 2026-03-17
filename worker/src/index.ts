@@ -21,7 +21,8 @@ import crypto from "crypto";
 // Configuração
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SUPABASE_URL        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+// Aceita NEXT_PUBLIC_SUPABASE_URL (padrão do Next.js) OU SUPABASE_URL (Railway/backend puro)
+const SUPABASE_URL        = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const ENCRYPTION_KEY_B64  = process.env.ENCRYPTION_KEY_BASE64!;
 const POLL_INTERVAL_MS    = Number(process.env.POLL_INTERVAL_MS   ?? 5_000);
@@ -388,13 +389,14 @@ async function main(): Promise<void> {
 
   // Validar variáveis obrigatórias
   const missing: string[] = [];
-  if (!SUPABASE_URL)         missing.push("NEXT_PUBLIC_SUPABASE_URL");
+  if (!SUPABASE_URL)         missing.push("SUPABASE_URL (ou NEXT_PUBLIC_SUPABASE_URL)");
   if (!SUPABASE_SERVICE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
   if (!ENCRYPTION_KEY_B64)   missing.push("ENCRYPTION_KEY_BASE64");
 
   if (missing.length > 0) {
     console.error("[worker] ✗ Variáveis de ambiente obrigatórias ausentes:");
     missing.forEach((v) => console.error(`    - ${v}`));
+    console.error("[worker]   Configure essas variáveis no painel do Railway → Variables.");
     process.exit(1);
   }
 
