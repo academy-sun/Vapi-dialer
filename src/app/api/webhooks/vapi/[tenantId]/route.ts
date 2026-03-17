@@ -178,6 +178,7 @@ async function handleEndOfCallReport(
       tenantId,
       endedReason,
       service,
+      { vapiCallId, transcript, summary, cost },
     );
     return;
   }
@@ -224,7 +225,7 @@ async function handleEndOfCallReport(
     summary,
   });
 
-  await updateLeadAfterCall(lead.id, queue.id, tenantId, endedReason, service);
+  await updateLeadAfterCall(lead.id, queue.id, tenantId, endedReason, service, { vapiCallId, transcript, summary, cost });
 }
 
 async function updateLeadAfterCall(
@@ -232,7 +233,13 @@ async function updateLeadAfterCall(
   queueId: string,
   tenantId: string,
   endedReason: string | null,
-  service: ReturnType<typeof createServiceClient>
+  service: ReturnType<typeof createServiceClient>,
+  callData?: {
+    vapiCallId?: string;
+    transcript?: string | null;
+    summary?: string | null;
+    cost?: number | null;
+  }
 ) {
   // Verificar se há callback scheduled futuro
   const { data: pendingCallback } = await service
@@ -252,6 +259,8 @@ async function updateLeadAfterCall(
       .from("leads")
       .update({ status: "callbackScheduled", last_outcome: endedReason })
       .eq("id", leadId);
+    // Disparar webhook de saída mesmo em callback
+    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "callbackScheduled", service, callData);
     return;
   }
 
@@ -282,6 +291,7 @@ async function updateLeadAfterCall(
         .from("leads")
         .update({ status: "failed", last_outcome: endedReason })
         .eq("id", leadId);
+      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
       // Ainda tem tentativas → volta para fila com delay de retry
       const nextAt = new Date(Date.now() + retryDelay * 60 * 1000).toISOString();
@@ -293,11 +303,77 @@ async function updateLeadAfterCall(
           next_attempt_at: nextAt,
         })
         .eq("id", leadId);
+      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "queued", service, callData);
     }
   } else {
     await service
       .from("leads")
       .update({ status: "completed", last_outcome: endedReason })
       .eq("id", leadId);
+    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "completed", service, callData);
+  }
+}
+
+// ── Outbound webhook: envia resultado da chamada para URL externa (n8n, Zapier, etc.) ──
+async function fireOutboundWebhook(
+  leadId: string,
+  queueId: string,
+  tenantId: string,
+  endedReason: string | null,
+  leadStatus: string,
+  service: ReturnType<typeof createServiceClient>,
+  callData?: {
+    vapiCallId?: string;
+    transcript?: string | null;
+    summary?: string | null;
+    cost?: number | null;
+  }
+) {
+  // Buscar webhook_url da fila
+  const { data: queueInfo } = await service
+    .from("dial_queues")
+    .select("webhook_url, name")
+    .eq("id", queueId)
+    .eq("tenant_id", tenantId)
+    .single();
+
+  if (!queueInfo?.webhook_url) return; // Sem webhook configurado
+
+  // Buscar dados do lead
+  const { data: lead } = await service
+    .from("leads")
+    .select("phone_e164, data_json, attempt_count")
+    .eq("id", leadId)
+    .single();
+
+  const payload = {
+    event:          "call.completed",
+    tenant_id:      tenantId,
+    queue_id:       queueId,
+    queue_name:     queueInfo.name,
+    lead_id:        leadId,
+    phone_e164:     lead?.phone_e164 ?? null,
+    lead_data:      lead?.data_json ?? {},
+    attempt_count:  lead?.attempt_count ?? 0,
+    lead_status:    leadStatus,
+    ended_reason:   endedReason,
+    vapi_call_id:   callData?.vapiCallId ?? null,
+    transcript:     callData?.transcript ?? null,
+    summary:        callData?.summary ?? null,
+    cost:           callData?.cost ?? null,
+    fired_at:       new Date().toISOString(),
+  };
+
+  try {
+    await fetch(queueInfo.webhook_url, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(payload),
+      // Timeout: não bloquear o webhook do Vapi por mais de 5s
+      signal:  AbortSignal.timeout(5000),
+    });
+  } catch {
+    // Logar mas não falhar — o resultado já foi salvo no banco
+    console.error("[outbound-webhook] Erro ao enviar para", queueInfo.webhook_url);
   }
 }

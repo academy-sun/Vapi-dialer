@@ -36,6 +36,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     concurrency = 3,
     max_attempts = 3,
     retry_delay_minutes = 30,
+    webhook_url = null,
   } = body;
 
   if (!name || !assistant_id || !phone_number_id || !lead_list_id) {
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       concurrency,
       max_attempts,
       retry_delay_minutes,
+      webhook_url,
     })
     .select()
     .single();

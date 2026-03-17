@@ -17,6 +17,11 @@ import {
   Loader2,
   Pencil,
   Trash2,
+  Link2,
+  Copy,
+  RefreshCw,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 interface LeadList {
@@ -227,6 +232,177 @@ function downloadTemplate() {
   a.download = "template_leads.csv";
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/* ── Painel de Webhook de entrada ── */
+function InboundWebhookPanel({
+  tenantId,
+  listId,
+  listName,
+  onToast,
+}: {
+  tenantId: string;
+  listId: string;
+  listName: string;
+  onToast: (msg: string, type?: "success" | "error") => void;
+}) {
+  const [secret, setSecret]           = useState<string | null>(null);
+  const [loading, setLoading]         = useState(false);
+  const [generating, setGenerating]   = useState(false);
+  const [showSecret, setShowSecret]   = useState(false);
+  const [copied, setCopied]           = useState<"url" | "secret" | null>(null);
+
+  const webhookUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/api/webhooks/leads/${tenantId}/${listId}`
+    : `/api/webhooks/leads/${tenantId}/${listId}`;
+
+  useEffect(() => {
+    setSecret(null);
+    setShowSecret(false);
+    setLoading(true);
+    fetch(`/api/tenants/${tenantId}/lead-lists/${listId}/webhook`)
+      .then((r) => r.json())
+      .then((d) => { setSecret(d.webhook_secret ?? null); })
+      .finally(() => setLoading(false));
+  }, [tenantId, listId]);
+
+  async function generateSecret() {
+    setGenerating(true);
+    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}/webhook`, { method: "POST" });
+    const data = await res.json();
+    if (data.webhook_secret) {
+      setSecret(data.webhook_secret);
+      setShowSecret(true);
+      onToast("Webhook secret gerado!");
+    } else {
+      onToast(data.error ?? "Erro ao gerar secret", "error");
+    }
+    setGenerating(false);
+  }
+
+  async function copyToClipboard(text: string, field: "url" | "secret") {
+    await navigator.clipboard.writeText(text);
+    setCopied(field);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  if (loading) {
+    return <div className="skeleton h-32 rounded-xl" />;
+  }
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+              <Link2 className="w-4 h-4 text-indigo-500" />
+              Webhook de Entrada
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Receba leads automaticamente de CRMs, n8n, formulários, etc.
+            </p>
+          </div>
+          {secret && (
+            <button
+              onClick={generateSecret}
+              disabled={generating}
+              className="btn-secondary text-xs gap-1.5"
+              title="Regenerar secret"
+            >
+              {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              Regenerar
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="card-body space-y-3">
+        {/* URL */}
+        <div>
+          <label className="form-label text-xs">URL do Webhook (POST)</label>
+          <div className="flex gap-2">
+            <input
+              readOnly
+              value={webhookUrl}
+              className="form-input font-mono text-xs bg-gray-50 flex-1"
+            />
+            <button
+              onClick={() => copyToClipboard(webhookUrl, "url")}
+              className={`btn-secondary px-3 shrink-0 ${copied === "url" ? "text-emerald-600" : ""}`}
+              title="Copiar URL"
+            >
+              {copied === "url" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Secret */}
+        {secret ? (
+          <div>
+            <label className="form-label text-xs">Secret (Authorization: Bearer)</label>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                type={showSecret ? "text" : "password"}
+                value={secret}
+                className="form-input font-mono text-xs bg-gray-50 flex-1"
+              />
+              <button
+                onClick={() => setShowSecret((p) => !p)}
+                className="btn-secondary px-3 shrink-0"
+                title={showSecret ? "Ocultar" : "Mostrar"}
+              >
+                {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+              <button
+                onClick={() => copyToClipboard(secret, "secret")}
+                className={`btn-secondary px-3 shrink-0 ${copied === "secret" ? "text-emerald-600" : ""}`}
+                title="Copiar secret"
+              >
+                {copied === "secret" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-800 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+            <div>
+              <p className="font-semibold">Sem secret configurado</p>
+              <p className="mt-0.5 text-amber-700">
+                Sem secret, qualquer requisição é aceita (útil para testes). Gere um secret para proteger o endpoint em produção.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Body de exemplo */}
+        <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5">
+          <p className="text-xs font-semibold text-gray-500 mb-1.5">Exemplo de body JSON:</p>
+          <pre className="text-xs font-mono text-gray-700 leading-relaxed whitespace-pre-wrap">
+{`{
+  "phone": "+5511999990001",
+  "name": "João Silva",
+  "company": "Empresa A"
+}`}
+          </pre>
+        </div>
+
+        {!secret && (
+          <button
+            onClick={generateSecret}
+            disabled={generating}
+            className="btn-primary w-full justify-center"
+          >
+            {generating ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Gerando...</>
+            ) : (
+              <><Link2 className="w-4 h-4" /> Gerar Webhook Secret</>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -609,6 +785,16 @@ export default function LeadsPage() {
                 )}
               </div>
             </div>
+
+            {/* ── Webhook de Entrada ── */}
+            {selectedListId && (
+              <InboundWebhookPanel
+                tenantId={tenantId}
+                listId={selectedListId}
+                listName={activeList?.name ?? ""}
+                onToast={showToast}
+              />
+            )}
 
             {/* ── Tabela de leads ── */}
             <div>
