@@ -87,6 +87,20 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   }
 
+  // Verificar se há fila ativa (running) para esta lista.
+  // Se sim, o lead já entra como "queued" para ser processado imediatamente pelo worker.
+  const { data: activeQueue } = await service
+    .from("dial_queues")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("lead_list_id", listId)
+    .eq("status", "running")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  const leadStatus = activeQueue ? "queued" : "new";
+
   const { data: lead, error: insertError } = await service
     .from("leads")
     .insert({
@@ -94,7 +108,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       lead_list_id: listId,
       phone_e164:   parsed.format("E.164"),
       data_json,
-      status:       "new",
+      status:       leadStatus,
     })
     .select()
     .single();
@@ -109,5 +123,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ lead }, { status: 201 });
+  return NextResponse.json({
+    lead,
+    queued: leadStatus === "queued",
+    message: activeQueue
+      ? "Lead inserido e colocado na fila para discagem imediata"
+      : "Lead inserido. Inicie uma fila de discagem para ligar.",
+  }, { status: 201 });
 }

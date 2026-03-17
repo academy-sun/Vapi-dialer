@@ -81,6 +81,19 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   }
 
+  // Se houver fila ativa (running) para esta lista, inserir já como "queued"
+  const { data: activeQueue } = await service
+    .from("dial_queues")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("lead_list_id", leadListId)
+    .eq("status", "running")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .single();
+
+  const leadStatus = activeQueue ? "queued" : "new";
+
   const { data, error } = await service
     .from("leads")
     .insert({
@@ -88,7 +101,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       lead_list_id: leadListId,
       phone_e164:   parsed.format("E.164"),
       data_json,
-      status:       "new",
+      status:       leadStatus,
     })
     .select()
     .single();

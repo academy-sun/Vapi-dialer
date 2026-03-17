@@ -37,6 +37,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     max_attempts = 3,
     retry_delay_minutes = 30,
     webhook_url = null,
+    allowed_days,
+    allowed_time_window,
   } = body;
 
   if (!name || !assistant_id || !phone_number_id || !lead_list_id) {
@@ -60,6 +62,8 @@ export async function POST(req: NextRequest, { params }: Params) {
       max_attempts,
       retry_delay_minutes,
       webhook_url,
+      ...(allowed_days         !== undefined && { allowed_days }),
+      ...(allowed_time_window  !== undefined && { allowed_time_window }),
     })
     .select()
     .single();

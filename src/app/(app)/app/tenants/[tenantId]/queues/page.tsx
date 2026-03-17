@@ -27,6 +27,8 @@ interface Queue {
   retry_delay_minutes: number;
   lead_list_id: string;
   webhook_url?: string;
+  allowed_days?: unknown;       // JSONB from Supabase
+  allowed_time_window?: unknown; // JSONB from Supabase
 }
 interface Progress {
   queueStatus: string; total: number; done: number;
@@ -68,6 +70,16 @@ const LEAD_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   callbackScheduled: { label: "Callback agendado", color: "text-purple-600 bg-purple-50"},
 };
 
+const DAYS_CONFIG = [
+  { iso: 1, label: "Seg" },
+  { iso: 2, label: "Ter" },
+  { iso: 3, label: "Qua" },
+  { iso: 4, label: "Qui" },
+  { iso: 5, label: "Sex" },
+  { iso: 6, label: "Sáb" },
+  { iso: 7, label: "Dom" },
+];
+
 // ── Queue form shared fields ──
 function QueueFormFields({
   form,
@@ -80,6 +92,20 @@ function QueueFormFields({
   update: (k: string, v: string) => void;
   isEdit?: boolean;
 }) {
+  // allowed_days stored as comma-separated string "1,2,3,4,5"
+  const selectedDays: number[] = form.allowed_days
+    ? form.allowed_days.split(",").map(Number).filter(Boolean)
+    : [1, 2, 3, 4, 5];
+
+  function toggleDay(iso: number) {
+    const next = selectedDays.includes(iso)
+      ? selectedDays.filter((d) => d !== iso)
+      : [...selectedDays, iso].sort();
+    update("allowed_days", next.join(","));
+  }
+
+  const noRestriction = form.allowed_days === "";
+
   return (
     <div className="grid grid-cols-2 gap-4">
       <div className="col-span-2">
@@ -125,6 +151,73 @@ function QueueFormFields({
           </div>
         </div>
       </div>
+
+      {/* Janela de horário */}
+      <div className="col-span-2 border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50/50">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium text-gray-700">Horário permitido para ligações</label>
+          <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={noRestriction}
+              onChange={(e) => update("allowed_days", e.target.checked ? "" : "1,2,3,4,5")}
+              className="rounded"
+            />
+            Sem restrição (ligar 24h/7 dias)
+          </label>
+        </div>
+
+        {!noRestriction && (
+          <>
+            {/* Dias da semana */}
+            <div>
+              <p className="text-xs text-gray-500 mb-2">Dias da semana</p>
+              <div className="flex gap-1.5 flex-wrap">
+                {DAYS_CONFIG.map((d) => (
+                  <button
+                    key={d.iso}
+                    type="button"
+                    onClick={() => toggleDay(d.iso)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      selectedDays.includes(d.iso)
+                        ? "bg-indigo-600 text-white"
+                        : "bg-white border border-gray-200 text-gray-600 hover:border-indigo-300"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Horário */}
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="form-label text-xs">Início</label>
+                <input type="time" className="form-input text-sm" value={form.time_start ?? "09:00"}
+                  onChange={(e) => update("time_start", e.target.value)} />
+              </div>
+              <div>
+                <label className="form-label text-xs">Fim</label>
+                <input type="time" className="form-input text-sm" value={form.time_end ?? "18:00"}
+                  onChange={(e) => update("time_end", e.target.value)} />
+              </div>
+              <div>
+                <label className="form-label text-xs">Fuso horário</label>
+                <select className="select-native text-sm" value={form.timezone ?? "America/Sao_Paulo"}
+                  onChange={(e) => update("timezone", e.target.value)}>
+                  <option value="America/Sao_Paulo">São Paulo (BRT)</option>
+                  <option value="America/Manaus">Manaus (AMT)</option>
+                  <option value="America/Belem">Belém (BRT)</option>
+                  <option value="America/Recife">Recife (BRT)</option>
+                  <option value="America/Fortaleza">Fortaleza (BRT)</option>
+                  <option value="America/Noronha">Noronha (FNT)</option>
+                </select>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
       <div className="col-span-2">
         <label className="form-label flex items-center gap-1">
           <Link2 className="w-3.5 h-3.5 text-gray-400" />
@@ -152,6 +245,8 @@ function CreateQueueModal({
   const [form, setForm] = useState({
     name: "", assistant_id: "", phone_number_id: "",
     lead_list_id: "", concurrency: "3", max_attempts: "3", webhook_url: "",
+    allowed_days: "1,2,3,4,5", time_start: "09:00", time_end: "18:00",
+    timezone: "America/Sao_Paulo",
   });
   const [loading, setLoading] = useState(false);
 
@@ -197,14 +292,24 @@ function EditQueueModal({
   onClose: () => void;
   onSave: (id: string, form: Record<string, string>) => Promise<void>;
 }) {
+  // Parse allowed_days from the queue (JSONB array → comma string)
+  const existingDays = Array.isArray(queue.allowed_days)
+    ? (queue.allowed_days as unknown as number[]).join(",")
+    : "1,2,3,4,5";
+  const existingWindow = queue.allowed_time_window as unknown as { start?: string; end?: string; timezone?: string } | null;
+
   const [form, setForm] = useState({
-    name:              queue.name,
-    assistant_id:      queue.assistant_id,
-    phone_number_id:   queue.phone_number_id,
-    concurrency:       String(queue.concurrency),
-    max_attempts:      String(queue.max_attempts),
+    name:                queue.name,
+    assistant_id:        queue.assistant_id,
+    phone_number_id:     queue.phone_number_id,
+    concurrency:         String(queue.concurrency),
+    max_attempts:        String(queue.max_attempts),
     retry_delay_minutes: String(queue.retry_delay_minutes ?? 30),
-    webhook_url:       queue.webhook_url ?? "",
+    webhook_url:         queue.webhook_url ?? "",
+    allowed_days:        existingDays,
+    time_start:          existingWindow?.start ?? "09:00",
+    time_end:            existingWindow?.end   ?? "18:00",
+    timezone:            existingWindow?.timezone ?? "America/Sao_Paulo",
   });
   const [loading, setLoading] = useState(false);
 
@@ -395,16 +500,39 @@ export default function QueuesPage() {
     return () => clearInterval(interval);
   }, [queues, tenantId]);
 
+  function buildQueuePayload(form: Record<string, string>) {
+    // Converte allowed_days de "1,2,3,4,5" → [1,2,3,4,5]
+    const allowedDays = form.allowed_days
+      ? form.allowed_days.split(",").map(Number).filter(Boolean)
+      : []; // vazio = sem restrição
+
+    const allowedTimeWindow = form.allowed_days && form.allowed_days.length > 0
+      ? {
+          start:    form.time_start  ?? "09:00",
+          end:      form.time_end    ?? "18:00",
+          timezone: form.timezone    ?? "America/Sao_Paulo",
+        }
+      : { start: "00:00", end: "23:59", timezone: "America/Sao_Paulo" };
+
+    return {
+      name:                 form.name,
+      assistant_id:         form.assistant_id,
+      phone_number_id:      form.phone_number_id,
+      lead_list_id:         form.lead_list_id,
+      concurrency:          parseInt(form.concurrency),
+      max_attempts:         parseInt(form.max_attempts),
+      retry_delay_minutes:  parseInt(form.retry_delay_minutes ?? "30"),
+      webhook_url:          form.webhook_url?.trim() || null,
+      allowed_days:         allowedDays,
+      allowed_time_window:  allowedTimeWindow,
+    };
+  }
+
   async function createQueue(form: Record<string, string>) {
     const res = await fetch(`/api/tenants/${tenantId}/queues`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        concurrency:  parseInt(form.concurrency),
-        max_attempts: parseInt(form.max_attempts),
-        webhook_url:  form.webhook_url?.trim() || null,
-      }),
+      body: JSON.stringify(buildQueuePayload(form)),
     });
     const data = await res.json();
     if (data.queue) {
@@ -416,16 +544,11 @@ export default function QueuesPage() {
   }
 
   async function saveQueue(id: string, form: Record<string, string>) {
+    const payload = buildQueuePayload(form);
     const res = await fetch(`/api/tenants/${tenantId}/queues/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...form,
-        concurrency:          parseInt(form.concurrency),
-        max_attempts:         parseInt(form.max_attempts),
-        retry_delay_minutes:  parseInt(form.retry_delay_minutes ?? "30"),
-        webhook_url:          form.webhook_url?.trim() || null,
-      }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (data.queue) {
@@ -538,6 +661,22 @@ export default function QueuesPage() {
                         <span className="text-xs text-gray-500">
                           Tentativas: <span className="font-medium text-gray-700">{q.max_attempts}</span>
                         </span>
+                        {(() => {
+                          const days = Array.isArray(q.allowed_days) ? (q.allowed_days as unknown as number[]) : [];
+                          const tw = q.allowed_time_window as { start?: string; end?: string } | null;
+                          if (days.length > 0 && tw?.start && tw?.end) {
+                            const dayLabels = ["","Seg","Ter","Qua","Qui","Sex","Sáb","Dom"];
+                            return (
+                              <>
+                                <span className="text-gray-200">·</span>
+                                <span className="text-xs text-gray-500">
+                                  {days.map((d) => dayLabels[d]).join(" ")} {tw.start}–{tw.end}
+                                </span>
+                              </>
+                            );
+                          }
+                          return null;
+                        })()}
                         {q.webhook_url && (
                           <>
                             <span className="text-gray-200">·</span>

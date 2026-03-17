@@ -115,7 +115,14 @@ const WEEKDAY_MAP: Record<string, number> = {
   Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7,
 };
 
-function isWithinTimeWindow(allowedDays: number[], window: TimeWindow): boolean {
+function isWithinTimeWindow(
+  allowedDays: number[] | null | undefined,
+  window: TimeWindow | null | undefined
+): boolean {
+  // Se não configurado (lista vazia ou null) → sem restrição → sempre permitido
+  if (!allowedDays || allowedDays.length === 0) return true;
+  if (!window?.start || !window?.end || !window?.timezone)   return true;
+
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: window.timezone,
     weekday: "short",
@@ -130,7 +137,12 @@ function isWithinTimeWindow(allowedDays: number[], window: TimeWindow): boolean 
   const minStr     = parts.find((p) => p.type === "minute")?.value ?? "0";
 
   const isoDay = WEEKDAY_MAP[weekdayStr] ?? 1;
-  if (!allowedDays.includes(isoDay)) return false;
+  if (!allowedDays.includes(isoDay)) {
+    console.log(
+      `[worker] Fora do dia permitido (hoje=${isoDay}, permitidos=[${allowedDays.join(",")}])`
+    );
+    return false;
+  }
 
   const [startH, startM] = window.start.split(":").map(Number);
   const [endH,   endM  ] = window.end.split(":").map(Number);
@@ -139,7 +151,14 @@ function isWithinTimeWindow(allowedDays: number[], window: TimeWindow): boolean 
   const startMin = startH * 60 + startM;
   const endMin   = endH   * 60 + endM;
 
-  return nowMin >= startMin && nowMin < endMin;
+  if (nowMin < startMin || nowMin >= endMin) {
+    console.log(
+      `[worker] Fora do horário permitido (agora=${hourStr}:${minStr}, janela=${window.start}-${window.end} ${window.timezone})`
+    );
+    return false;
+  }
+
+  return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -275,7 +294,9 @@ async function processLead(
 
 async function processQueue(supabase: SupabaseClient, queue: DialQueue): Promise<void> {
   // ── Verificar janela de horário ──
-  if (!isWithinTimeWindow(queue.allowed_days, queue.allowed_time_window)) return;
+  // allowed_days vem como JSONB do Supabase; garantir array numérico antes de verificar
+  const allowedDays = Array.isArray(queue.allowed_days) ? (queue.allowed_days as unknown as number[]) : [];
+  if (!isWithinTimeWindow(allowedDays, queue.allowed_time_window)) return;
 
   // ── Contar chamadas ativas (status='calling') para esta fila ──
   const { count: activeCount } = await supabase

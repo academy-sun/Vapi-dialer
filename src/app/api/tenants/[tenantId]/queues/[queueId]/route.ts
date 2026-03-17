@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   // Campos editáveis
-  const allowed = ["name", "assistant_id", "phone_number_id", "concurrency", "max_attempts", "retry_delay_minutes", "webhook_url"];
+  const allowed = ["name", "assistant_id", "phone_number_id", "concurrency", "max_attempts", "retry_delay_minutes", "webhook_url", "allowed_days", "allowed_time_window"];
   const updates: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) updates[key] = body[key];
