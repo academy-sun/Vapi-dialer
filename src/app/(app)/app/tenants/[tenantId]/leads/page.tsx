@@ -12,6 +12,9 @@ import {
   FileText,
   X,
   Check,
+  Download,
+  UserPlus,
+  Loader2,
 } from "lucide-react";
 
 interface LeadList {
@@ -29,13 +32,13 @@ interface Lead {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
-  new: { label: "Novo", badge: "badge-gray" },
-  queued: { label: "Na fila", badge: "badge-blue" },
-  calling: { label: "Em ligação", badge: "badge-yellow" },
-  completed: { label: "Concluído", badge: "badge-green" },
-  failed: { label: "Falhou", badge: "badge-red" },
-  doNotCall: { label: "Não ligar", badge: "badge-gray" },
-  callbackScheduled: { label: "Callback", badge: "badge-purple" },
+  new:               { label: "Novo",       badge: "badge-gray"   },
+  queued:            { label: "Na fila",    badge: "badge-blue"   },
+  calling:           { label: "Em ligação", badge: "badge-yellow" },
+  completed:         { label: "Concluído",  badge: "badge-green"  },
+  failed:            { label: "Falhou",     badge: "badge-red"    },
+  doNotCall:         { label: "Não ligar",  badge: "badge-gray"   },
+  callbackScheduled: { label: "Callback",   badge: "badge-purple" },
 };
 
 /* ── Toast ── */
@@ -51,10 +54,14 @@ function useToast() {
   return { toasts, show };
 }
 
-/* ── Modal criar lista ── */
-function CreateListModal({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string) => Promise<void> }) {
+/* ── Modal: Criar lista ── */
+function CreateListModal({ onClose, onCreate }: {
+  onClose: () => void;
+  onCreate: (name: string) => Promise<void>;
+}) {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
@@ -63,6 +70,7 @@ function CreateListModal({ onClose, onCreate }: { onClose: () => void; onCreate:
     setLoading(false);
     onClose();
   }
+
   return (
     <div className="modal-overlay animate-fadeIn" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -85,9 +93,7 @@ function CreateListModal({ onClose, onCreate }: { onClose: () => void; onCreate:
             />
           </div>
           <div className="flex gap-3 justify-end pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary">
-              Cancelar
-            </button>
+            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" disabled={loading || !name.trim()} className="btn-primary">
               {loading ? "Criando..." : "Criar Lista"}
             </button>
@@ -98,16 +104,143 @@ function CreateListModal({ onClose, onCreate }: { onClose: () => void; onCreate:
   );
 }
 
+/* ── Modal: Adicionar lead manualmente ── */
+function AddLeadModal({ onClose, onAdd, listName }: {
+  onClose: () => void;
+  onAdd: (fields: Record<string, string>) => Promise<void>;
+  listName: string;
+}) {
+  const [phone, setPhone]     = useState("");
+  const [name, setName]       = useState("");
+  const [company, setCompany] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      await onAdd({ phone, name, company });
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Erro ao adicionar lead");
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div className="modal-overlay animate-fadeIn" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="card-header flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Adicionar Lead</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Lista: <span className="font-medium text-gray-600">{listName}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="card-body space-y-4">
+          {error && (
+            <div className="alert-error">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
+
+          <div>
+            <label className="form-label flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5 text-gray-500" />
+              Telefone <span className="text-red-500 ml-0.5">*</span>
+            </label>
+            <input
+              type="tel"
+              className="form-input"
+              placeholder="+55 (11) 99999-9999  ou  11999990001"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              autoFocus
+              required
+            />
+            <p className="text-xs text-gray-400 mt-1.5">
+              Aceita com ou sem{" "}
+              <code className="bg-gray-100 px-1 rounded font-mono">+55</code>, com ou sem máscara.
+            </p>
+          </div>
+
+          <div>
+            <label className="form-label">Nome</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Ex: João Silva"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="form-label">Empresa</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Ex: Empresa Ltda"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
+            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={loading || !phone.trim()} className="btn-primary">
+              {loading ? (
+                <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
+              ) : (
+                <><UserPlus className="w-4 h-4" />Adicionar Lead</>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── Helpers ── */
+function downloadTemplate() {
+  const csv = [
+    "phone,name,company",
+    "+5511999990001,João Silva,Empresa A",
+    "+5511999990002,Maria Santos,Empresa B",
+    "11988880003,Carlos Lima,",
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = "template_leads.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Página principal
+══════════════════════════════════════════════════════════════ */
 export default function LeadsPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
-  const [lists, setLists] = useState<LeadList[]>([]);
+  const [lists, setLists]                   = useState<LeadList[]>([]);
   const [selectedListId, setSelectedListId] = useState("");
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loadingLeads, setLoadingLeads] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [leads, setLeads]                   = useState<Lead[]>([]);
+  const [loadingLeads, setLoadingLeads]     = useState(false);
+  const [importing, setImporting]           = useState(false);
+  const [showCreate, setShowCreate]         = useState(false);
+  const [showAddLead, setShowAddLead]       = useState(false);
+  const [dragOver, setDragOver]             = useState(false);
+  const [selectedFile, setSelectedFile]     = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const { toasts, show: showToast } = useToast();
 
@@ -115,7 +248,7 @@ export default function LeadsPage() {
   useEffect(() => { if (selectedListId) loadLeads(); }, [selectedListId]);
 
   async function loadLists() {
-    const res = await fetch(`/api/tenants/${tenantId}/lead-lists`);
+    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists`);
     const data = await res.json();
     setLists(data.leadLists ?? []);
     if (data.leadLists?.length > 0) setSelectedListId(data.leadLists[0].id);
@@ -123,14 +256,14 @@ export default function LeadsPage() {
 
   async function loadLeads() {
     setLoadingLeads(true);
-    const res = await fetch(`/api/tenants/${tenantId}/lead-lists/${selectedListId}/leads`);
+    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${selectedListId}/leads`);
     const data = await res.json();
     setLeads(data.leads ?? []);
     setLoadingLeads(false);
   }
 
   async function createList(name: string) {
-    const res = await fetch(`/api/tenants/${tenantId}/lead-lists`, {
+    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
@@ -143,18 +276,39 @@ export default function LeadsPage() {
     }
   }
 
+  async function addLeadManual(fields: Record<string, string>) {
+    const res  = await fetch(
+      `/api/tenants/${tenantId}/lead-lists/${selectedListId}/leads`,
+      {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(fields),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "Erro ao adicionar lead");
+    showToast(`Lead ${fields.phone} adicionado com sucesso!`);
+    loadLeads();
+  }
+
   async function importCSV(file: File) {
     if (!file || !selectedListId) return;
     setImporting(true);
     const form = new FormData();
     form.append("file", file);
-    const res = await fetch(
+    const res  = await fetch(
       `/api/tenants/${tenantId}/lead-lists/${selectedListId}/import`,
       { method: "POST", body: form }
     );
     const data = await res.json();
     if (res.ok) {
-      showToast(`✓ ${data.imported} leads importados${data.skipped > 0 ? `, ${data.skipped} ignorados` : ""}`, "success");
+      showToast(
+        `✓ ${data.imported} leads importados${data.skipped > 0 ? `, ${data.skipped} ignorados` : ""}`,
+        "success"
+      );
+      if (data.errors?.length > 0) {
+        setTimeout(() => showToast(`Atenção: ${data.errors[0]}`, "error"), 600);
+      }
       loadLeads();
     } else {
       showToast(`Erro: ${data.error}`, "error");
@@ -169,6 +323,7 @@ export default function LeadsPage() {
     setDragOver(false);
     const file = e.dataTransfer.files[0];
     if (file?.name.endsWith(".csv")) setSelectedFile(file);
+    else showToast("Apenas arquivos .csv são aceitos", "error");
   }
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
@@ -192,7 +347,7 @@ export default function LeadsPage() {
         </button>
       </div>
 
-      {/* Empty state — sem listas */}
+      {/* Empty state */}
       {lists.length === 0 ? (
         <div className="card">
           <div className="empty-state">
@@ -219,7 +374,7 @@ export default function LeadsPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* Lista de listas */}
+          {/* Coluna esquerda: seleção de lista */}
           <div className="space-y-3">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Suas Listas</h2>
             {lists.map((list) => (
@@ -234,14 +389,10 @@ export default function LeadsPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div
-                      className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                        list.id === selectedListId ? "bg-indigo-100" : "bg-gray-100"
-                      }`}
-                    >
-                      <Users
-                        className={`w-4 h-4 ${list.id === selectedListId ? "text-indigo-600" : "text-gray-500"}`}
-                      />
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                      list.id === selectedListId ? "bg-indigo-100" : "bg-gray-100"
+                    }`}>
+                      <Users className={`w-4 h-4 ${list.id === selectedListId ? "text-indigo-600" : "text-gray-500"}`} />
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">{list.name}</p>
@@ -250,20 +401,18 @@ export default function LeadsPage() {
                       </p>
                     </div>
                   </div>
-                  <ChevronRight
-                    className={`w-4 h-4 ${
-                      list.id === selectedListId ? "text-indigo-500" : "text-gray-300"
-                    }`}
-                  />
+                  <ChevronRight className={`w-4 h-4 ${
+                    list.id === selectedListId ? "text-indigo-500" : "text-gray-300"
+                  }`} />
                 </div>
               </button>
             ))}
           </div>
 
-          {/* Painel direito */}
+          {/* Coluna direita: importar CSV + tabela */}
           <div className="lg:col-span-2 space-y-5">
 
-            {/* Import CSV */}
+            {/* ── Card: Importar CSV ── */}
             <div className="card">
               <div className="card-header flex items-center justify-between">
                 <div>
@@ -272,8 +421,43 @@ export default function LeadsPage() {
                     Para: <span className="font-medium text-gray-600">{activeList?.name}</span>
                   </p>
                 </div>
+                <button
+                  onClick={downloadTemplate}
+                  className="btn-secondary text-xs gap-1.5"
+                  title="Baixar modelo CSV com o formato correto"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Template CSV
+                </button>
               </div>
+
               <div className="card-body space-y-4">
+                {/* Instruções de formato */}
+                <div className="alert-info text-xs">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-indigo-500" />
+                  <div className="space-y-1.5">
+                    <p className="font-semibold text-indigo-800">Formato esperado do CSV</p>
+                    <p className="text-indigo-700">
+                      Coluna obrigatória:{" "}
+                      <code className="bg-indigo-100 px-1 rounded font-mono">phone</code>
+                      {" · "}Opcionais:{" "}
+                      <code className="bg-indigo-100 px-1 rounded font-mono">name</code>,{" "}
+                      <code className="bg-indigo-100 px-1 rounded font-mono">company</code>{" "}
+                      (ou qualquer outra coluna extra)
+                    </p>
+                    <pre className="font-mono bg-indigo-100/60 px-2 py-1.5 rounded text-indigo-800 text-xs leading-relaxed">
+{`phone,name,company
++5511999990001,João Silva,Empresa A
+11988880002,Maria Santos,`}
+                    </pre>
+                    <p className="text-indigo-600">
+                      Aceita com/sem <code className="bg-indigo-100 px-1 rounded font-mono">+55</code> e com/sem máscara.
+                      Clique em <strong>Template CSV</strong> para baixar um modelo pronto.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Drop zone */}
                 <div
                   className={`upload-area ${dragOver ? "dragover" : ""}`}
                   onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -302,7 +486,7 @@ export default function LeadsPage() {
                         Arraste um arquivo CSV ou clique para selecionar
                       </p>
                       <p className="text-xs text-gray-400 mt-1">
-                        O arquivo deve conter a coluna <code className="bg-gray-100 px-1 rounded font-mono">phone</code>
+                        Somente arquivos <code className="bg-gray-100 px-1 rounded font-mono">.csv</code>
                       </p>
                     </div>
                   )}
@@ -320,15 +504,9 @@ export default function LeadsPage() {
                       className="btn-primary shrink-0"
                     >
                       {importing ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Importando...
-                        </>
+                        <><Loader2 className="w-4 h-4 animate-spin" />Importando...</>
                       ) : (
-                        <>
-                          <Upload className="w-4 h-4" />
-                          Importar
-                        </>
+                        <><Upload className="w-4 h-4" />Importar</>
                       )}
                     </button>
                     <button
@@ -342,11 +520,25 @@ export default function LeadsPage() {
               </div>
             </div>
 
-            {/* Tabela de leads */}
+            {/* ── Tabela de leads ── */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                Leads da Lista
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                  Leads da Lista{" "}
+                  {leads.length > 0 && (
+                    <span className="text-gray-400 font-normal normal-case">({leads.length})</span>
+                  )}
+                </h3>
+                {selectedListId && (
+                  <button
+                    onClick={() => setShowAddLead(true)}
+                    className="btn-secondary text-xs gap-1.5"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    Adicionar Lead
+                  </button>
+                )}
+              </div>
 
               {loadingLeads ? (
                 <div className="card">
@@ -354,6 +546,7 @@ export default function LeadsPage() {
                     {[...Array(5)].map((_, i) => (
                       <div key={i} className="px-5 py-4 flex gap-4">
                         <div className="skeleton h-4 w-32" />
+                        <div className="skeleton h-4 w-28" />
                         <div className="skeleton h-4 w-20" />
                         <div className="skeleton h-4 w-12" />
                       </div>
@@ -371,27 +564,38 @@ export default function LeadsPage() {
                             Telefone
                           </span>
                         </th>
+                        <th>Nome / Empresa</th>
                         <th>Status</th>
                         <th>Tentativas</th>
-                        <th>Dados Extras</th>
+                        <th>Outros dados</th>
                       </tr>
                     </thead>
                     <tbody>
                       {leads.map((lead) => {
                         const statusCfg = STATUS_CONFIG[lead.status] ?? { label: lead.status, badge: "badge-gray" };
+                        const { name, company, ...rest } = lead.data_json ?? {};
+                        const extras = Object.entries(rest)
+                          .slice(0, 2)
+                          .map(([k, v]) => `${k}: ${v}`)
+                          .join(" · ");
                         return (
                           <tr key={lead.id}>
                             <td className="font-mono font-medium text-gray-900">{lead.phone_e164}</td>
                             <td>
+                              {name ? (
+                                <div>
+                                  <p className="text-sm font-medium text-gray-800">{name}</p>
+                                  {company && <p className="text-xs text-gray-400">{company}</p>}
+                                </div>
+                              ) : (
+                                <span className="text-gray-300 text-xs">—</span>
+                              )}
+                            </td>
+                            <td>
                               <span className={statusCfg.badge}>{statusCfg.label}</span>
                             </td>
                             <td className="text-gray-500">{lead.attempt_count}</td>
-                            <td className="text-gray-400 text-xs">
-                              {Object.entries(lead.data_json ?? {})
-                                .slice(0, 2)
-                                .map(([k, v]) => `${k}: ${v}`)
-                                .join(" · ")}
-                            </td>
+                            <td className="text-gray-400 text-xs">{extras || "—"}</td>
                           </tr>
                         );
                       })}
@@ -406,8 +610,12 @@ export default function LeadsPage() {
                     </div>
                     <p className="empty-state-title">Nenhum lead nesta lista</p>
                     <p className="empty-state-desc">
-                      Importe um arquivo CSV para adicionar contatos a esta lista.
+                      Importe um CSV ou adicione leads manualmente para começar.
                     </p>
+                    <button onClick={() => setShowAddLead(true)} className="btn-secondary">
+                      <UserPlus className="w-4 h-4" />
+                      Adicionar primeiro lead
+                    </button>
                   </div>
                 </div>
               )}
@@ -416,16 +624,28 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {/* Modal Criar */}
+      {/* Modal: Criar lista */}
       {showCreate && (
         <CreateListModal onClose={() => setShowCreate(false)} onCreate={createList} />
+      )}
+
+      {/* Modal: Adicionar lead manualmente */}
+      {showAddLead && activeList && (
+        <AddLeadModal
+          onClose={() => setShowAddLead(false)}
+          onAdd={addLeadManual}
+          listName={activeList.name}
+        />
       )}
 
       {/* Toasts */}
       <div className="toast-container">
         {toasts.map((t) => (
           <div key={t.id} className={t.type === "success" ? "toast-success" : "toast-error"}>
-            {t.type === "success" ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertCircle className="w-4 h-4" />}
+            {t.type === "success"
+              ? <Check className="w-4 h-4 text-emerald-400" />
+              : <AlertCircle className="w-4 h-4" />
+            }
             {t.message}
           </div>
         ))}
