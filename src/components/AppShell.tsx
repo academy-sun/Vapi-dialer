@@ -76,10 +76,15 @@ export default function AppShell({
     }
   }
 
-  function selectTenant(id: string) {
+  function selectTenant(id: string, navigate = false) {
     setActiveTenantId(id);
     localStorage.setItem("activeTenantId", id);
     setShowTenantDropdown(false);
+    // Ao trocar de tenant manualmente, redireciona para a página inicial do tenant
+    // evitando que o usuário veja dados do tenant anterior na URL atual.
+    if (navigate) {
+      router.push(`/app/tenants/${id}/vapi`);
+    }
   }
 
   function showToast(message: string, type: "success" | "error" = "success") {
@@ -192,7 +197,7 @@ export default function AppShell({
                 {tenants.map((t) => (
                   <button
                     key={t.id}
-                    onClick={() => selectTenant(t.id)}
+                    onClick={() => selectTenant(t.id, true)}
                     className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-left transition-colors"
                     style={{
                       color: t.id === activeTenantId ? "hsl(238, 84%, 75%)" : "hsl(220, 14%, 70%)",

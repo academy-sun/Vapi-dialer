@@ -309,7 +309,7 @@ export default function QueuesPage() {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-1">
-                  {q.status !== "running" && q.status !== "stopped" && (
+                  {q.status === "draft" && (
                     <button
                       onClick={() => queueAction(q.id, "start")}
                       className="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700"
