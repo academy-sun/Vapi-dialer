@@ -1,0 +1,207 @@
+﻿
+> vapi-dialer@0.1.0 build
+> next build
+
+node.exe : ÔÜá 
+Warning: Next.js 
+inferred your 
+workspace root, but it 
+may not be correct.
+No linha:1 caractere:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : 
+NotSpecified:     (ÔÜá 
+Warning: Ne...n    ot 
+be correct.:Strin    
+g) [], RemoteExcepti   
+ on
+    + 
+FullyQualifiedErro    
+rId : NativeCommandE   
+ rror
+ 
+ We detected multiple 
+lockfiles and selected 
+the directory of C:\Use
+rs\henrique.silvatte\pa
+ckage-lock.json as the 
+root directory.
+ To silence this 
+warning, set 
+`turbopack.root` in 
+your Next.js config, 
+or consider removing 
+one of the lockfiles 
+if it's not needed.
+   See https://nextjs.o
+rg/docs/app/api-referen
+ce/config/next-config-j
+s/turbopack#root-direct
+ory for more 
+information.
+ Detected additional 
+lockfiles: 
+   * C:\Users\henrique.
+silvatte\Desktop\Projet
+os Fabricio\Vapi-dialer
+\Vapi-dialer-master\pac
+kage-lock.json
+
+Ôû▓ Next.js 16.1.6 (Turbopack)
+- Environments: .env
+
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build 
+failed with 1 errors:
+./Desktop/Projetos Fabr
+icio/Vapi-dialer/Vapi-d
+ialer-master/src/app/gl
+obals.css
+Error evaluating 
+Node.js code
+CssSyntaxError: C:\User
+s\henrique.silvatte\Des
+ktop\Projetos Fabricio\
+Vapi-dialer\Vapi-dialer
+-master\src\app\globals
+.css:3:1: The 
+`bg-background` class 
+does not exist. If 
+`bg-background` is a 
+custom class, make 
+sure it is defined 
+within a `@layer` 
+directive.
+    at Input.error 
+(Desktop/Projetos Fabri
+cio/Vapi-dialer/Vapi-di
+aler-master/node_module
+s/postcss/lib/input.js:
+135:16) [C:\Users\henri
+que.silvatte\Desktop\Pr
+ojetos Fabricio\Vapi-di
+aler\Vapi-dialer-master
+\.next\build\chunks\9e8
+02_d2736f92._.js:4651:2
+2]
+    at AtRule.error 
+(Desktop/Projetos Fabri
+cio/Vapi-dialer/Vapi-di
+aler-master/node_module
+s/postcss/lib/node.js:1
+46:32) [C:\Users\henriq
+ue.silvatte\Desktop\Pro
+jetos Fabricio\Vapi-dia
+ler\Vapi-dialer-master\
+.next\build\chunks\9e80
+2_d2736f92._.js:928:38]
+    [at processApply (C
+:\Users\henrique.silvat
+te\Desktop\Projetos Fab
+ricio\Vapi-dialer\Vapi-
+dialer-master\node_modu
+les\tailwindcss\lib\lib
+\expandApplyAtRules.js:
+380:29)]
+    [at C:\Users\henriq
+ue.silvatte\Desktop\Pro
+jetos Fabricio\Vapi-dia
+ler\Vapi-dialer-master\
+node_modules\tailwindcs
+s\lib\lib\expandApplyAt
+Rules.js:551:9]
+    [at C:\Users\henriq
+ue.silvatte\Desktop\Pro
+jetos Fabricio\Vapi-dia
+ler\Vapi-dialer-master\
+node_modules\tailwindcs
+s\lib\processTailwindFe
+atures.js:55:50]
+    [at async plugins (
+C:\Users\henrique.silva
+tte\Desktop\Projetos Fa
+bricio\Vapi-dialer\Vapi
+-dialer-master\node_mod
+ules\tailwindcss\lib\pl
+ugin.js:38:17)]
+    at async 
+LazyResult.runAsync 
+(Desktop/Projetos Fabri
+cio/Vapi-dialer/Vapi-di
+aler-master/node_module
+s/postcss/lib/lazy-resu
+lt.js:293:11) [C:\Users
+\henrique.silvatte\Desk
+top\Projetos Fabricio\V
+api-dialer\Vapi-dialer-
+master\.next\build\chun
+ks\9e802_d2736f92._.js:
+6214:21]
+    at async transform 
+(turbopack:///[turbopac
+k-node]/transforms/post
+css.ts:70:34) [C:\Users
+\henrique.silvatte\Desk
+top\Projetos Fabricio\V
+api-dialer\Vapi-dialer-
+master\.next\build\chun
+ks\[root-of-the-server]
+__e524f82d._.js:172:36]
+    at async run (turbo
+pack:///[turbopack-node
+]/ipc/evaluate.ts:92:23
+) [C:\Users\henrique.si
+lvatte\Desktop\Projetos
+ Fabricio\Vapi-dialer\V
+api-dialer-master\.next
+\build\chunks\[root-of-
+the-server]__e383f30d._
+.js:443:31]
+
+Import trace:
+  Client Component 
+Browser:
+    ./Desktop/Projetos 
+Fabricio/Vapi-dialer/Va
+pi-dialer-master/src/ap
+p/globals.css [Client 
+Component Browser]
+    ./Desktop/Projetos 
+Fabricio/Vapi-dialer/Va
+pi-dialer-master/src/ap
+p/layout.tsx [Server 
+Component]
+
+
+    at async transform 
+(turbopack:///[turbopac
+k-node]/transforms/post
+css.ts:70:34) [C:\Users
+\henrique.silvatte\Desk
+top\Projetos Fabricio\V
+api-dialer\Vapi-dialer-
+master\.next\build\chun
+ks\[root-of-the-server]
+__e524f82d._.js:172:36]
+)
+    at async run (turbo
+pack:///[turbopack-node
+]/ipc/evaluate.ts:92:23
+) [C:\Users\henrique.si
+lvatte\Desktop\Projetos
+ Fabricio\Vapi-dialer\V
+api-dialer-master\.next
+\build\chunks\[root-of-
+the-server]__e383f30d._
+.js:443:31])

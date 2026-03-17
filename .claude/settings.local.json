@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(redis-cli ping:*)",
+      "Bash(docker --version)",
+      "Bash(wsl --list)",
+      "Bash(choco --version)",
+      "Bash(where redis-server:*)",
+      "Read(//c/Program Files/**)",
+      "Bash(winget --version)",
+      "Bash(winget install:*)",
+      "Bash(winget search:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npm --version)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 14784 /F)",
+      "Bash(taskkill /PID 20292 /F)",
+      "Bash(findstr \":3000\")",
+      "Bash(cmd /c \"taskkill /PID 20292 /F\")",
+      "Bash(powershell -Command \"Stop-Process -Id 20292 -Force\")"
+    ]
+  }
+}

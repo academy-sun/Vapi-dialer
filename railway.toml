@@ -1,0 +1,11 @@
+# railway.toml — Configuração do serviço Worker no Railway
+# Referência: https://docs.railway.com/reference/config-as-code
+
+[build]
+# Aponta para o Dockerfile específico do worker
+dockerfilePath = "Dockerfile.worker"
+
+[deploy]
+# Política de restart: reinicia automaticamente em caso de crash
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

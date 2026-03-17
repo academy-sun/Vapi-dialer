@@ -1,0 +1,16 @@
+FROM node:20-alpine
+WORKDIR /app
+
+# Instalar dependências primeiro (camada cacheável)
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# tsx está em dependencies, então é instalado acima.
+# Copiar o restante do código
+COPY . .
+
+# Healthcheck: verifica se o processo está vivo
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD pgrep -f "tsx worker" || exit 1
+
+CMD ["npx", "tsx", "worker/src/index.ts"]
