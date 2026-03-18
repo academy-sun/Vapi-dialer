@@ -6,6 +6,8 @@ import {
   Play,
   Pause,
   Square,
+  RotateCcw,
+  Copy,
   ListOrdered,
   Check,
   AlertTriangle,
@@ -590,13 +592,51 @@ export default function QueuesPage() {
   }
 
   async function queueAction(queueId: string, action: "start" | "pause" | "stop") {
-    await fetch(`/api/tenants/${tenantId}/queues/${queueId}/${action}`, { method: "POST" });
-    showToast(
-      action === "start" ? "Fila iniciada!" :
-      action === "pause" ? "Fila pausada!" :
-      "Fila parada!"
-    );
+    const res = await fetch(`/api/tenants/${tenantId}/queues/${queueId}/${action}`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error ?? "Erro ao executar ação", "error");
+    } else {
+      showToast(
+        action === "start" ? "Fila ativada!" :
+        action === "pause" ? "Fila pausada!" :
+        "Fila parada!"
+      );
+    }
     loadQueues();
+  }
+
+  async function duplicateQueue(queue: Queue) {
+    const allowedDays = Array.isArray(queue.allowed_days)
+      ? (queue.allowed_days as unknown as number[])
+      : [1, 2, 3, 4, 5];
+    const tw = queue.allowed_time_window as { start?: string; end?: string; timezone?: string } | null;
+
+    const payload = {
+      name:                `Cópia de ${queue.name}`,
+      assistant_id:        queue.assistant_id,
+      phone_number_id:     queue.phone_number_id,
+      lead_list_id:        queue.lead_list_id,
+      concurrency:         queue.concurrency,
+      max_attempts:        queue.max_attempts,
+      retry_delay_minutes: queue.retry_delay_minutes ?? 30,
+      webhook_url:         queue.webhook_url ?? null,
+      allowed_days:        allowedDays,
+      allowed_time_window: tw ?? { start: "09:00", end: "18:00", timezone: "America/Sao_Paulo" },
+    };
+
+    const res = await fetch(`/api/tenants/${tenantId}/queues`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.queue) {
+      setQueues((prev) => [data.queue, ...prev]);
+      showToast(`Fila "${data.queue.name}" duplicada!`);
+    } else {
+      showToast(data.error ?? "Erro ao duplicar fila", "error");
+    }
   }
 
   const leadListName = (id: string) =>
@@ -785,6 +825,15 @@ export default function QueuesPage() {
                       Retomar
                     </button>
                   )}
+                  {q.status === "stopped" && (
+                    <button
+                      onClick={() => queueAction(q.id, "start")}
+                      className="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Reiniciar
+                    </button>
+                  )}
                   {(q.status === "running" || q.status === "paused") && (
                     <button
                       onClick={() => queueAction(q.id, "stop")}
@@ -794,6 +843,15 @@ export default function QueuesPage() {
                       Parar
                     </button>
                   )}
+                  {/* Duplicar */}
+                  <button
+                    onClick={() => duplicateQueue(q)}
+                    className="btn btn-sm bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    title="Duplicar fila"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Duplicar
+                  </button>
                   {/* Ver leads */}
                   <button
                     onClick={() => setViewingQueue(q)}

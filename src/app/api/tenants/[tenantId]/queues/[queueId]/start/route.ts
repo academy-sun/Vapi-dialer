@@ -11,17 +11,19 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   const service = createServiceClient();
 
-  // Marcar leads new/queued da lista como queued
+  // Buscar fila e status atual
   const { data: queue } = await service
     .from("dial_queues")
-    .select("lead_list_id")
+    .select("lead_list_id, status")
     .eq("id", queueId)
     .eq("tenant_id", tenantId)
     .single();
 
   if (!queue) return NextResponse.json({ error: "Queue não encontrada" }, { status: 404 });
 
-  // Atualizar status da queue
+  const previousStatus = queue.status;
+
+  // Ativar fila
   const { error } = await service
     .from("dial_queues")
     .update({ status: "running" })
@@ -40,8 +42,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     .eq("tenant_id", tenantId)
     .eq("status", "new");
 
-  // Ao retomar de pausa, limpar next_attempt_at vencido em leads aguardando retry
-  // (para que o worker os processe imediatamente no próximo ciclo, sem esperar mais)
+  // Ao retomar de pausa: limpar next_attempt_at vencido para processamento imediato
   await service
     .from("leads")
     .update({ next_attempt_at: null })
@@ -50,6 +51,16 @@ export async function POST(_req: NextRequest, { params }: Params) {
     .eq("status", "queued")
     .not("next_attempt_at", "is", null)
     .lte("next_attempt_at", now);
+
+  // Ao reiniciar uma fila parada: recolocar leads com falha na fila para nova tentativa
+  if (previousStatus === "stopped") {
+    await service
+      .from("leads")
+      .update({ status: "queued", next_attempt_at: null })
+      .eq("lead_list_id", queue.lead_list_id)
+      .eq("tenant_id", tenantId)
+      .eq("status", "failed");
+  }
 
   return NextResponse.json({ ok: true, status: "running" });
 }
