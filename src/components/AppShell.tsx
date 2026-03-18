@@ -10,6 +10,7 @@ import {
   Users,
   ListOrdered,
   PhoneCall,
+  BarChart3,
   LogOut,
   Plus,
   ChevronDown,
@@ -138,6 +139,11 @@ export default function AppShell({
           label: "Chamadas",
           href: `/app/tenants/${activeTenantId}/calls`,
           icon: PhoneCall,
+        },
+        {
+          label: "Analytics",
+          href: `/app/tenants/${activeTenantId}/analytics`,
+          icon: BarChart3,
         },
       ]
     : [];

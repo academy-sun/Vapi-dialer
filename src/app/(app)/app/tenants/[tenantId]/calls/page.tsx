@@ -14,6 +14,9 @@ import {
   Filter,
   Info,
   Loader2,
+  Timer,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 interface Call {
@@ -23,6 +26,8 @@ interface Call {
   ended_reason: string | null;
   cost: number | null;
   summary: string | null;
+  duration_seconds: number | null;
+  structured_outputs: Record<string, unknown> | null;
   created_at: string;
   leads: { phone_e164: string; data_json: Record<string, string> } | null;
 }
@@ -40,6 +45,8 @@ const REASON_CONFIG: Record<string, { label: string; badge: string }> = {
   "failed": { label: "Falha", badge: "badge-red" },
 };
 
+const ANSWERED_REASONS = new Set(["customer-ended-call", "assistant-ended-call"]);
+
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.length === 12) {
@@ -49,6 +56,13 @@ function formatPhone(phone: string): string {
     return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   }
   return phone;
+}
+
+function formatDuration(seconds: number | null): string {
+  if (seconds == null) return "—";
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function formatRelativeTime(dateStr: string): { relative: string; full: string } {
@@ -62,6 +76,37 @@ function formatRelativeTime(dateStr: string): { relative: string; full: string }
   else relative = `há ${Math.floor(diff / 86400)} dias`;
   const full = date.toLocaleString("pt-BR");
   return { relative, full };
+}
+
+function StructuredOutputsBadge({ outputs }: { outputs: Record<string, unknown> | null }) {
+  if (!outputs) return <span className="text-gray-300 text-xs">—</span>;
+
+  // Detect success field (common patterns)
+  const successVal = outputs.success ?? outputs.sucesso ?? outputs.interested ?? outputs.interesse;
+  if (successVal === true || successVal === "true" || successVal === "Sucesso" || successVal === "sim") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+        <CheckCircle2 className="w-3 h-3" /> Sucesso
+      </span>
+    );
+  }
+  if (successVal === false || successVal === "false" || successVal === "Fracasso" || successVal === "não" || successVal === "nao") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">
+        <XCircle className="w-3 h-3" /> Fracasso
+      </span>
+    );
+  }
+  // Fallback: show as badge with first key-value
+  const firstEntry = Object.entries(outputs)[0];
+  if (firstEntry) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
+        {String(firstEntry[1])}
+      </span>
+    );
+  }
+  return <span className="text-gray-400 text-xs">—</span>;
 }
 
 interface ToastMsg { id: string; message: string; type: "success" | "error" }
@@ -83,9 +128,29 @@ export default function CallsPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [filterReason, setFilterReason] = useState("all");
   const [searchPhone, setSearchPhone] = useState("");
+  // Short-duration answered filter
+  const [shortDurationMode, setShortDurationMode] = useState(false);
+  const [maxDuration, setMaxDuration] = useState("30");
   const { toasts, show: showToast } = useToast();
 
-  useEffect(() => { loadCalls(); }, [tenantId]);
+  const loadCalls = useCallback(async (showRefresh = false) => {
+    if (showRefresh) setRefreshing(true);
+    else setLoading(true);
+
+    let url = `/api/tenants/${tenantId}/calls?limit=100`;
+    if (shortDurationMode) {
+      url += `&answered_only=true&max_duration=${maxDuration}`;
+    }
+
+    const res = await fetch(url);
+    const data = await res.json();
+    setCalls(data.calls ?? []);
+    setLoading(false);
+    setRefreshing(false);
+    if (showRefresh) showToast("Chamadas atualizadas!");
+  }, [tenantId, shortDurationMode, maxDuration, showToast]);
+
+  useEffect(() => { loadCalls(); }, [loadCalls]);
 
   // Auto-refresh a cada 8s enquanto houver chamadas sem ended_reason (em andamento)
   useEffect(() => {
@@ -93,18 +158,7 @@ export default function CallsPage() {
     if (!hasInProgress) return;
     const id = setInterval(() => loadCalls(), 8_000);
     return () => clearInterval(id);
-  }, [calls, tenantId]);
-
-  async function loadCalls(showRefresh = false) {
-    if (showRefresh) setRefreshing(true);
-    else setLoading(true);
-    const res = await fetch(`/api/tenants/${tenantId}/calls?limit=100`);
-    const data = await res.json();
-    setCalls(data.calls ?? []);
-    setLoading(false);
-    setRefreshing(false);
-    if (showRefresh) showToast("Chamadas atualizadas!");
-  }
+  }, [calls, loadCalls]);
 
   async function openDetail(callId: string) {
     const res = await fetch(`/api/tenants/${tenantId}/calls/${callId}`);
@@ -119,6 +173,7 @@ export default function CallsPage() {
   });
 
   const totalCost   = calls.reduce((sum, c) => sum + (c.cost ?? 0), 0);
+  const totalDurSec = calls.reduce((sum, c) => sum + (c.duration_seconds ?? 0), 0);
   const inProgress  = calls.filter((c) => !c.ended_reason).length;
 
   return (
@@ -128,7 +183,12 @@ export default function CallsPage() {
         <div>
           <h1 className="page-title">Chamadas</h1>
           <p className="page-subtitle">
-            {calls.length > 0 && `${calls.length} chamadas registradas · Custo total: $${totalCost.toFixed(4)}`}
+            {calls.length > 0 && (
+              <>
+                {calls.length} chamadas · Custo: ${totalCost.toFixed(4)}
+                {totalDurSec > 0 && ` · Tempo total: ${formatDuration(totalDurSec)}`}
+              </>
+            )}
           </p>
         </div>
         <button
@@ -162,36 +222,68 @@ export default function CallsPage() {
       )}
 
       {/* Filters */}
-      {calls.length > 0 && (
-        <div className="card px-4 py-3 mb-5 flex items-center gap-3 flex-wrap">
-          <Filter className="w-4 h-4 text-gray-400 shrink-0" />
-          <input
-            type="text"
-            className="form-input max-w-xs text-sm"
-            placeholder="Buscar por telefone..."
-            value={searchPhone}
-            onChange={(e) => setSearchPhone(e.target.value)}
-          />
-          <select
-            className="select-native text-sm py-2.5 max-w-xs"
-            value={filterReason}
-            onChange={(e) => setFilterReason(e.target.value)}
-          >
-            <option value="all">Todos os resultados</option>
-            {Object.entries(REASON_CONFIG).map(([key, cfg]) => (
-              <option key={key} value={key}>{cfg.label}</option>
-            ))}
-          </select>
-          {(filterReason !== "all" || searchPhone) && (
-            <button
-              onClick={() => { setFilterReason("all"); setSearchPhone(""); }}
-              className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+      {calls.length > 0 || shortDurationMode ? (
+        <div className="card px-4 py-3 mb-5 space-y-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+            <input
+              type="text"
+              className="form-input max-w-xs text-sm"
+              placeholder="Buscar por telefone..."
+              value={searchPhone}
+              onChange={(e) => setSearchPhone(e.target.value)}
+            />
+            <select
+              className="select-native text-sm py-2.5 max-w-xs"
+              value={filterReason}
+              onChange={(e) => setFilterReason(e.target.value)}
             >
-              <X className="w-3.5 h-3.5" /> Limpar filtros
-            </button>
-          )}
+              <option value="all">Todos os resultados</option>
+              {Object.entries(REASON_CONFIG).map(([key, cfg]) => (
+                <option key={key} value={key}>{cfg.label}</option>
+              ))}
+            </select>
+            {(filterReason !== "all" || searchPhone) && (
+              <button
+                onClick={() => { setFilterReason("all"); setSearchPhone(""); }}
+                className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" /> Limpar filtros
+              </button>
+            )}
+          </div>
+
+          {/* Short-duration answered filter */}
+          <div className="flex items-center gap-3 pt-1 border-t border-gray-100 flex-wrap">
+            <Timer className="w-4 h-4 text-indigo-400 shrink-0" />
+            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <input
+                type="checkbox"
+                className="rounded"
+                checked={shortDurationMode}
+                onChange={(e) => setShortDurationMode(e.target.checked)}
+              />
+              Atendidas com duração menor que
+            </label>
+            {shortDurationMode && (
+              <>
+                <input
+                  type="number"
+                  min="1"
+                  max="600"
+                  className="form-input w-20 text-sm"
+                  value={maxDuration}
+                  onChange={(e) => setMaxDuration(e.target.value)}
+                />
+                <span className="text-sm text-gray-500">segundos</span>
+                <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">
+                  Leads que atenderam mas desligaram rápido — candidatos a re-trabalho
+                </span>
+              </>
+            )}
+          </div>
         </div>
-      )}
+      ) : null}
 
       <div className="flex gap-5">
         {/* Lista */}
@@ -238,6 +330,8 @@ export default function CallsPage() {
                   <tr>
                     <th><span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />Telefone</span></th>
                     <th>Resultado</th>
+                    <th><span className="flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" />Duração</span></th>
+                    <th>Avaliação</th>
                     <th><span className="flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" />Custo</span></th>
                     <th><span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Data</span></th>
                   </tr>
@@ -258,6 +352,12 @@ export default function CallsPage() {
                         </td>
                         <td>
                           <span className={reason.badge}>{reason.label}</span>
+                        </td>
+                        <td className="text-gray-600 font-mono text-sm">
+                          {formatDuration(call.duration_seconds)}
+                        </td>
+                        <td>
+                          <StructuredOutputsBadge outputs={call.structured_outputs} />
                         </td>
                         <td className="text-gray-600">
                           {call.cost != null ? (
@@ -321,19 +421,46 @@ export default function CallsPage() {
                       })()}
                     </dd>
                   </div>
+
+                  {/* Avaliação de Sucesso */}
+                  {selected.structured_outputs && (
+                    <div>
+                      <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Avaliação de Sucesso</dt>
+                      <dd className="mt-0.5">
+                        <StructuredOutputsBadge outputs={selected.structured_outputs} />
+                      </dd>
+                      {Object.keys(selected.structured_outputs).length > 0 && (
+                        <div className="mt-1.5 bg-gray-50 rounded-lg px-2.5 py-2 text-xs font-mono text-gray-600 space-y-0.5">
+                          {Object.entries(selected.structured_outputs).map(([k, v]) => (
+                            <div key={k}>
+                              <span className="text-gray-400">{k}:</span>{" "}
+                              <span className="text-gray-700">{String(v)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Duração</dt>
+                      <dd className="font-mono text-sm text-gray-900 mt-0.5">
+                        {formatDuration(selected.duration_seconds)}
+                      </dd>
+                    </div>
                     <div>
                       <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Custo</dt>
                       <dd className="font-mono text-sm text-gray-900 mt-0.5">
                         {selected.cost != null ? `$${selected.cost.toFixed(4)}` : "—"}
                       </dd>
                     </div>
-                    <div>
-                      <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Data</dt>
-                      <dd className="text-sm text-gray-700 mt-0.5">
-                        {new Date(selected.created_at).toLocaleString("pt-BR")}
-                      </dd>
-                    </div>
+                  </div>
+                  <div>
+                    <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Data</dt>
+                    <dd className="text-sm text-gray-700 mt-0.5">
+                      {new Date(selected.created_at).toLocaleString("pt-BR")}
+                    </dd>
                   </div>
                   <div>
                     <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Vapi Call ID</dt>

@@ -40,15 +40,14 @@ export async function POST(_req: NextRequest, { params }: Params) {
     .eq("tenant_id", tenantId)
     .eq("status", "new");
 
-  // Recolocar na fila leads com retry pendente (failed + next_attempt_at vencido)
-  // Isso garante que leads que aguardavam retry enquanto a fila estava pausada
-  // sejam processados assim que a fila voltar a rodar.
+  // Ao retomar de pausa, limpar next_attempt_at vencido em leads aguardando retry
+  // (para que o worker os processe imediatamente no próximo ciclo, sem esperar mais)
   await service
     .from("leads")
-    .update({ status: "queued", next_attempt_at: null })
+    .update({ next_attempt_at: null })
     .eq("lead_list_id", queue.lead_list_id)
     .eq("tenant_id", tenantId)
-    .eq("status", "failed")
+    .eq("status", "queued")
     .not("next_attempt_at", "is", null)
     .lte("next_attempt_at", now);
 

@@ -8,6 +8,7 @@ import {
   Phone,
   ChevronRight,
   CheckCircle2,
+  XCircle,
   AlertCircle,
   FileText,
   X,
@@ -36,6 +37,8 @@ interface Lead {
   status: string;
   attempt_count: number;
   data_json: Record<string, string>;
+  last_outcome: string | null;
+  next_attempt_at: string | null;
 }
 
 const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
@@ -841,37 +844,75 @@ export default function LeadsPage() {
                           </span>
                         </th>
                         <th>Nome / Empresa</th>
+                        <th>Campos extras</th>
+                        <th>Atendido?</th>
                         <th>Status</th>
-                        <th>Tentativas</th>
-                        <th>Outros dados</th>
+                        <th>Tent.</th>
                       </tr>
                     </thead>
                     <tbody>
                       {leads.map((lead) => {
                         const statusCfg = STATUS_CONFIG[lead.status] ?? { label: lead.status, badge: "badge-gray" };
-                        const { name, company, ...rest } = lead.data_json ?? {};
-                        const extras = Object.entries(rest)
-                          .slice(0, 2)
-                          .map(([k, v]) => `${k}: ${v}`)
-                          .join(" · ");
+                        const { name, company, nome, empresa, ...rest } = lead.data_json ?? {};
+                        const displayName = name ?? nome;
+                        const displayCompany = company ?? empresa;
+                        const extras = Object.entries(rest).map(([k, v]) => `${k}: ${v}`).join(" · ");
+
+                        // Atendido: baseado em last_outcome
+                        const ANSWERED = new Set(["customer-ended-call", "assistant-ended-call"]);
+                        const NO_ANSWER = new Set(["no-answer", "busy", "voicemail", "machine_end_silence", "machine_end_other"]);
+                        const answered =
+                          lead.last_outcome == null ? null
+                          : ANSWERED.has(lead.last_outcome) ? true
+                          : NO_ANSWER.has(lead.last_outcome) ? false
+                          : null;
+
+                        // Próxima tentativa
+                        const nextAt = lead.next_attempt_at ? new Date(lead.next_attempt_at) : null;
+                        const nextAtLabel = nextAt
+                          ? nextAt < new Date()
+                            ? "Imediato"
+                            : nextAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+                          : null;
+
                         return (
                           <tr key={lead.id}>
-                            <td className="font-mono font-medium text-gray-900">{lead.phone_e164}</td>
+                            <td className="font-mono font-medium text-gray-900 text-xs">{lead.phone_e164}</td>
                             <td>
-                              {name ? (
+                              {displayName ? (
                                 <div>
-                                  <p className="text-sm font-medium text-gray-800">{name}</p>
-                                  {company && <p className="text-xs text-gray-400">{company}</p>}
+                                  <p className="text-sm font-medium text-gray-800">{displayName}</p>
+                                  {displayCompany && <p className="text-xs text-gray-400">{displayCompany}</p>}
                                 </div>
                               ) : (
                                 <span className="text-gray-300 text-xs">—</span>
                               )}
                             </td>
+                            <td className="text-gray-400 text-xs max-w-[180px] truncate" title={extras}>{extras || "—"}</td>
                             <td>
-                              <span className={statusCfg.badge}>{statusCfg.label}</span>
+                              {answered === true && (
+                                <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Sim
+                                </span>
+                              )}
+                              {answered === false && (
+                                <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400">
+                                  <XCircle className="w-3.5 h-3.5" /> Não
+                                </span>
+                              )}
+                              {answered === null && <span className="text-gray-300 text-xs">—</span>}
                             </td>
-                            <td className="text-gray-500">{lead.attempt_count}</td>
-                            <td className="text-gray-400 text-xs">{extras || "—"}</td>
+                            <td>
+                              <div className="space-y-0.5">
+                                <span className={statusCfg.badge}>{statusCfg.label}</span>
+                                {nextAtLabel && lead.status === "queued" && (
+                                  <p className="text-xs text-indigo-500 mt-0.5">
+                                    Retry: {nextAtLabel}
+                                  </p>
+                                )}
+                              </div>
+                            </td>
+                            <td className="text-gray-500 text-center">{lead.attempt_count}</td>
                           </tr>
                         );
                       })}

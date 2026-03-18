@@ -151,10 +151,13 @@ async function handleEndOfCallReport(
   const vapiCallId = call?.id as string | undefined;
   if (!vapiCallId) return;
 
-  const endedReason = (message.endedReason as string) ?? null;
-  const cost        = (message.cost        as number) ?? null;
-  const transcript  = (message.transcript  as string) ?? null;
-  const summary     = (message.analysis    as Record<string, unknown>)?.summary as string ?? null;
+  const endedReason       = (message.endedReason as string) ?? null;
+  const cost              = (message.cost        as number) ?? null;
+  const transcript        = (message.transcript  as string) ?? null;
+  const summary           = (message.analysis    as Record<string, unknown>)?.summary as string ?? null;
+  const durationSeconds   = (message.durationSeconds as number) ?? null;
+  const artifact          = (message.artifact as Record<string, unknown>) ?? {};
+  const structuredOutputs = (artifact.structuredOutputs ?? null) as Record<string, unknown> | null;
 
   // Dados completos para repassar ao webhook de saída
   const callData = {
@@ -162,6 +165,8 @@ async function handleEndOfCallReport(
     transcript,
     summary,
     cost,
+    durationSeconds,
+    structuredOutputs,
     vapiMessage: message, // payload completo do Vapi
   };
 
@@ -178,7 +183,7 @@ async function handleEndOfCallReport(
     // ── Caso normal: worker criou o call_record, webhook finaliza ──
     await service
       .from("call_records")
-      .update({ ended_reason: endedReason, cost, transcript, summary })
+      .update({ ended_reason: endedReason, cost, transcript, summary, duration_seconds: durationSeconds, structured_outputs: structuredOutputs })
       .eq("vapi_call_id", vapiCallId);
 
     await updateLeadAfterCall(
@@ -220,26 +225,30 @@ async function handleEndOfCallReport(
   if (!queue) return;
 
   await service.from("call_records").insert({
-    tenant_id:     tenantId,
-    dial_queue_id: queue.id,
-    lead_id:       lead.id,
-    vapi_call_id:  vapiCallId,
-    status:        "completed",
-    ended_reason:  endedReason,
+    tenant_id:          tenantId,
+    dial_queue_id:      queue.id,
+    lead_id:            lead.id,
+    vapi_call_id:       vapiCallId,
+    status:             "completed",
+    ended_reason:       endedReason,
     cost,
     transcript,
     summary,
+    duration_seconds:   durationSeconds,
+    structured_outputs: structuredOutputs,
   });
 
   await updateLeadAfterCall(lead.id, queue.id, tenantId, endedReason, service, callData);
 }
 
 interface CallData {
-  vapiCallId?:  string;
-  transcript?:  string | null;
-  summary?:     string | null;
-  cost?:        number | null;
-  vapiMessage?: Record<string, unknown>; // payload completo do end-of-call-report
+  vapiCallId?:        string;
+  transcript?:        string | null;
+  summary?:           string | null;
+  cost?:              number | null;
+  durationSeconds?:   number | null;
+  structuredOutputs?: Record<string, unknown> | null;
+  vapiMessage?:       Record<string, unknown>; // payload completo do end-of-call-report
 }
 
 async function updateLeadAfterCall(
