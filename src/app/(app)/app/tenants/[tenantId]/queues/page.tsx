@@ -19,6 +19,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Link2,
+  Zap,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 interface LeadList { id: string; name: string }
@@ -491,6 +494,8 @@ export default function QueuesPage() {
   const [viewingQueue, setViewingQueue] = useState<Queue | null>(null);
   const [progress, setProgress] = useState<Record<string, Progress>>({});
   const [loading, setLoading] = useState(true);
+  const [webhookTesting, setWebhookTesting] = useState<Record<string, boolean>>({});
+  const [webhookResults, setWebhookResults] = useState<Record<string, { ok: boolean; message: string; status: number | null; elapsed_ms: number }>>({});
   const { toasts, show: showToast } = useToast();
 
   const loadQueues = useCallback(async () => {
@@ -636,6 +641,20 @@ export default function QueuesPage() {
       showToast(`Fila "${data.queue.name}" duplicada!`);
     } else {
       showToast(data.error ?? "Erro ao duplicar fila", "error");
+    }
+  }
+
+  async function testWebhook(queueId: string) {
+    setWebhookTesting((prev) => ({ ...prev, [queueId]: true }));
+    setWebhookResults((prev) => { const n = { ...prev }; delete n[queueId]; return n; });
+    try {
+      const res = await fetch(`/api/tenants/${tenantId}/queues/${queueId}/test-webhook`, { method: "POST" });
+      const data = await res.json();
+      setWebhookResults((prev) => ({ ...prev, [queueId]: data }));
+    } catch {
+      setWebhookResults((prev) => ({ ...prev, [queueId]: { ok: false, message: "Erro de rede ao testar webhook", status: null, elapsed_ms: 0 } }));
+    } finally {
+      setWebhookTesting((prev) => ({ ...prev, [queueId]: false }));
     }
   }
 
@@ -795,6 +814,43 @@ export default function QueuesPage() {
                     </div>
                   </div>
                 ) : null}
+
+                {/* Webhook status */}
+                {q.webhook_url && (
+                  <div className="mb-3 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                      <span className="text-xs text-gray-500 font-mono truncate flex-1">{q.webhook_url}</span>
+                      <button
+                        onClick={() => testWebhook(q.id)}
+                        disabled={webhookTesting[q.id]}
+                        className="btn btn-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shrink-0"
+                      >
+                        {webhookTesting[q.id]
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <Zap className="w-3.5 h-3.5" />}
+                        {webhookTesting[q.id] ? "Testando..." : "Testar"}
+                      </button>
+                    </div>
+                    {webhookResults[q.id] && (
+                      <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
+                        webhookResults[q.id].ok
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-red-50 text-red-700"
+                      }`}>
+                        {webhookResults[q.id].ok
+                          ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                          : <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+                        <span>
+                          {webhookResults[q.id].message}
+                          {webhookResults[q.id].elapsed_ms > 0 && (
+                            <span className="opacity-60 ml-1">({webhookResults[q.id].elapsed_ms}ms)</span>
+                          )}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-1 flex-wrap">
