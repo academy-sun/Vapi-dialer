@@ -11,11 +11,13 @@ import {
   DollarSign,
   Calendar,
   Filter,
-  Loader2,
   Timer,
   CheckCircle2,
   XCircle,
   ListOrdered,
+  Star,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface Queue { id: string; name: string }
@@ -40,20 +42,36 @@ interface CallDetail extends Call {
 const REASON_CONFIG: Record<string, { label: string; badge: string }> = {
   "customer-ended-call": { label: "Cliente encerrou", badge: "badge-green" },
   "assistant-ended-call": { label: "Assistente encerrou", badge: "badge-blue" },
-  "no-answer": { label: "Sem resposta", badge: "badge-gray" },
-  "busy": { label: "Ocupado", badge: "badge-yellow" },
-  "voicemail": { label: "Caixa postal", badge: "badge-purple" },
-  "failed": { label: "Falha", badge: "badge-red" },
+  "no-answer":            { label: "Sem resposta",      badge: "badge-gray" },
+  "busy":                 { label: "Ocupado",           badge: "badge-yellow" },
+  "voicemail":            { label: "Caixa postal",      badge: "badge-purple" },
+  "failed":               { label: "Falha",             badge: "badge-red" },
 };
+
+// Campos do result que devem aparecer no topo do drawer (labels amigáveis)
+const RESULT_PRIORITY_FIELDS: Record<string, string> = {
+  interesse:                    "Interesse",
+  success:                      "Sucesso",
+  sucesso:                      "Sucesso",
+  successEvaluation:            "Avaliação",
+  success_evaluation:           "Avaliação",
+  momentoDeCompra:              "Momento de Compra",
+  ComparImovelPlanta:           "Comparou Planta",
+  QuerReuniaoComVendedor:       "Quer Reunião",
+  "Performance Global Score":   "Score Global",
+};
+
+// Campos a exibir como texto longo (não em badge)
+const LONG_TEXT_FIELDS = new Set([
+  "resumo", "Pontos Melhoria", "Lista Objeções",
+  "Possíveis Motivos de Falha", "Justificative Performance Global",
+  "compliancePlan",
+]);
 
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
-  if (digits.length === 12) {
-    return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
-  }
-  if (digits.length === 11) {
-    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-  }
+  if (digits.length === 12) return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
+  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
   return phone;
 }
 
@@ -73,75 +91,159 @@ function formatRelativeTime(dateStr: string): { relative: string; full: string }
   else if (diff < 3600) relative = `há ${Math.floor(diff / 60)} min`;
   else if (diff < 86400) relative = `há ${Math.floor(diff / 3600)} h`;
   else relative = `há ${Math.floor(diff / 86400)} dias`;
-  const full = date.toLocaleString("pt-BR");
-  return { relative, full };
+  return { relative, full: date.toLocaleString("pt-BR") };
 }
 
-/** Normaliza qualquer valor em string legível */
-function valueToString(v: unknown): string {
+/**
+ * Extrai o objeto `result` do structured_outputs do Vapi.
+ * Suporta dois formatos:
+ *   1. { result: {...} }  — top-level direto
+ *   2. { "<uuid>": { name, result: {...} } } — wrapped por tool call ID
+ */
+function extractResult(outputs: Record<string, unknown>): Record<string, unknown> | null {
+  if (!outputs) return null;
+  // Formato 1: tem 'result' direto
+  if (outputs.result && typeof outputs.result === "object" && !Array.isArray(outputs.result)) {
+    return outputs.result as Record<string, unknown>;
+  }
+  // Formato 2: valores são objetos com { name, result }
+  for (const val of Object.values(outputs)) {
+    if (val && typeof val === "object" && !Array.isArray(val)) {
+      const obj = val as Record<string, unknown>;
+      if (obj.result && typeof obj.result === "object" && !Array.isArray(obj.result)) {
+        return obj.result as Record<string, unknown>;
+      }
+    }
+  }
+  // Fallback: retorna o próprio objeto
+  return outputs;
+}
+
+function getInteresseValue(result: Record<string, unknown>): unknown {
+  return result.interesse ?? result.success ?? result.sucesso ??
+         result.interested ?? result.successEvaluation ?? result.success_evaluation;
+}
+
+function isSuccessValue(v: unknown): boolean {
+  if (v === null || v === undefined) return false;
+  const s = String(v).toLowerCase();
+  return v === true || s === "true" || s === "sucesso" || s === "sim" || s === "yes" || s === "1";
+}
+
+function isFailureValue(v: unknown): boolean {
+  if (v === null || v === undefined) return false;
+  const s = String(v).toLowerCase();
+  return v === false || s === "false" || s === "fracasso" || s === "não" || s === "nao" || s === "no" || s === "0";
+}
+
+function valueToLabel(v: unknown): string {
   if (v === null || v === undefined) return "—";
   if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
 
-/** Detecta se o valor é "verdadeiro" (sucesso) */
-function isTruthy(v: unknown): boolean {
-  if (v === true || v === "true" || v === "Sucesso" || v === "sim" || v === "yes" || v === 1) return true;
-  return false;
-}
+/** Badge compacto para a tabela: só Sucesso / Fracasso */
+function InteresseBadge({ outputs }: { outputs: Record<string, unknown> | null }) {
+  if (!outputs) return <span className="text-gray-300 text-xs">—</span>;
+  const result = extractResult(outputs);
+  if (!result) return <span className="text-gray-300 text-xs">—</span>;
+  const val = getInteresseValue(result);
+  if (val === undefined || val === null) return <span className="text-gray-300 text-xs">—</span>;
 
-/** Detecta se o valor é "falso" (fracasso) */
-function isFalsy(v: unknown): boolean {
-  if (v === false || v === "false" || v === "Fracasso" || v === "não" || v === "nao" || v === "no" || v === 0) return true;
-  return false;
-}
-
-function StructuredOutputsBadge({ outputs }: { outputs: Record<string, unknown> | null }) {
-  if (!outputs || Object.keys(outputs).length === 0) return <span className="text-gray-300 text-xs">—</span>;
-
-  // Procura campo de avaliação em vários padrões de nome
-  const successVal =
-    outputs.success ??
-    outputs.sucesso ??
-    outputs.interested ??
-    outputs.interesse ??
-    outputs.successEvaluation ??
-    outputs.success_evaluation ??
-    outputs.result;
-
-  if (successVal !== undefined) {
-    if (isTruthy(successVal)) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
-          <CheckCircle2 className="w-3 h-3" /> Sucesso
-        </span>
-      );
-    }
-    if (isFalsy(successVal)) {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">
-          <XCircle className="w-3 h-3" /> Fracasso
-        </span>
-      );
-    }
-    // Valor textual customizado
+  if (isSuccessValue(val)) {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
-        {valueToString(successVal)}
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
+        <CheckCircle2 className="w-3 h-3" /> Sucesso
       </span>
     );
   }
-
-  // Fallback: primeiro campo disponível
-  const firstEntry = Object.entries(outputs)[0];
-  if (firstEntry) {
+  if (isFailureValue(val)) {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-        {valueToString(firstEntry[1])}
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700">
+        <XCircle className="w-3 h-3" /> Fracasso
       </span>
     );
   }
-  return <span className="text-gray-400 text-xs">—</span>;
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
+      {valueToLabel(val)}
+    </span>
+  );
+}
+
+/** Painel de avaliação detalhada no drawer */
+function EvaluationPanel({ outputs }: { outputs: Record<string, unknown> | null }) {
+  const [showTranscript, setShowTranscript] = useState(false);
+  if (!outputs) return null;
+  const result = extractResult(outputs);
+  if (!result || Object.keys(result).length === 0) return null;
+
+  // Separar campos curtos (badges/valores) dos longos (textos)
+  const shortEntries: [string, unknown][] = [];
+  const longEntries: [string, unknown][] = [];
+
+  for (const [k, v] of Object.entries(result)) {
+    if (v === null || v === undefined || v === "") continue;
+    if (LONG_TEXT_FIELDS.has(k)) longEntries.push([k, v]);
+    else shortEntries.push([k, v]);
+  }
+
+  const score = result["Performance Global Score"];
+
+  return (
+    <div className="space-y-3">
+      {/* Score global destacado */}
+      {score != null && (
+        <div className="flex items-center gap-2 bg-indigo-50 rounded-xl px-3 py-2.5">
+          <Star className="w-4 h-4 text-indigo-500 shrink-0" />
+          <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Score Global</span>
+          <span className="ml-auto text-lg font-bold text-indigo-700">{String(score)}</span>
+        </div>
+      )}
+
+      {/* Campos curtos em grid */}
+      {shortEntries.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {shortEntries.map(([k, v]) => {
+            const label = RESULT_PRIORITY_FIELDS[k] ?? k;
+            const isScore = k === "Performance Global Score";
+            if (isScore) return null; // já exibido acima
+            const isSuccess = isSuccessValue(v);
+            const isFailure = isFailureValue(v);
+            return (
+              <div key={k} className="bg-gray-50 rounded-lg px-2.5 py-2">
+                <p className="text-xs text-gray-400 font-medium mb-0.5 truncate">{label}</p>
+                {isSuccess ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                    <CheckCircle2 className="w-3 h-3" /> Sim
+                  </span>
+                ) : isFailure ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600">
+                    <XCircle className="w-3 h-3" /> Não
+                  </span>
+                ) : (
+                  <p className="text-sm font-semibold text-gray-800 truncate">{valueToLabel(v)}</p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Campos longos como blocos de texto */}
+      {longEntries.map(([k, v]) => {
+        const label = RESULT_PRIORITY_FIELDS[k] ?? k;
+        return (
+          <div key={k}>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</p>
+            <p className="text-xs text-gray-700 bg-gray-50 rounded-lg px-3 py-2.5 leading-relaxed">
+              {valueToLabel(v)}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 interface ToastMsg { id: string; message: string; type: "success" | "error" }
@@ -167,9 +269,9 @@ export default function CallsPage() {
   const [searchPhone, setSearchPhone] = useState("");
   const [shortDurationMode, setShortDurationMode] = useState(false);
   const [maxDuration, setMaxDuration] = useState("30");
+  const [showTranscript, setShowTranscript] = useState(false);
   const { toasts, show: showToast } = useToast();
 
-  // Carrega lista de filas para o filtro
   useEffect(() => {
     fetch(`/api/tenants/${tenantId}/queues`)
       .then((r) => r.json())
@@ -198,6 +300,7 @@ export default function CallsPage() {
   useEffect(() => { loadCalls(); }, [loadCalls]);
 
   async function openDetail(callId: string) {
+    setShowTranscript(false);
     const res = await fetch(`/api/tenants/${tenantId}/calls/${callId}`);
     const data = await res.json();
     setSelected(data.call);
@@ -228,100 +331,93 @@ export default function CallsPage() {
             )}
           </p>
         </div>
-        <button
-          onClick={() => loadCalls(true)}
-          className="btn-secondary"
-          disabled={refreshing}
-        >
+        <button onClick={() => loadCalls(true)} className="btn-secondary" disabled={refreshing}>
           <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
           Atualizar
         </button>
       </div>
 
       {/* Filters */}
-      {(calls.length > 0 || shortDurationMode || queues.length > 0) && (
-        <div className="card px-4 py-3 mb-5 space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+      <div className="card px-4 py-3 mb-5 space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Filter className="w-4 h-4 text-gray-400 shrink-0" />
 
-            {/* Filtro de fila */}
-            {queues.length > 0 && (
-              <div className="flex items-center gap-2">
-                <ListOrdered className="w-4 h-4 text-indigo-400 shrink-0" />
-                <select
-                  className="select-native text-sm py-2.5"
-                  value={filterQueue}
-                  onChange={(e) => setFilterQueue(e.target.value)}
-                >
-                  <option value="all">Todas as filas</option>
-                  {queues.map((q) => (
-                    <option key={q.id} value={q.id}>{q.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <input
-              type="text"
-              className="form-input max-w-xs text-sm"
-              placeholder="Buscar por telefone..."
-              value={searchPhone}
-              onChange={(e) => setSearchPhone(e.target.value)}
-            />
-            <select
-              className="select-native text-sm py-2.5 max-w-xs"
-              value={filterReason}
-              onChange={(e) => setFilterReason(e.target.value)}
-            >
-              <option value="all">Todos os resultados</option>
-              {Object.entries(REASON_CONFIG).map(([key, cfg]) => (
-                <option key={key} value={key}>{cfg.label}</option>
-              ))}
-            </select>
-            {hasActiveFilters && (
-              <button
-                onClick={() => { setFilterReason("all"); setSearchPhone(""); setFilterQueue("all"); }}
-                className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+          {queues.length > 0 && (
+            <div className="flex items-center gap-2">
+              <ListOrdered className="w-4 h-4 text-indigo-400 shrink-0" />
+              <select
+                className="select-native text-sm py-2.5"
+                value={filterQueue}
+                onChange={(e) => setFilterQueue(e.target.value)}
               >
-                <X className="w-3.5 h-3.5" /> Limpar filtros
-              </button>
-            )}
-          </div>
+                <option value="all">Todas as filas</option>
+                {queues.map((q) => (
+                  <option key={q.id} value={q.id}>{q.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
-          {/* Filtro por duração curta */}
-          <div className="flex items-center gap-3 pt-1 border-t border-gray-100 flex-wrap">
-            <Timer className="w-4 h-4 text-indigo-400 shrink-0" />
-            <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
-              <input
-                type="checkbox"
-                className="rounded"
-                checked={shortDurationMode}
-                onChange={(e) => setShortDurationMode(e.target.checked)}
-              />
-              Atendidas com duração menor que
-            </label>
-            {shortDurationMode && (
-              <>
-                <input
-                  type="number"
-                  min="1"
-                  max="600"
-                  className="form-input w-20 text-sm"
-                  value={maxDuration}
-                  onChange={(e) => setMaxDuration(e.target.value)}
-                />
-                <span className="text-sm text-gray-500">segundos</span>
-                <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">
-                  Leads que atenderam mas desligaram rápido — candidatos a re-trabalho
-                </span>
-              </>
-            )}
-          </div>
+          <input
+            type="text"
+            className="form-input max-w-xs text-sm"
+            placeholder="Buscar por telefone..."
+            value={searchPhone}
+            onChange={(e) => setSearchPhone(e.target.value)}
+          />
+          <select
+            className="select-native text-sm py-2.5 max-w-xs"
+            value={filterReason}
+            onChange={(e) => setFilterReason(e.target.value)}
+          >
+            <option value="all">Todos os resultados</option>
+            {Object.entries(REASON_CONFIG).map(([key, cfg]) => (
+              <option key={key} value={key}>{cfg.label}</option>
+            ))}
+          </select>
+          {hasActiveFilters && (
+            <button
+              onClick={() => { setFilterReason("all"); setSearchPhone(""); setFilterQueue("all"); }}
+              className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+            >
+              <X className="w-3.5 h-3.5" /> Limpar filtros
+            </button>
+          )}
         </div>
-      )}
+
+        {/* Filtro duração curta */}
+        <div className="flex items-center gap-3 pt-1 border-t border-gray-100 flex-wrap">
+          <Timer className="w-4 h-4 text-indigo-400 shrink-0" />
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+            <input
+              type="checkbox"
+              className="rounded"
+              checked={shortDurationMode}
+              onChange={(e) => setShortDurationMode(e.target.checked)}
+            />
+            Atendidas com duração menor que
+          </label>
+          {shortDurationMode && (
+            <>
+              <input
+                type="number"
+                min="1"
+                max="600"
+                className="form-input w-20 text-sm"
+                value={maxDuration}
+                onChange={(e) => setMaxDuration(e.target.value)}
+              />
+              <span className="text-sm text-gray-500">segundos</span>
+              <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">
+                Leads que atenderam mas desligaram rápido — candidatos a re-trabalho
+              </span>
+            </>
+          )}
+        </div>
+      </div>
 
       <div className="flex gap-5">
-        {/* Lista */}
+        {/* Tabela */}
         <div className="flex-1 min-w-0">
           {loading ? (
             <div className="table-wrapper">
@@ -347,9 +443,7 @@ export default function CallsPage() {
                   </svg>
                 </div>
                 <p className="empty-state-title">
-                  {calls.length === 0
-                    ? "Nenhuma chamada registrada ainda"
-                    : "Nenhuma chamada encontrada"}
+                  {calls.length === 0 ? "Nenhuma chamada registrada ainda" : "Nenhuma chamada encontrada"}
                 </p>
                 <p className="empty-state-desc">
                   {calls.length === 0
@@ -366,8 +460,8 @@ export default function CallsPage() {
                     <th><span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />Telefone</span></th>
                     <th>Resultado</th>
                     <th><span className="flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" />Duração</span></th>
-                    <th>Avaliação</th>
-                    <th><span className="flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" />Custo</span></th>
+                    <th>Interesse</th>
+                    <th><span className="flex items-center gap-1.5"><Star className="w-3.5 h-3.5" />Score</span></th>
                     <th><span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Data</span></th>
                   </tr>
                 </thead>
@@ -376,6 +470,8 @@ export default function CallsPage() {
                     const reason = REASON_CONFIG[call.ended_reason ?? ""] ?? { label: call.ended_reason ?? "Em andamento", badge: "badge-indigo" };
                     const { relative, full } = formatRelativeTime(call.created_at);
                     const isSelected = selected?.id === call.id;
+                    const result = call.structured_outputs ? extractResult(call.structured_outputs) : null;
+                    const score = result?.["Performance Global Score"];
                     return (
                       <tr
                         key={call.id}
@@ -392,12 +488,10 @@ export default function CallsPage() {
                           {formatDuration(call.duration_seconds)}
                         </td>
                         <td>
-                          <StructuredOutputsBadge outputs={call.structured_outputs} />
+                          <InteresseBadge outputs={call.structured_outputs} />
                         </td>
-                        <td className="text-gray-600">
-                          {call.cost != null ? (
-                            <span className="font-mono">${call.cost.toFixed(4)}</span>
-                          ) : "—"}
+                        <td className="text-gray-600 font-mono text-sm">
+                          {score != null ? String(score) : "—"}
                         </td>
                         <td>
                           <span title={full} className="text-gray-500 cursor-help">
@@ -410,7 +504,6 @@ export default function CallsPage() {
                 </tbody>
               </table>
 
-              {/* Footer */}
               <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
                 <p className="text-xs text-gray-400">
                   {filteredCalls.length} de {calls.length} chamadas
@@ -418,9 +511,7 @@ export default function CallsPage() {
                     <> · Fila: <strong>{queues.find(q => q.id === filterQueue)?.name}</strong></>
                   )}
                 </p>
-                <p className="text-xs text-gray-500">
-                  Clique em uma linha para ver detalhes
-                </p>
+                <p className="text-xs text-gray-500">Clique em uma linha para ver detalhes</p>
               </div>
             </div>
           )}
@@ -428,84 +519,67 @@ export default function CallsPage() {
 
         {/* Drawer lateral */}
         {selected && (
-          <div className="w-80 shrink-0">
-            <div className="card sticky top-8">
+          <div className="w-96 shrink-0">
+            <div className="card sticky top-8 overflow-hidden">
+              {/* Header do drawer */}
               <div className="card-header flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <PhoneCall className="w-4 h-4 text-indigo-500" />
                   Detalhe da Chamada
                 </h2>
-                <button
-                  onClick={() => setSelected(null)}
-                  className="btn-icon text-gray-400 hover:text-gray-600 text-sm"
-                >
+                <button onClick={() => setSelected(null)} className="btn-icon text-gray-400 hover:text-gray-600">
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="card-body space-y-4">
-                <dl className="space-y-3">
+
+              <div className="card-body space-y-5 max-h-[calc(100vh-12rem)] overflow-y-auto">
+                {/* Info básica */}
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Telefone</dt>
-                    <dd className="font-mono text-sm font-medium text-gray-900 mt-0.5">
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">Telefone</p>
+                    <p className="font-mono text-base font-semibold text-gray-900">
                       {selected.leads ? formatPhone(selected.leads.phone_e164) : "—"}
-                    </dd>
+                    </p>
                   </div>
-                  <div>
-                    <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Resultado</dt>
-                    <dd className="mt-0.5">
-                      {(() => {
-                        const r = REASON_CONFIG[selected.ended_reason ?? ""] ?? { label: selected.ended_reason ?? "—", badge: "badge-gray" };
-                        return <span className={r.badge}>{r.label}</span>;
-                      })()}
-                    </dd>
+                  <div className="text-right">
+                    {(() => {
+                      const r = REASON_CONFIG[selected.ended_reason ?? ""] ?? { label: selected.ended_reason ?? "—", badge: "badge-gray" };
+                      return <span className={r.badge}>{r.label}</span>;
+                    })()}
                   </div>
+                </div>
 
-                  {/* Avaliação de Sucesso */}
-                  {selected.structured_outputs && Object.keys(selected.structured_outputs).length > 0 && (
-                    <div>
-                      <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Avaliação de Sucesso</dt>
-                      <dd className="mt-0.5">
-                        <StructuredOutputsBadge outputs={selected.structured_outputs} />
-                      </dd>
-                      <div className="mt-1.5 bg-gray-50 rounded-lg px-2.5 py-2 text-xs font-mono text-gray-600 space-y-0.5">
-                        {Object.entries(selected.structured_outputs).map(([k, v]) => (
-                          <div key={k}>
-                            <span className="text-gray-400">{k}:</span>{" "}
-                            <span className="text-gray-700">{valueToString(v)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                {/* Métricas rápidas */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
+                    <p className="text-xs text-gray-400 font-medium">Duração</p>
+                    <p className="font-mono text-sm font-bold text-gray-800 mt-0.5">
+                      {formatDuration(selected.duration_seconds)}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
+                    <p className="text-xs text-gray-400 font-medium">Custo</p>
+                    <p className="font-mono text-sm font-bold text-gray-800 mt-0.5">
+                      {selected.cost != null ? `$${selected.cost.toFixed(4)}` : "—"}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
+                    <p className="text-xs text-gray-400 font-medium">Data</p>
+                    <p className="text-xs font-semibold text-gray-700 mt-0.5">
+                      {new Date(selected.created_at).toLocaleDateString("pt-BR")}
+                    </p>
+                  </div>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Duração</dt>
-                      <dd className="font-mono text-sm text-gray-900 mt-0.5">
-                        {formatDuration(selected.duration_seconds)}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Custo</dt>
-                      <dd className="font-mono text-sm text-gray-900 mt-0.5">
-                        {selected.cost != null ? `$${selected.cost.toFixed(4)}` : "—"}
-                      </dd>
-                    </div>
-                  </div>
+                {/* Avaliação estruturada */}
+                {selected.structured_outputs && Object.keys(selected.structured_outputs).length > 0 && (
                   <div>
-                    <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Data</dt>
-                    <dd className="text-sm text-gray-700 mt-0.5">
-                      {new Date(selected.created_at).toLocaleString("pt-BR")}
-                    </dd>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Avaliação</p>
+                    <EvaluationPanel outputs={selected.structured_outputs} />
                   </div>
-                  <div>
-                    <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Vapi Call ID</dt>
-                    <dd className="font-mono text-xs text-gray-600 break-all mt-0.5 bg-gray-50 rounded px-2 py-1.5">
-                      {selected.vapi_call_id}
-                    </dd>
-                  </div>
-                </dl>
+                )}
 
+                {/* Resumo do assistente */}
                 {selected.summary && (
                   <div>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Resumo</p>
@@ -515,14 +589,31 @@ export default function CallsPage() {
                   </div>
                 )}
 
+                {/* Transcrição colapsável */}
                 {selected.transcript && (
                   <div>
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Transcrição</p>
-                    <pre className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-3 whitespace-pre-wrap max-h-64 overflow-y-auto font-mono leading-relaxed">
-                      {selected.transcript}
-                    </pre>
+                    <button
+                      onClick={() => setShowTranscript((v) => !v)}
+                      className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-full hover:text-gray-600"
+                    >
+                      Transcrição
+                      {showTranscript ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+                    </button>
+                    {showTranscript && (
+                      <pre className="mt-2 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-3 whitespace-pre-wrap max-h-64 overflow-y-auto font-mono leading-relaxed">
+                        {selected.transcript}
+                      </pre>
+                    )}
                   </div>
                 )}
+
+                {/* Vapi ID */}
+                <div>
+                  <p className="text-xs font-semibold text-gray-300 uppercase tracking-wide mb-1">Vapi Call ID</p>
+                  <p className="font-mono text-xs text-gray-400 break-all bg-gray-50 rounded px-2 py-1.5">
+                    {selected.vapi_call_id}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
