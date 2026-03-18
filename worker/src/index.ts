@@ -176,29 +176,21 @@ async function initiateVapiCall(
   customerData:  Record<string, unknown>,
   tenantId:      string,
 ): Promise<VapiCallResponse> {
-  // serverUrl garante que o end-of-call-report sempre chega no tenant certo,
-  // independente do que estiver configurado globalmente no painel do Vapi
-  const serverUrl = APP_BASE_URL
-    ? `${APP_BASE_URL}/api/webhooks/vapi/${tenantId}`
-    : undefined;
-
-  if (serverUrl) {
-    console.log(`[worker] serverUrl configurado: ${serverUrl}`);
-  } else {
-    console.warn(
-      "[worker] ⚠ APP_BASE_URL não configurado — Vapi usará a URL global do painel." +
-      " Configure APP_BASE_URL nas variáveis de ambiente para garantir recebimento dos webhooks."
+  // Nota: o Vapi não aceita serverUrl nem server.url no payload do /call/phone.
+  // O webhook de end-of-call-report deve ser configurado no painel do Vapi
+  // em: Dashboard → Settings → Server URL → https://<app>/api/webhooks/vapi/<tenantId>
+  if (APP_BASE_URL) {
+    console.log(
+      `[worker] ⚠ Configure o Server URL no painel do Vapi: ` +
+      `${APP_BASE_URL}/api/webhooks/vapi/${tenantId}`
     );
   }
 
-  // Monta variableValues de forma defensiva:
-  // - Apenas valores primitivos (string, number, boolean)
-  // - Exclui nulos, objetos, arrays e strings vazias
-  // - Nunca sobrescreve as chaves reservadas phone / phone_e164
+  // variableValues: somente primitivos não-vazios
   const variableValues: Record<string, string> = {};
   for (const [k, v] of Object.entries(customerData)) {
     if (v === null || v === undefined) continue;
-    if (typeof v === "object") continue; // array ou objeto aninhado
+    if (typeof v === "object") continue;
     const str = String(v).trim();
     if (!str) continue;
     variableValues[k] = str;
@@ -206,13 +198,7 @@ async function initiateVapiCall(
   variableValues.phone      = phoneE164;
   variableValues.phone_e164 = phoneE164;
 
-  console.log(
-    `[worker] variableValues: ${Object.keys(variableValues).length} campo(s) → [${Object.keys(variableValues).join(", ")}]`
-  );
-
-  // Vapi só aceita campos específicos no objeto customer: number, name, extension.
-  // Qualquer campo extra (Name, company, email, etc.) causa HTTP 400.
-  // Todos os dados do lead chegam ao assistente via variableValues (acima).
+  // customer: apenas campos aceitos pelo Vapi (number, name, extension)
   const nameValue = customerData.name ?? customerData.Name ?? customerData.nome ?? null;
   const customerPayload: Record<string, unknown> = {
     number: phoneE164,
@@ -225,11 +211,7 @@ async function initiateVapiCall(
       assistantId,
       phoneNumberId,
       customer: customerPayload,
-      assistantOverrides: {
-        variableValues,
-      },
-      // Vapi API v2: serverUrl agora é { server: { url } }, não mais campo top-level
-      ...(serverUrl ? { server: { url: serverUrl } } : {}),
+      assistantOverrides: { variableValues },
     },
     {
       headers: {
@@ -409,6 +391,11 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue): Promise
   ] as Lead[];
 
   if (leads.length === 0) return;
+
+  console.log(
+    `[worker] Fila="${queue.name}" (${queue.id}) | lista=${queue.lead_list_id} | ` +
+    `slots=${slots} | leads selecionados: [${leads.map(l => l.phone_e164).join(", ")}]`
+  );
 
   // ── Buscar chave Vapi do tenant ──
   const vapiKey = await getVapiKey(supabase, queue.tenant_id);
