@@ -346,7 +346,12 @@ async function fireOutboundWebhook(
     .eq("tenant_id", tenantId)
     .single();
 
-  if (!queueInfo?.webhook_url) return; // Sem webhook configurado
+  if (!queueInfo?.webhook_url) {
+    console.log(`[outbound-webhook] Fila ${queueId} sem webhook_url configurada — ignorando`);
+    return;
+  }
+
+  console.log(`[outbound-webhook] Disparando para ${queueInfo.webhook_url} | lead=${leadId} | status=${leadStatus}`);
 
   // Buscar dados do lead
   const { data: lead } = await service
@@ -459,13 +464,24 @@ async function fireOutboundWebhook(
   };
 
   try {
-    await fetch(queueInfo.webhook_url, {
+    const res = await fetch(queueInfo.webhook_url, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(payload),
-      signal:  AbortSignal.timeout(8000), // 8s — payload maior, mais tempo
+      signal:  AbortSignal.timeout(12_000), // 12s
     });
-  } catch {
-    console.error("[outbound-webhook] Erro ao enviar para", queueInfo.webhook_url);
+
+    if (res.ok) {
+      console.log(`[outbound-webhook] ✓ Entregue | HTTP ${res.status} | url=${queueInfo.webhook_url}`);
+    } else {
+      const body = await res.text().catch(() => "");
+      console.error(
+        `[outbound-webhook] ✗ Destino retornou HTTP ${res.status} | url=${queueInfo.webhook_url} | body=${body.slice(0, 200)}`
+      );
+    }
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[outbound-webhook] ✗ Falha de rede | url=${queueInfo.webhook_url} | erro=${msg}`);
   }
 }

@@ -28,6 +28,9 @@ const ENCRYPTION_KEY_B64  = process.env.ENCRYPTION_KEY_BASE64!;
 const POLL_INTERVAL_MS    = Number(process.env.POLL_INTERVAL_MS   ?? 5_000);
 const VAPI_TIMEOUT_MS     = Number(process.env.VAPI_TIMEOUT_MS    ?? 15_000);
 const VAPI_BASE_URL       = process.env.VAPI_BASE_URL ?? "https://api.vapi.ai";
+// URL base do app (ex: https://meuapp.vercel.app) — usado para construir o serverUrl do Vapi
+// Sem isso, o Vapi usa a URL global do painel, que pode estar errada
+const APP_BASE_URL        = (process.env.APP_BASE_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos
@@ -171,13 +174,30 @@ async function initiateVapiCall(
   phoneNumberId: string,
   phoneE164:     string,
   customerData:  Record<string, unknown>,
+  tenantId:      string,
 ): Promise<VapiCallResponse> {
+  // serverUrl garante que o end-of-call-report sempre chega no tenant certo,
+  // independente do que estiver configurado globalmente no painel do Vapi
+  const serverUrl = APP_BASE_URL
+    ? `${APP_BASE_URL}/api/webhooks/vapi/${tenantId}`
+    : undefined;
+
+  if (serverUrl) {
+    console.log(`[worker] serverUrl configurado: ${serverUrl}`);
+  } else {
+    console.warn(
+      "[worker] ⚠ APP_BASE_URL não configurado — Vapi usará a URL global do painel." +
+      " Configure APP_BASE_URL nas variáveis de ambiente para garantir recebimento dos webhooks."
+    );
+  }
+
   const { data } = await axios.post<VapiCallResponse>(
     `${VAPI_BASE_URL}/call/phone`,
     {
       assistantId,
       phoneNumberId,
-      customer: { number: phoneE164, ...customerData },
+      customer:  { number: phoneE164, ...customerData },
+      ...(serverUrl ? { serverUrl } : {}),
     },
     {
       headers: {
@@ -229,6 +249,7 @@ async function processLead(
       queue.phone_number_id,
       lead.phone_e164,
       lead.data_json ?? {},
+      queue.tenant_id,
     );
 
     // ── 3. Criar call_record ──
