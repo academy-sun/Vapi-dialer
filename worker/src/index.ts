@@ -210,14 +210,14 @@ async function initiateVapiCall(
     `[worker] variableValues: ${Object.keys(variableValues).length} campo(s) → [${Object.keys(variableValues).join(", ")}]`
   );
 
-  // Monta customer SEM espalhar data_json para evitar sobrescrever campos reservados do Vapi
-  // (ex: se o lead tiver um campo "number", "name" ou "id" isso não conflita mais)
-  const customerPayload: Record<string, unknown> = { number: phoneE164 };
-  for (const [k, v] of Object.entries(customerData)) {
-    if (k === "number") continue; // nunca sobrescreve o número
-    if (v === null || v === undefined) continue;
-    customerPayload[k] = v;
-  }
+  // Vapi só aceita campos específicos no objeto customer: number, name, extension.
+  // Qualquer campo extra (Name, company, email, etc.) causa HTTP 400.
+  // Todos os dados do lead chegam ao assistente via variableValues (acima).
+  const nameValue = customerData.name ?? customerData.Name ?? customerData.nome ?? null;
+  const customerPayload: Record<string, unknown> = {
+    number: phoneE164,
+    ...(nameValue ? { name: String(nameValue) } : {}),
+  };
 
   const { data } = await axios.post<VapiCallResponse>(
     `${VAPI_BASE_URL}/call/phone`,
