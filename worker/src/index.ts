@@ -191,12 +191,24 @@ async function initiateVapiCall(
     );
   }
 
+  const variableValues: Record<string, string> = {
+    phone:      phoneE164,
+    phone_e164: phoneE164,
+    ...Object.fromEntries(
+      Object.entries(customerData).map(([k, v]) => [k, String(v ?? "")])
+    ),
+  };
+  console.log(`[worker] assistantOverrides.variableValues: ${Object.keys(variableValues).length} variáveis enviadas`);
+
   const { data } = await axios.post<VapiCallResponse>(
     `${VAPI_BASE_URL}/call/phone`,
     {
       assistantId,
       phoneNumberId,
-      customer:  { number: phoneE164, ...customerData },
+      customer: { number: phoneE164, ...customerData },
+      assistantOverrides: {
+        variableValues,
+      },
       ...(serverUrl ? { serverUrl } : {}),
     },
     {

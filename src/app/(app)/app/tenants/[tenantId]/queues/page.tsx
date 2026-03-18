@@ -25,6 +25,14 @@ import {
 } from "lucide-react";
 
 interface LeadList { id: string; name: string }
+interface VapiAssistant  { id: string; name: string }
+interface VapiPhoneNumber { id: string; name?: string; number?: string }
+interface VapiTool        { id: string; name: string; type?: string }
+interface VapiResources {
+  assistants:   VapiAssistant[];
+  phoneNumbers: VapiPhoneNumber[];
+  tools:        VapiTool[];
+}
 interface Queue {
   id: string; name: string; status: string;
   assistant_id: string; phone_number_id: string;
@@ -91,11 +99,15 @@ function QueueFormFields({
   leadLists,
   update,
   isEdit = false,
+  vapiResources,
+  vapiLoading,
 }: {
   form: Record<string, string>;
   leadLists: LeadList[];
   update: (k: string, v: string) => void;
   isEdit?: boolean;
+  vapiResources?: VapiResources;
+  vapiLoading?: boolean;
 }) {
   // allowed_days stored as comma-separated string "1,2,3,4,5"
   const selectedDays: number[] = form.allowed_days
@@ -119,14 +131,66 @@ function QueueFormFields({
           onChange={(e) => update("name", e.target.value)} required />
       </div>
       <div>
-        <label className="form-label">Vapi Assistant ID</label>
-        <input className="form-input font-mono" placeholder="asst_xxx" value={form.assistant_id}
-          onChange={(e) => update("assistant_id", e.target.value)} required />
+        <label className="form-label flex items-center gap-1.5">
+          Assistente Vapi
+          {vapiLoading && <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />}
+        </label>
+        {vapiResources && vapiResources.assistants.length > 0 ? (
+          <select
+            className="select-native"
+            value={form.assistant_id ?? ""}
+            onChange={(e) => update("assistant_id", e.target.value)}
+            required
+          >
+            <option value="">Selecionar assistente...</option>
+            {vapiResources.assistants.map((a) => (
+              <option key={a.id} value={a.id}>{a.name || a.id}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            className="form-input font-mono text-sm"
+            placeholder={vapiLoading ? "Carregando..." : "asst_xxx (cole o ID manualmente)"}
+            value={form.assistant_id ?? ""}
+            onChange={(e) => update("assistant_id", e.target.value)}
+            required
+          />
+        )}
+        {form.assistant_id && (
+          <p className="text-xs text-gray-400 mt-1 font-mono truncate">{form.assistant_id}</p>
+        )}
       </div>
       <div>
-        <label className="form-label">Vapi Phone Number ID</label>
-        <input className="form-input font-mono" placeholder="pn_xxx" value={form.phone_number_id}
-          onChange={(e) => update("phone_number_id", e.target.value)} required />
+        <label className="form-label flex items-center gap-1.5">
+          Número de Telefone Vapi
+          {vapiLoading && <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />}
+        </label>
+        {vapiResources && vapiResources.phoneNumbers.length > 0 ? (
+          <select
+            className="select-native"
+            value={form.phone_number_id ?? ""}
+            onChange={(e) => update("phone_number_id", e.target.value)}
+            required
+          >
+            <option value="">Selecionar número...</option>
+            {vapiResources.phoneNumbers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.number ? `${p.number}${p.name ? ` — ${p.name}` : ""}` : (p.name || p.id)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            className="form-input font-mono text-sm"
+            placeholder={vapiLoading ? "Carregando..." : "pn_xxx (cole o ID manualmente)"}
+            value={form.phone_number_id ?? ""}
+            onChange={(e) => update("phone_number_id", e.target.value)}
+            required
+          />
+        )}
+        {form.phone_number_id && (
+          <p className="text-xs text-gray-400 mt-1 font-mono truncate">{form.phone_number_id}</p>
+        )}
       </div>
       {!isEdit && (
         <div>
@@ -258,11 +322,13 @@ function QueueFormFields({
 
 // ── Create modal ──
 function CreateQueueModal({
-  leadLists, onClose, onCreate,
+  leadLists, onClose, onCreate, vapiResources, vapiLoading,
 }: {
   leadLists: LeadList[];
   onClose: () => void;
   onCreate: (form: Record<string, string>) => Promise<void>;
+  vapiResources?: VapiResources;
+  vapiLoading?: boolean;
 }) {
   const [form, setForm] = useState({
     name: "", assistant_id: "", phone_number_id: "",
@@ -293,7 +359,7 @@ function CreateQueueModal({
           <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="card-body">
-          <QueueFormFields form={form} leadLists={leadLists} update={update} />
+          <QueueFormFields form={form} leadLists={leadLists} update={update} vapiResources={vapiResources} vapiLoading={vapiLoading} />
           <div className="flex gap-3 justify-end pt-5 mt-2 border-t border-gray-100">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" disabled={loading} className="btn-primary">
@@ -308,12 +374,14 @@ function CreateQueueModal({
 
 // ── Edit modal ──
 function EditQueueModal({
-  queue, leadLists, onClose, onSave,
+  queue, leadLists, onClose, onSave, vapiResources, vapiLoading,
 }: {
   queue: Queue;
   leadLists: LeadList[];
   onClose: () => void;
   onSave: (id: string, form: Record<string, string>) => Promise<void>;
+  vapiResources?: VapiResources;
+  vapiLoading?: boolean;
 }) {
   // Parse allowed_days from the queue (JSONB array → comma string)
   const existingDays = Array.isArray(queue.allowed_days)
@@ -356,7 +424,7 @@ function EditQueueModal({
           <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="card-body">
-          <QueueFormFields form={form} leadLists={leadLists} update={update} isEdit />
+          <QueueFormFields form={form} leadLists={leadLists} update={update} isEdit vapiResources={vapiResources} vapiLoading={vapiLoading} />
           <div className="flex gap-3 justify-end pt-5 mt-2 border-t border-gray-100">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
             <button type="submit" disabled={loading} className="btn-primary">
@@ -496,6 +564,8 @@ export default function QueuesPage() {
   const [loading, setLoading] = useState(true);
   const [webhookTesting, setWebhookTesting] = useState<Record<string, boolean>>({});
   const [webhookResults, setWebhookResults] = useState<Record<string, { ok: boolean; message: string; status: number | null; elapsed_ms: number }>>({});
+  const [vapiResources, setVapiResources] = useState<VapiResources | undefined>(undefined);
+  const [vapiLoading, setVapiLoading] = useState(false);
   const { toasts, show: showToast } = useToast();
 
   const loadQueues = useCallback(async () => {
@@ -505,12 +575,24 @@ export default function QueuesPage() {
     setLoading(false);
   }, [tenantId]);
 
+  const loadVapiResources = useCallback(async () => {
+    setVapiLoading(true);
+    try {
+      const res = await fetch(`/api/tenants/${tenantId}/vapi-resources`);
+      const data = await res.json();
+      if (res.ok) setVapiResources(data);
+    } finally {
+      setVapiLoading(false);
+    }
+  }, [tenantId]);
+
   useEffect(() => {
     loadQueues();
+    loadVapiResources();
     fetch(`/api/tenants/${tenantId}/lead-lists`)
       .then((r) => r.json())
       .then((d) => setLeadLists(d.leadLists ?? []));
-  }, [tenantId, loadQueues]);
+  }, [tenantId, loadQueues, loadVapiResources]);
 
   useEffect(() => {
     const running = queues.filter((q) => q.status === "running");
@@ -929,6 +1011,8 @@ export default function QueuesPage() {
           leadLists={leadLists}
           onClose={() => setShowCreate(false)}
           onCreate={createQueue}
+          vapiResources={vapiResources}
+          vapiLoading={vapiLoading}
         />
       )}
 
@@ -938,6 +1022,8 @@ export default function QueuesPage() {
           leadLists={leadLists}
           onClose={() => setEditingQueue(null)}
           onSave={saveQueue}
+          vapiResources={vapiResources}
+          vapiLoading={vapiLoading}
         />
       )}
 
