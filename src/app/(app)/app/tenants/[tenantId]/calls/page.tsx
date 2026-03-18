@@ -8,16 +8,17 @@ import {
   Check,
   AlertTriangle,
   Phone,
-  Clock,
   DollarSign,
   Calendar,
   Filter,
-  Info,
   Loader2,
   Timer,
   CheckCircle2,
   XCircle,
+  ListOrdered,
 } from "lucide-react";
+
+interface Queue { id: string; name: string }
 
 interface Call {
   id: string;
@@ -44,8 +45,6 @@ const REASON_CONFIG: Record<string, { label: string; badge: string }> = {
   "voicemail": { label: "Caixa postal", badge: "badge-purple" },
   "failed": { label: "Falha", badge: "badge-red" },
 };
-
-const ANSWERED_REASONS = new Set(["customer-ended-call", "assistant-ended-call"]);
 
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -78,31 +77,67 @@ function formatRelativeTime(dateStr: string): { relative: string; full: string }
   return { relative, full };
 }
 
-function StructuredOutputsBadge({ outputs }: { outputs: Record<string, unknown> | null }) {
-  if (!outputs) return <span className="text-gray-300 text-xs">—</span>;
+/** Normaliza qualquer valor em string legível */
+function valueToString(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
 
-  // Detect success field (common patterns)
-  const successVal = outputs.success ?? outputs.sucesso ?? outputs.interested ?? outputs.interesse;
-  if (successVal === true || successVal === "true" || successVal === "Sucesso" || successVal === "sim") {
+/** Detecta se o valor é "verdadeiro" (sucesso) */
+function isTruthy(v: unknown): boolean {
+  if (v === true || v === "true" || v === "Sucesso" || v === "sim" || v === "yes" || v === 1) return true;
+  return false;
+}
+
+/** Detecta se o valor é "falso" (fracasso) */
+function isFalsy(v: unknown): boolean {
+  if (v === false || v === "false" || v === "Fracasso" || v === "não" || v === "nao" || v === "no" || v === 0) return true;
+  return false;
+}
+
+function StructuredOutputsBadge({ outputs }: { outputs: Record<string, unknown> | null }) {
+  if (!outputs || Object.keys(outputs).length === 0) return <span className="text-gray-300 text-xs">—</span>;
+
+  // Procura campo de avaliação em vários padrões de nome
+  const successVal =
+    outputs.success ??
+    outputs.sucesso ??
+    outputs.interested ??
+    outputs.interesse ??
+    outputs.successEvaluation ??
+    outputs.success_evaluation ??
+    outputs.result;
+
+  if (successVal !== undefined) {
+    if (isTruthy(successVal)) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+          <CheckCircle2 className="w-3 h-3" /> Sucesso
+        </span>
+      );
+    }
+    if (isFalsy(successVal)) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">
+          <XCircle className="w-3 h-3" /> Fracasso
+        </span>
+      );
+    }
+    // Valor textual customizado
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
-        <CheckCircle2 className="w-3 h-3" /> Sucesso
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
+        {valueToString(successVal)}
       </span>
     );
   }
-  if (successVal === false || successVal === "false" || successVal === "Fracasso" || successVal === "não" || successVal === "nao") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">
-        <XCircle className="w-3 h-3" /> Fracasso
-      </span>
-    );
-  }
-  // Fallback: show as badge with first key-value
+
+  // Fallback: primeiro campo disponível
   const firstEntry = Object.entries(outputs)[0];
   if (firstEntry) {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
-        {String(firstEntry[1])}
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+        {valueToString(firstEntry[1])}
       </span>
     );
   }
@@ -123,42 +158,44 @@ function useToast() {
 export default function CallsPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const [calls, setCalls] = useState<Call[]>([]);
+  const [queues, setQueues] = useState<Queue[]>([]);
   const [selected, setSelected] = useState<CallDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filterReason, setFilterReason] = useState("all");
+  const [filterQueue, setFilterQueue] = useState("all");
   const [searchPhone, setSearchPhone] = useState("");
-  // Short-duration answered filter
   const [shortDurationMode, setShortDurationMode] = useState(false);
   const [maxDuration, setMaxDuration] = useState("30");
   const { toasts, show: showToast } = useToast();
+
+  // Carrega lista de filas para o filtro
+  useEffect(() => {
+    fetch(`/api/tenants/${tenantId}/queues`)
+      .then((r) => r.json())
+      .then((d) => setQueues(d.queues ?? []));
+  }, [tenantId]);
 
   const loadCalls = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
     else setLoading(true);
 
-    let url = `/api/tenants/${tenantId}/calls?limit=100`;
+    const params = new URLSearchParams({ limit: "100" });
+    if (filterQueue !== "all") params.set("queueId", filterQueue);
     if (shortDurationMode) {
-      url += `&answered_only=true&max_duration=${maxDuration}`;
+      params.set("answered_only", "true");
+      params.set("max_duration", maxDuration);
     }
 
-    const res = await fetch(url);
+    const res = await fetch(`/api/tenants/${tenantId}/calls?${params}`);
     const data = await res.json();
     setCalls(data.calls ?? []);
     setLoading(false);
     setRefreshing(false);
     if (showRefresh) showToast("Chamadas atualizadas!");
-  }, [tenantId, shortDurationMode, maxDuration, showToast]);
+  }, [tenantId, filterQueue, shortDurationMode, maxDuration, showToast]);
 
   useEffect(() => { loadCalls(); }, [loadCalls]);
-
-  // Auto-refresh a cada 8s enquanto houver chamadas sem ended_reason (em andamento)
-  useEffect(() => {
-    const hasInProgress = calls.some((c) => !c.ended_reason);
-    if (!hasInProgress) return;
-    const id = setInterval(() => loadCalls(), 8_000);
-    return () => clearInterval(id);
-  }, [calls, loadCalls]);
 
   async function openDetail(callId: string) {
     const res = await fetch(`/api/tenants/${tenantId}/calls/${callId}`);
@@ -174,7 +211,7 @@ export default function CallsPage() {
 
   const totalCost   = calls.reduce((sum, c) => sum + (c.cost ?? 0), 0);
   const totalDurSec = calls.reduce((sum, c) => sum + (c.duration_seconds ?? 0), 0);
-  const inProgress  = calls.filter((c) => !c.ended_reason).length;
+  const hasActiveFilters = filterReason !== "all" || searchPhone || filterQueue !== "all";
 
   return (
     <div>
@@ -201,31 +238,29 @@ export default function CallsPage() {
         </button>
       </div>
 
-      {/* Aviso: chamadas em andamento sem webhook configurado */}
-      {inProgress > 0 && (
-        <div className="alert-warning mb-5 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold">
-              {inProgress} {inProgress === 1 ? "chamada aparece" : "chamadas aparecem"} como "Em andamento"
-            </p>
-            <p className="text-sm text-amber-700 mt-0.5">
-              O status só atualiza quando o Vapi envia o evento <code className="bg-amber-100 px-1 rounded font-mono text-xs">end-of-call-report</code> via webhook.
-              {" "}Confirme que a URL do webhook está configurada no painel Vapi{" "}
-              (<strong>Settings → Webhooks</strong>). Acesse{" "}
-              <strong>Configuração Vapi</strong> no menu para ver e copiar a URL correta.
-              A página atualiza automaticamente a cada 8s.{" "}
-              <Loader2 className="w-3 h-3 inline animate-spin text-amber-600" />
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Filters */}
-      {calls.length > 0 || shortDurationMode ? (
+      {(calls.length > 0 || shortDurationMode || queues.length > 0) && (
         <div className="card px-4 py-3 mb-5 space-y-3">
           <div className="flex items-center gap-3 flex-wrap">
             <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+
+            {/* Filtro de fila */}
+            {queues.length > 0 && (
+              <div className="flex items-center gap-2">
+                <ListOrdered className="w-4 h-4 text-indigo-400 shrink-0" />
+                <select
+                  className="select-native text-sm py-2.5"
+                  value={filterQueue}
+                  onChange={(e) => setFilterQueue(e.target.value)}
+                >
+                  <option value="all">Todas as filas</option>
+                  {queues.map((q) => (
+                    <option key={q.id} value={q.id}>{q.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <input
               type="text"
               className="form-input max-w-xs text-sm"
@@ -243,9 +278,9 @@ export default function CallsPage() {
                 <option key={key} value={key}>{cfg.label}</option>
               ))}
             </select>
-            {(filterReason !== "all" || searchPhone) && (
+            {hasActiveFilters && (
               <button
-                onClick={() => { setFilterReason("all"); setSearchPhone(""); }}
+                onClick={() => { setFilterReason("all"); setSearchPhone(""); setFilterQueue("all"); }}
                 className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
               >
                 <X className="w-3.5 h-3.5" /> Limpar filtros
@@ -253,7 +288,7 @@ export default function CallsPage() {
             )}
           </div>
 
-          {/* Short-duration answered filter */}
+          {/* Filtro por duração curta */}
           <div className="flex items-center gap-3 pt-1 border-t border-gray-100 flex-wrap">
             <Timer className="w-4 h-4 text-indigo-400 shrink-0" />
             <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
@@ -283,7 +318,7 @@ export default function CallsPage() {
             )}
           </div>
         </div>
-      ) : null}
+      )}
 
       <div className="flex gap-5">
         {/* Lista */}
@@ -379,6 +414,9 @@ export default function CallsPage() {
               <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
                 <p className="text-xs text-gray-400">
                   {filteredCalls.length} de {calls.length} chamadas
+                  {filterQueue !== "all" && queues.length > 0 && (
+                    <> · Fila: <strong>{queues.find(q => q.id === filterQueue)?.name}</strong></>
+                  )}
                 </p>
                 <p className="text-xs text-gray-500">
                   Clique em uma linha para ver detalhes
@@ -423,22 +461,20 @@ export default function CallsPage() {
                   </div>
 
                   {/* Avaliação de Sucesso */}
-                  {selected.structured_outputs && (
+                  {selected.structured_outputs && Object.keys(selected.structured_outputs).length > 0 && (
                     <div>
                       <dt className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Avaliação de Sucesso</dt>
                       <dd className="mt-0.5">
                         <StructuredOutputsBadge outputs={selected.structured_outputs} />
                       </dd>
-                      {Object.keys(selected.structured_outputs).length > 0 && (
-                        <div className="mt-1.5 bg-gray-50 rounded-lg px-2.5 py-2 text-xs font-mono text-gray-600 space-y-0.5">
-                          {Object.entries(selected.structured_outputs).map(([k, v]) => (
-                            <div key={k}>
-                              <span className="text-gray-400">{k}:</span>{" "}
-                              <span className="text-gray-700">{String(v)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div className="mt-1.5 bg-gray-50 rounded-lg px-2.5 py-2 text-xs font-mono text-gray-600 space-y-0.5">
+                        {Object.entries(selected.structured_outputs).map(([k, v]) => (
+                          <div key={k}>
+                            <span className="text-gray-400">{k}:</span>{" "}
+                            <span className="text-gray-700">{valueToString(v)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
