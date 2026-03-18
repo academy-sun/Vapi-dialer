@@ -228,7 +228,8 @@ async function initiateVapiCall(
       assistantOverrides: {
         variableValues,
       },
-      ...(serverUrl ? { serverUrl } : {}),
+      // Vapi API v2: serverUrl agora é { server: { url } }, não mais campo top-level
+      ...(serverUrl ? { server: { url: serverUrl } } : {}),
     },
     {
       headers: {
