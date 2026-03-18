@@ -18,6 +18,8 @@ import {
   Star,
   ChevronDown,
   ChevronUp,
+  Mic,
+  ExternalLink,
 } from "lucide-react";
 
 interface Queue { id: string; name: string }
@@ -37,6 +39,8 @@ interface Call {
 
 interface CallDetail extends Call {
   transcript: string | null;
+  recording_url: string | null;
+  stereo_recording_url: string | null;
 }
 
 const REASON_CONFIG: Record<string, { label: string; badge: string }> = {
@@ -61,12 +65,22 @@ const RESULT_PRIORITY_FIELDS: Record<string, string> = {
   "Performance Global Score":   "Score Global",
 };
 
-// Campos a exibir como texto longo (não em badge)
-const LONG_TEXT_FIELDS = new Set([
+// Campos conhecidos como texto longo
+const KNOWN_LONG_TEXT_FIELDS = new Set([
   "resumo", "Pontos Melhoria", "Lista Objeções",
   "Possíveis Motivos de Falha", "Justificative Performance Global",
-  "compliancePlan",
+  "compliancePlan", "summary", "notes", "observacoes", "justificativa",
 ]);
+
+// Heurística: valor longo (>60 chars) ou campo com palavras-chave → texto longo
+function isLongTextField(key: string, value: unknown): boolean {
+  if (KNOWN_LONG_TEXT_FIELDS.has(key)) return true;
+  if (typeof value === "string" && value.length > 60) return true;
+  const lk = key.toLowerCase();
+  return lk.includes("motiv") || lk.includes("justif") || lk.includes("resum") ||
+         lk.includes("descri") || lk.includes("observ") || lk.includes("nota") ||
+         lk.includes("comment") || lk.includes("reason") || lk.includes("detail");
+}
 
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
@@ -184,7 +198,7 @@ function EvaluationPanel({ outputs }: { outputs: Record<string, unknown> | null 
 
   for (const [k, v] of Object.entries(result)) {
     if (v === null || v === undefined || v === "") continue;
-    if (LONG_TEXT_FIELDS.has(k)) longEntries.push([k, v]);
+    if (isLongTextField(k, v)) longEntries.push([k, v]);
     else shortEntries.push([k, v]);
   }
 
@@ -586,6 +600,43 @@ export default function CallsPage() {
                     <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-3 leading-relaxed">
                       {selected.summary}
                     </p>
+                  </div>
+                )}
+
+                {/* Gravação */}
+                {selected.recording_url && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <Mic className="w-3.5 h-3.5" /> Gravação
+                    </p>
+                    <div className="bg-gray-50 rounded-xl px-3 py-3 space-y-2">
+                      <audio
+                        controls
+                        src={selected.recording_url}
+                        className="w-full h-8"
+                        style={{ height: "36px" }}
+                      />
+                      <div className="flex gap-2">
+                        <a
+                          href={selected.recording_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                        >
+                          <ExternalLink className="w-3 h-3" /> Abrir mono
+                        </a>
+                        {selected.stereo_recording_url && (
+                          <a
+                            href={selected.stereo_recording_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                          >
+                            <ExternalLink className="w-3 h-3" /> Abrir estéreo
+                          </a>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
 
