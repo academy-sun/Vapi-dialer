@@ -417,10 +417,10 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue): Promise
   }
 
   // ── Processar leads em sequência (um por um para não sobrecarregar a Vapi) ──
+  // Intervalo de 1.5s entre chamadas para evitar HTTP 429 (rate limit do Vapi)
   for (const lead of leads) {
     await processLead(supabase, queue, lead, vapiKey);
-    // Pequeno intervalo entre chamadas para suavizar burst na API da Vapi
-    await sleep(300);
+    await sleep(1_500);
   }
 }
 
