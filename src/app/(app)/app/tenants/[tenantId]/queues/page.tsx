@@ -22,6 +22,9 @@ import {
   Zap,
   CheckCircle2,
   XCircle,
+  Stethoscope,
+  Clock,
+  Ban,
 } from "lucide-react";
 
 interface LeadList { id: string; name: string }
@@ -564,6 +567,8 @@ export default function QueuesPage() {
   const [loading, setLoading] = useState(true);
   const [webhookTesting, setWebhookTesting] = useState<Record<string, boolean>>({});
   const [webhookResults, setWebhookResults] = useState<Record<string, { ok: boolean; message: string; status: number | null; elapsed_ms: number }>>({});
+  const [diagnosing, setDiagnosing] = useState<Record<string, boolean>>({});
+  const [diagnoseResults, setDiagnoseResults] = useState<Record<string, { ok: boolean; issues: string[]; leads: { by_status: Record<string, number>; ready_to_call: number }; time_window: { status: string; now_in_tz?: string; window_start?: string; window_end?: string; timezone?: string }; vapi_key_configured: boolean } | null>>({});
   const [vapiResources, setVapiResources] = useState<VapiResources | undefined>(undefined);
   const [vapiLoading, setVapiLoading] = useState(false);
   const { toasts, show: showToast } = useToast();
@@ -737,6 +742,20 @@ export default function QueuesPage() {
       setWebhookResults((prev) => ({ ...prev, [queueId]: { ok: false, message: "Erro de rede ao testar webhook", status: null, elapsed_ms: 0 } }));
     } finally {
       setWebhookTesting((prev) => ({ ...prev, [queueId]: false }));
+    }
+  }
+
+  async function diagnoseQueue(queueId: string) {
+    setDiagnosing((p) => ({ ...p, [queueId]: true }));
+    setDiagnoseResults((p) => ({ ...p, [queueId]: null }));
+    try {
+      const res = await fetch(`/api/tenants/${tenantId}/queues/${queueId}/diagnose`);
+      const data = await res.json();
+      setDiagnoseResults((p) => ({ ...p, [queueId]: data }));
+    } catch {
+      setDiagnoseResults((p) => ({ ...p, [queueId]: { ok: false, issues: ["Erro de rede ao diagnosticar"], leads: { by_status: {}, ready_to_call: 0 }, time_window: { status: "no_restriction" }, vapi_key_configured: false } }));
+    } finally {
+      setDiagnosing((p) => ({ ...p, [queueId]: false }));
     }
   }
 
@@ -934,6 +953,50 @@ export default function QueuesPage() {
                   </div>
                 )}
 
+                {/* Diagnóstico */}
+                {diagnoseResults[q.id] && (() => {
+                  const d = diagnoseResults[q.id]!;
+                  const twStatus = d.time_window.status;
+                  return (
+                    <div className={`mb-3 rounded-xl border px-3 py-3 space-y-2 text-xs ${d.ok ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+                      <div className="flex items-center gap-2 font-semibold">
+                        {d.ok
+                          ? <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /><span className="text-emerald-700">Tudo certo — pronto para discar</span></>
+                          : <><AlertTriangle className="w-3.5 h-3.5 text-amber-600" /><span className="text-amber-700">{d.issues.length} problema(s) detectado(s)</span></>
+                        }
+                      </div>
+                      {d.issues.length > 0 && (
+                        <ul className="space-y-1">
+                          {d.issues.map((issue, i) => (
+                            <li key={i} className="flex items-start gap-1.5 text-amber-800">
+                              <Ban className="w-3 h-3 shrink-0 mt-0.5" />
+                              {issue}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="flex gap-4 flex-wrap pt-1 border-t border-amber-200/60">
+                        <span className="flex items-center gap-1 text-gray-600">
+                          <Users className="w-3 h-3" />
+                          Prontos: <strong>{d.leads.ready_to_call}</strong>
+                        </span>
+                        {Object.entries(d.leads.by_status).map(([s, c]) => (
+                          <span key={s} className="text-gray-500">{s}: {c}</span>
+                        ))}
+                        {d.time_window.now_in_tz && (
+                          <span className="flex items-center gap-1 text-gray-600">
+                            <Clock className="w-3 h-3" />
+                            {d.time_window.now_in_tz} ({d.time_window.timezone}) — janela: {d.time_window.window_start}–{d.time_window.window_end}
+                            {twStatus === "blocked_day" && <span className="text-red-600 font-semibold ml-1">DIA BLOQUEADO</span>}
+                            {twStatus === "blocked_hour" && <span className="text-red-600 font-semibold ml-1">FORA DO HORÁRIO</span>}
+                            {twStatus === "allowed" && <span className="text-emerald-600 font-semibold ml-1">✓</span>}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Actions */}
                 <div className="flex gap-2 pt-1 flex-wrap">
                   {q.status === "draft" && (
@@ -989,6 +1052,18 @@ export default function QueuesPage() {
                   >
                     <Copy className="w-3.5 h-3.5" />
                     Duplicar
+                  </button>
+                  {/* Diagnosticar */}
+                  <button
+                    onClick={() => diagnoseQueue(q.id)}
+                    disabled={diagnosing[q.id]}
+                    className="btn btn-sm bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    title="Diagnosticar fila"
+                  >
+                    {diagnosing[q.id]
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Stethoscope className="w-3.5 h-3.5" />}
+                    Diagnosticar
                   </button>
                   {/* Ver leads */}
                   <button

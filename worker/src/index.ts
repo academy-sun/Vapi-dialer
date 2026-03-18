@@ -191,21 +191,40 @@ async function initiateVapiCall(
     );
   }
 
-  const variableValues: Record<string, string> = {
-    phone:      phoneE164,
-    phone_e164: phoneE164,
-    ...Object.fromEntries(
-      Object.entries(customerData).map(([k, v]) => [k, String(v ?? "")])
-    ),
-  };
-  console.log(`[worker] assistantOverrides.variableValues: ${Object.keys(variableValues).length} variáveis enviadas`);
+  // Monta variableValues de forma defensiva:
+  // - Apenas valores primitivos (string, number, boolean)
+  // - Exclui nulos, objetos, arrays e strings vazias
+  // - Nunca sobrescreve as chaves reservadas phone / phone_e164
+  const variableValues: Record<string, string> = {};
+  for (const [k, v] of Object.entries(customerData)) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === "object") continue; // array ou objeto aninhado
+    const str = String(v).trim();
+    if (!str) continue;
+    variableValues[k] = str;
+  }
+  variableValues.phone      = phoneE164;
+  variableValues.phone_e164 = phoneE164;
+
+  console.log(
+    `[worker] variableValues: ${Object.keys(variableValues).length} campo(s) → [${Object.keys(variableValues).join(", ")}]`
+  );
+
+  // Monta customer SEM espalhar data_json para evitar sobrescrever campos reservados do Vapi
+  // (ex: se o lead tiver um campo "number", "name" ou "id" isso não conflita mais)
+  const customerPayload: Record<string, unknown> = { number: phoneE164 };
+  for (const [k, v] of Object.entries(customerData)) {
+    if (k === "number") continue; // nunca sobrescreve o número
+    if (v === null || v === undefined) continue;
+    customerPayload[k] = v;
+  }
 
   const { data } = await axios.post<VapiCallResponse>(
     `${VAPI_BASE_URL}/call/phone`,
     {
       assistantId,
       phoneNumberId,
-      customer: { number: phoneE164, ...customerData },
+      customer: customerPayload,
       assistantOverrides: {
         variableValues,
       },
@@ -284,14 +303,27 @@ async function processLead(
   } catch (err) {
     // ── 4. Falha na API Vapi → reagendar ou marcar como falha ──
     const isRateLimit = err instanceof AxiosError && err.response?.status === 429;
+    const httpStatus  = err instanceof AxiosError ? err.response?.status : null;
+    const errorBody   = err instanceof AxiosError ? JSON.stringify(err.response?.data) : null;
     const errorLabel  = err instanceof AxiosError
-      ? `HTTP ${err.response?.status}: ${JSON.stringify(err.response?.data)}`
+      ? `HTTP ${httpStatus}: ${errorBody}`
       : String(err);
 
     console.error(
       `[worker] ✗ Falha ao ligar para ${lead.phone_e164}` +
-      ` | tentativa ${newAttemptCount}/${queue.max_attempts} | erro: ${errorLabel}`,
+      ` | tentativa ${newAttemptCount}/${queue.max_attempts}` +
+      ` | fila=${queue.name} | tenant=${queue.tenant_id}` +
+      ` | erro: ${errorLabel}`,
     );
+
+    // Log extra para erros de validação do Vapi (422 / 400) — indica payload inválido
+    if (httpStatus === 422 || httpStatus === 400) {
+      console.error(
+        `[worker] ⚠ Payload rejeitado pelo Vapi (HTTP ${httpStatus}) — verifique assistantId, phoneNumberId e variableValues` +
+        ` | assistantId=${queue.assistant_id} | phoneNumberId=${queue.phone_number_id}` +
+        ` | resposta Vapi: ${errorBody}`
+      );
+    }
 
     if (newAttemptCount < queue.max_attempts) {
       // Ainda tem tentativas — reagendar com delay
