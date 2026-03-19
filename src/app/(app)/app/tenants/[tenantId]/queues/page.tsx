@@ -18,6 +18,8 @@ import {
   Users,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Link2,
   Zap,
   CheckCircle2,
@@ -25,6 +27,7 @@ import {
   Stethoscope,
   Clock,
   Ban,
+  Braces,
 } from "lucide-react";
 
 interface LeadList { id: string; name: string }
@@ -455,7 +458,9 @@ function LeadsDrawer({
   const [leads, setLeads] = useState<Lead[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageInput, setPageInput] = useState("1");
   const [loading, setLoading] = useState(true);
+  const [showVars, setShowVars] = useState(false);
   const limit = 20;
 
   const loadLeads = useCallback(async (p: number) => {
@@ -469,9 +474,36 @@ function LeadsDrawer({
     setLoading(false);
   }, [tenantId, queue.lead_list_id]);
 
-  useEffect(() => { loadLeads(page); }, [loadLeads, page]);
+  useEffect(() => {
+    loadLeads(page);
+    setPageInput(String(page));
+  }, [loadLeads, page]);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
+
+  function goToPage(p: number) {
+    const clamped = Math.max(1, Math.min(totalPages, p));
+    setPage(clamped);
+  }
+
+  function handlePageInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setPageInput(e.target.value);
+  }
+
+  function handlePageInputBlur() {
+    const parsed = parseInt(pageInput);
+    if (!isNaN(parsed)) goToPage(parsed);
+    else setPageInput(String(page));
+  }
+
+  function handlePageInputKey(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+  }
+
+  // Variáveis LiquidJS disponíveis — extraídas do primeiro lead
+  const liquidVars: string[] = leads.length > 0
+    ? ["phone", "phone_e164", ...Object.keys(leads[0].data_json ?? {})]
+    : ["phone", "phone_e164"];
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -485,10 +517,44 @@ function LeadsDrawer({
             <h2 className="font-semibold text-gray-900">{queue.name}</h2>
             <p className="text-xs text-gray-500 mt-0.5">Lista: {leadListName} · {total} leads</p>
           </div>
-          <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600">
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowVars((v) => !v)}
+              title="Variáveis LiquidJS disponíveis"
+              className={`btn-icon ${showVars ? "text-indigo-600 bg-indigo-50" : "text-gray-400 hover:text-indigo-500"}`}
+            >
+              <Braces className="w-4 h-4" />
+            </button>
+            <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
+
+        {/* LiquidJS variables panel */}
+        {showVars && (
+          <div className="px-5 py-3 bg-indigo-50 border-b border-indigo-100">
+            <p className="text-xs font-semibold text-indigo-700 mb-2 flex items-center gap-1.5">
+              <Braces className="w-3.5 h-3.5" />
+              Variáveis disponíveis no assistente Vapi (LiquidJS)
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {liquidVars.map((v) => (
+                <code
+                  key={v}
+                  className="text-xs px-2 py-0.5 rounded bg-white border border-indigo-200 text-indigo-700 font-mono cursor-pointer select-all"
+                  title={`Clique para copiar: {{${v}}}`}
+                  onClick={() => navigator.clipboard?.writeText(`{{${v}}}`)}
+                >
+                  {`{{${v}}}`}
+                </code>
+              ))}
+            </div>
+            <p className="text-xs text-indigo-500 mt-2">
+              Clique numa variável para copiar · Use no prompt do assistente no painel Vapi
+            </p>
+          </div>
+        )}
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto">
@@ -511,7 +577,7 @@ function LeadsDrawer({
               <tbody className="divide-y divide-gray-50">
                 {leads.map((lead) => {
                   const sc = LEAD_STATUS_CONFIG[lead.status] ?? { label: lead.status, color: "text-gray-600 bg-gray-50" };
-                  const name = lead.data_json?.name ?? lead.data_json?.nome ?? "—";
+                  const name = lead.data_json?.name ?? lead.data_json?.nome ?? lead.data_json?.first_name ?? "—";
                   return (
                     <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-2.5 font-mono text-xs text-gray-700">{lead.phone_e164}</td>
@@ -532,22 +598,64 @@ function LeadsDrawer({
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="btn btn-sm btn-secondary disabled:opacity-40"
-            >
-              <ChevronLeft className="w-4 h-4" /> Anterior
-            </button>
-            <span className="text-xs text-gray-500">Página {page} de {totalPages}</span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="btn btn-sm btn-secondary disabled:opacity-40"
-            >
-              Próxima <ChevronRight className="w-4 h-4" />
-            </button>
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50 gap-2">
+            {/* First + Prev */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => goToPage(1)}
+                disabled={page === 1}
+                className="btn-icon w-7 h-7 disabled:opacity-30"
+                title="Primeira página"
+              >
+                <ChevronsLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => goToPage(page - 1)}
+                disabled={page === 1}
+                className="btn-icon w-7 h-7 disabled:opacity-30"
+                title="Página anterior"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Page input */}
+            <div className="flex items-center gap-1.5 text-xs text-gray-500">
+              <span>Página</span>
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={pageInput}
+                onChange={handlePageInputChange}
+                onBlur={handlePageInputBlur}
+                onKeyDown={handlePageInputKey}
+                className="w-12 text-center border border-gray-200 rounded-lg py-1 text-xs font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300"
+              />
+              <span>de {totalPages}</span>
+              <span className="text-gray-300">·</span>
+              <span>{total} leads</span>
+            </div>
+
+            {/* Next + Last */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => goToPage(page + 1)}
+                disabled={page === totalPages}
+                className="btn-icon w-7 h-7 disabled:opacity-30"
+                title="Próxima página"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => goToPage(totalPages)}
+                disabled={page === totalPages}
+                className="btn-icon w-7 h-7 disabled:opacity-30"
+                title="Última página"
+              >
+                <ChevronsRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         )}
       </div>
