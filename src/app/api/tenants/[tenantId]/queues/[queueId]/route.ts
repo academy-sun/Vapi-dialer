@@ -61,7 +61,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   // Verificar status antes de deletar
   const { data: queue } = await service
     .from("dial_queues")
-    .select("status")
+    .select("status, lead_list_id")
     .eq("id", queueId)
     .eq("tenant_id", tenantId)
     .single();
@@ -70,6 +70,15 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (queue.status === "running" || queue.status === "paused") {
     return NextResponse.json({ error: "Pare a fila antes de deletar" }, { status: 409 });
   }
+
+  // Resetar leads que estavam em processamento por esta fila:
+  // queued/calling → new, limpar next_attempt_at e attempt_count
+  await service
+    .from("leads")
+    .update({ status: "new", next_attempt_at: null, attempt_count: 0 })
+    .eq("lead_list_id", queue.lead_list_id)
+    .eq("tenant_id", tenantId)
+    .in("status", ["queued", "calling"]);
 
   const { error } = await service
     .from("dial_queues")

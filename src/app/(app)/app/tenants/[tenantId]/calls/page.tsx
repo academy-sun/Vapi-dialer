@@ -330,6 +330,11 @@ export default function CallsPage() {
   const totalDurSec = calls.reduce((sum, c) => sum + (c.duration_seconds ?? 0), 0);
   const hasActiveFilters = filterReason !== "all" || searchPhone || filterQueue !== "all";
 
+  // Valores únicos de ended_reason presentes nos dados (inclui erros dinâmicos do Vapi)
+  const dynamicReasons: string[] = Array.from(
+    new Set(calls.map((c) => c.ended_reason).filter(Boolean) as string[])
+  ).sort();
+
   return (
     <div>
       {/* Header */}
@@ -384,10 +389,15 @@ export default function CallsPage() {
             value={filterReason}
             onChange={(e) => setFilterReason(e.target.value)}
           >
-            <option value="all">Todos os resultados</option>
-            {Object.entries(REASON_CONFIG).map(([key, cfg]) => (
-              <option key={key} value={key}>{cfg.label}</option>
-            ))}
+            <option value="all">Todos os resultados ({calls.length})</option>
+            {dynamicReasons.map((reason) => {
+              const cfg = REASON_CONFIG[reason];
+              const count = calls.filter((c) => c.ended_reason === reason).length;
+              const label = cfg ? cfg.label : reason;
+              return (
+                <option key={reason} value={reason}>{label} ({count})</option>
+              );
+            })}
           </select>
           {hasActiveFilters && (
             <button

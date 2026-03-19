@@ -197,12 +197,15 @@ export default function AdminOverviewPage() {
 
               {/* Actions */}
               <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-50">
-                <Link
-                  href={`/app/tenants/${t.id}/vapi`}
+                <button
+                  onClick={() => {
+                    localStorage.setItem("activeTenantId", t.id);
+                    window.location.href = `/app/tenants/${t.id}/vapi`;
+                  }}
                   className="btn-secondary text-xs px-3 py-1.5"
                 >
                   Acessar conta
-                </Link>
+                </button>
                 <Link
                   href={`/app/admin/sandbox?tenantId=${t.id}`}
                   className="btn-ghost text-xs px-3 py-1.5 flex items-center gap-1.5"
