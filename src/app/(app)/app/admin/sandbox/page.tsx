@@ -1,11 +1,11 @@
 "use client";
-import { useState, useEffect, useCallback, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   FlaskConical, ChevronLeft, Phone, Loader2, CheckCircle2,
   XCircle, Play, Eye, Building2, ListOrdered, Zap, AlertTriangle,
-  RefreshCw,
+  RefreshCw, Plus, X, Braces,
 } from "lucide-react";
 
 interface Tenant    { id: string; name: string; stats: { vapi_configured: boolean } }
@@ -44,6 +44,18 @@ function SandboxContent() {
   const [loadingResources, setLoadingResources] = useState(false);
   const [result,       setResult]       = useState<CallResult | null>(null);
   const [logs,         setLogs]         = useState<string[]>([]);
+  const [variables,    setVariables]    = useState<{ id: number; key: string; value: string }[]>([]);
+  const varNextId = useRef(0);
+
+  function addVar() {
+    setVariables((p) => [...p, { id: varNextId.current++, key: "", value: "" }]);
+  }
+  function removeVar(id: number) {
+    setVariables((p) => p.filter((v) => v.id !== id));
+  }
+  function updateVar(id: number, field: "key" | "value", val: string) {
+    setVariables((p) => p.map((v) => v.id === id ? { ...v, [field]: val } : v));
+  }
 
   function addLog(msg: string) {
     setLogs((p) => [`[${new Date().toLocaleTimeString("pt-BR")}] ${msg}`, ...p].slice(0, 50));
@@ -82,14 +94,23 @@ function SandboxContent() {
     setResult(null);
     addLog(`${dryRun ? "Simulando" : "Disparando"} chamada para ${phone.trim()}…`);
 
+    // Montar variableValues a partir dos campos preenchidos
+    const varsPayload: Record<string, string> = {};
+    for (const v of variables) {
+      const k = v.key.trim();
+      const val = v.value.trim();
+      if (k) varsPayload[k] = val;
+    }
+
     const res  = await fetch("/api/admin/sandbox/call", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tenantId: selectedTenant,
-        queueId:  selectedQueue,
-        phone:    phone.trim(),
+        tenantId:  selectedTenant,
+        queueId:   selectedQueue,
+        phone:     phone.trim(),
         dryRun,
+        variables: varsPayload,
       }),
     });
     const data: CallResult = await res.json();
@@ -236,6 +257,72 @@ function SandboxContent() {
                   />
                 </div>
                 <p className="text-xs text-gray-400 mt-1">Use seu próprio número para não afetar leads reais</p>
+              </div>
+
+              {/* Variables (LiquidJS) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="form-label flex items-center gap-1.5 mb-0">
+                    <Braces className="w-3.5 h-3.5 text-indigo-400" />
+                    Variáveis LiquidJS
+                    <span className="text-xs font-normal text-gray-400 ml-1">(opcional)</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addVar}
+                    className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Adicionar
+                  </button>
+                </div>
+
+                {variables.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={addVar}
+                    className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Ex: first_name = João, empresa = Acme…
+                  </button>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 mb-0.5">
+                      <span className="text-xs text-gray-400 px-1">Chave</span>
+                      <span className="text-xs text-gray-400 px-1">Valor</span>
+                      <span />
+                    </div>
+                    {variables.map((v) => (
+                      <div key={v.id} className="grid grid-cols-[1fr_1fr_auto] gap-1.5 items-center">
+                        <input
+                          className="form-input text-xs font-mono py-1.5"
+                          placeholder="first_name"
+                          value={v.key}
+                          onChange={(e) => updateVar(v.id, "key", e.target.value)}
+                        />
+                        <input
+                          className="form-input text-xs py-1.5"
+                          placeholder="João"
+                          value={v.value}
+                          onChange={(e) => updateVar(v.id, "value", e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeVar(v.id)}
+                          className="btn-icon text-gray-300 hover:text-red-400 w-6 h-6"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <p className="text-xs text-indigo-600 bg-indigo-50 rounded px-2 py-1.5 mt-1">
+                      {variables.filter((v) => v.key.trim()).map((v) => (
+                        <code key={v.id} className="font-mono mr-1.5 bg-white px-1 rounded">{`{{${v.key.trim()}}}`}</code>
+                      ))}
+                      {variables.filter((v) => v.key.trim()).length === 0 && "Preencha as chaves para ver as variáveis"}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Dry run toggle */}

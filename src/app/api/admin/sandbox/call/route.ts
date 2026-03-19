@@ -25,11 +25,11 @@ export async function POST(req: NextRequest) {
   const { response } = await requireAdmin();
   if (response) return response;
 
-  let body: { tenantId?: string; queueId?: string; phone?: string; dryRun?: boolean };
+  let body: { tenantId?: string; queueId?: string; phone?: string; dryRun?: boolean; variables?: Record<string, string> };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
 
-  const { tenantId, queueId, phone, dryRun = false } = body;
+  const { tenantId, queueId, phone, dryRun = false, variables = {} } = body;
   if (!tenantId || !queueId || !phone) {
     return NextResponse.json({ error: "tenantId, queueId e phone são obrigatórios" }, { status: 400 });
   }
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
         phoneNumberId: queue.phone_number_id,
         customer:      { number: phone },
         assistantOverrides: {
-          variableValues: { phone, phone_e164: phone, sandbox: "true" },
+          variableValues: { ...variables, phone, phone_e164: phone, sandbox: "true" },
         },
       },
       {
