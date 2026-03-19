@@ -120,18 +120,46 @@ function AddLeadModal({ onClose, onAdd, listName }: {
   onAdd: (fields: Record<string, string>) => Promise<void>;
   listName: string;
 }) {
-  const [phone, setPhone]     = useState("");
-  const [name, setName]       = useState("");
-  const [company, setCompany] = useState("");
+  const [phone,   setPhone]   = useState("");
+  const [name,    setName]    = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+  const [error,   setError]   = useState("");
+  // Campos extras dinâmicos: lista de { key, value }
+  const [extras,  setExtras]  = useState<{ id: number; key: string; value: string }[]>([]);
+  const nextId = useRef(0);
+
+  function addExtra() {
+    setExtras((p) => [...p, { id: nextId.current++, key: "", value: "" }]);
+  }
+
+  function removeExtra(id: number) {
+    setExtras((p) => p.filter((e) => e.id !== id));
+  }
+
+  function updateExtra(id: number, field: "key" | "value", val: string) {
+    setExtras((p) => p.map((e) => e.id === id ? { ...e, [field]: val } : e));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
+    // Validar chaves duplicadas ou vazias nos extras
+    const keys = extras.map((e) => e.key.trim()).filter(Boolean);
+    const dupKey = keys.find((k, i) => keys.indexOf(k) !== i);
+    if (dupKey) { setError(`Campo duplicado: "${dupKey}"`); return; }
+
+    const fields: Record<string, string> = { phone };
+    if (name.trim())    fields.name = name.trim();
+    for (const ex of extras) {
+      const k = ex.key.trim();
+      const v = ex.value.trim();
+      if (k) fields[k] = v;
+    }
+
     setLoading(true);
     try {
-      await onAdd({ phone, name, company });
+      await onAdd(fields);
       onClose();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Erro ao adicionar lead");
@@ -141,7 +169,7 @@ function AddLeadModal({ onClose, onAdd, listName }: {
 
   return (
     <div className="modal-overlay animate-fadeIn" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal max-w-lg" onClick={(e) => e.stopPropagation()}>
         <div className="card-header flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Adicionar Lead</h2>
@@ -162,6 +190,7 @@ function AddLeadModal({ onClose, onAdd, listName }: {
             </div>
           )}
 
+          {/* Telefone */}
           <div>
             <label className="form-label flex items-center gap-1.5">
               <Phone className="w-3.5 h-3.5 text-gray-500" />
@@ -177,11 +206,11 @@ function AddLeadModal({ onClose, onAdd, listName }: {
               required
             />
             <p className="text-xs text-gray-400 mt-1.5">
-              Aceita com ou sem{" "}
-              <code className="bg-gray-100 px-1 rounded font-mono">+55</code>, com ou sem máscara.
+              Aceita com ou sem <code className="bg-gray-100 px-1 rounded font-mono">+55</code>, com ou sem máscara.
             </p>
           </div>
 
+          {/* Nome */}
           <div>
             <label className="form-label">Nome</label>
             <input
@@ -193,16 +222,59 @@ function AddLeadModal({ onClose, onAdd, listName }: {
             />
           </div>
 
-          <div>
-            <label className="form-label">Empresa</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Ex: Empresa Ltda"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-            />
-          </div>
+          {/* Campos extras dinâmicos */}
+          {extras.length > 0 && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_1fr_auto] gap-2 mb-1">
+                <span className="text-xs font-medium text-gray-500 px-1">Nome do campo</span>
+                <span className="text-xs font-medium text-gray-500 px-1">Valor</span>
+                <span />
+              </div>
+              {extras.map((ex) => (
+                <div key={ex.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                  <input
+                    className="form-input text-sm font-mono"
+                    placeholder="ex: first_name"
+                    value={ex.key}
+                    onChange={(e) => updateExtra(ex.id, "key", e.target.value)}
+                  />
+                  <input
+                    className="form-input text-sm"
+                    placeholder="valor"
+                    value={ex.value}
+                    onChange={(e) => updateExtra(ex.id, "value", e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeExtra(ex.id)}
+                    className="btn-icon text-gray-400 hover:text-red-500"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Botão adicionar campo */}
+          <button
+            type="button"
+            onClick={addExtra}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-gray-200 text-sm text-gray-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Adicionar campo extra
+          </button>
+
+          {extras.length > 0 && (
+            <p className="text-xs text-indigo-600 bg-indigo-50 rounded-lg px-3 py-2">
+              Campos extras ficam disponíveis no assistente Vapi como{" "}
+              {extras.filter((e) => e.key.trim()).slice(0, 2).map((e) => (
+                <code key={e.id} className="font-mono bg-white px-1 rounded mx-0.5">{`{{${e.key.trim()}}}`}</code>
+              ))}
+              {extras.filter((e) => e.key.trim()).length > 2 && "…"}
+            </p>
+          )}
 
           <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
             <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
