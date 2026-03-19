@@ -150,7 +150,7 @@ function AddLeadModal({ onClose, onAdd, listName }: {
     if (dupKey) { setError(`Campo duplicado: "${dupKey}"`); return; }
 
     const fields: Record<string, string> = { phone };
-    if (name.trim())    fields.name = name.trim();
+    if (name.trim())    fields.first_name = name.trim();
     for (const ex of extras) {
       const k = ex.key.trim();
       const v = ex.value.trim();
@@ -210,13 +210,16 @@ function AddLeadModal({ onClose, onAdd, listName }: {
             </p>
           </div>
 
-          {/* Nome */}
+          {/* Primeiro nome */}
           <div>
-            <label className="form-label">Nome</label>
+            <label className="form-label flex items-center gap-1.5">
+              Primeiro nome
+              <code className="text-xs font-mono bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">{"{{first_name}}"}</code>
+            </label>
             <input
               type="text"
               className="form-input"
-              placeholder="Ex: João Silva"
+              placeholder="Ex: João"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -234,7 +237,7 @@ function AddLeadModal({ onClose, onAdd, listName }: {
                 <div key={ex.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
                   <input
                     className="form-input text-sm font-mono"
-                    placeholder="ex: first_name"
+                    placeholder="ex: empresa"
                     value={ex.key}
                     onChange={(e) => updateExtra(ex.id, "key", e.target.value)}
                   />
