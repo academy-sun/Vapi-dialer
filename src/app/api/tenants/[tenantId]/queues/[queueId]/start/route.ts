@@ -23,6 +23,14 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
   const previousStatus = queue.status;
 
+  // Pausar todas as outras filas running do mesmo tenant (cada lista é uma campanha separada)
+  await service
+    .from("dial_queues")
+    .update({ status: "paused" })
+    .eq("tenant_id", tenantId)
+    .eq("status", "running")
+    .neq("id", queueId);
+
   // Ativar fila
   const { error } = await service
     .from("dial_queues")

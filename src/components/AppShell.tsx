@@ -17,6 +17,8 @@ import {
   Building2,
   Check,
   X,
+  FlaskConical,
+  LayoutDashboard,
 } from "lucide-react";
 
 interface Tenant {
@@ -33,9 +35,11 @@ interface ToastItem {
 
 export default function AppShell({
   user,
+  isAdmin = false,
   children,
 }: {
   user: User;
+  isAdmin?: boolean;
   children: React.ReactNode;
 }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -314,6 +318,31 @@ export default function AppShell({
             <p className="px-3 py-2 text-xs" style={{ color: "hsl(220, 9%, 40%)" }}>
               Selecione ou crie um tenant para navegar.
             </p>
+          )}
+
+          {/* Admin section */}
+          {isAdmin && (
+            <div className="mt-4 pt-4" style={{ borderTop: "1px solid hsl(224, 40%, 12%)" }}>
+              <p className="sidebar-section-label" style={{ color: "hsl(45, 80%, 55%)" }}>Admin</p>
+              {[
+                { label: "Visão Geral",  href: "/app/admin",         icon: LayoutDashboard },
+                { label: "Sandbox",      href: "/app/admin/sandbox", icon: FlaskConical    },
+              ].map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname.startsWith(item.href);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`sidebar-nav-item ${isActive ? "active" : ""}`}
+                    style={isActive ? {} : { color: "hsl(45, 80%, 55%)" }}
+                  >
+                    <Icon className="nav-icon w-4 h-4 shrink-0" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
           )}
         </nav>
 

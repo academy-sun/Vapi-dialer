@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin-helper";
 import { redirect } from "next/navigation";
 import AppShell from "@/components/AppShell";
 
@@ -10,5 +11,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!user) redirect("/login");
 
-  return <AppShell user={user}>{children}</AppShell>;
+  const isAdmin = isAdminEmail(user.email);
+
+  return <AppShell user={user} isAdmin={isAdmin}>{children}</AppShell>;
 }
