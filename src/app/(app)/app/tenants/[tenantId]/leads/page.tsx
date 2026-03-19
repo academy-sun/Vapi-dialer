@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
+  RotateCcw,
 } from "lucide-react";
 
 interface LeadList {
@@ -497,6 +498,7 @@ export default function LeadsPage() {
   const [showAddLead, setShowAddLead]       = useState(false);
   const [dragOver, setDragOver]             = useState(false);
   const [selectedFile, setSelectedFile]     = useState<File | null>(null);
+  const [resettingStuck, setResettingStuck] = useState(false);
   // Edição inline de nome da lista
   const [editingListId, setEditingListId]   = useState<string | null>(null);
   const [editingListName, setEditingListName] = useState("");
@@ -562,6 +564,28 @@ export default function LeadsPage() {
     }
   }
 
+  async function resetStuckLeads() {
+    if (!selectedListId) return;
+    setResettingStuck(true);
+    const res  = await fetch(
+      `/api/tenants/${tenantId}/lead-lists/${selectedListId}/reset-stuck`,
+      { method: "POST" }
+    );
+    const data = await res.json();
+    if (res.ok) {
+      showToast(
+        data.reset > 0
+          ? `${data.reset} lead${data.reset > 1 ? "s" : ""} resetado${data.reset > 1 ? "s" : ""} para a fila`
+          : "Nenhum lead travado encontrado",
+        data.reset > 0 ? "success" : "success"
+      );
+      loadLeads();
+    } else {
+      showToast(data.error ?? "Erro ao resetar leads", "error");
+    }
+    setResettingStuck(false);
+  }
+
   async function addLeadManual(fields: Record<string, string>) {
     const res  = await fetch(
       `/api/tenants/${tenantId}/lead-lists/${selectedListId}/leads`,
@@ -617,7 +641,8 @@ export default function LeadsPage() {
     if (file) setSelectedFile(file);
   }
 
-  const activeList = lists.find((l) => l.id === selectedListId);
+  const activeList  = lists.find((l) => l.id === selectedListId);
+  const stuckCount  = leads.filter((l) => l.status === "calling").length;
 
   return (
     <div>
@@ -883,15 +908,32 @@ export default function LeadsPage() {
                     <span className="text-gray-400 font-normal normal-case">({leads.length})</span>
                   )}
                 </h3>
-                {selectedListId && (
-                  <button
-                    onClick={() => setShowAddLead(true)}
-                    className="btn-secondary text-xs gap-1.5"
-                  >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    Adicionar Lead
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {/* Botão de reset aparece só se há leads travados em 'calling' */}
+                  {stuckCount > 0 && (
+                    <button
+                      onClick={resetStuckLeads}
+                      disabled={resettingStuck}
+                      className="btn-secondary text-xs gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
+                      title={`${stuckCount} lead${stuckCount > 1 ? "s" : ""} preso${stuckCount > 1 ? "s" : ""} em "Em ligação" — clique para resetar para a fila`}
+                    >
+                      {resettingStuck
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <RotateCcw className="w-3.5 h-3.5" />
+                      }
+                      Resetar travados ({stuckCount})
+                    </button>
+                  )}
+                  {selectedListId && (
+                    <button
+                      onClick={() => setShowAddLead(true)}
+                      className="btn-secondary text-xs gap-1.5"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      Adicionar Lead
+                    </button>
+                  )}
+                </div>
               </div>
 
               {loadingLeads ? (
