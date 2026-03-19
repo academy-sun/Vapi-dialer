@@ -1,11 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin-helper";
 
-// GET /api/tenants — lista tenants do usuário
+// GET /api/tenants — lista tenants do usuário (admins veem todos)
 export async function GET() {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+
+  if (isAdminEmail(user.email)) {
+    const { createServiceClient } = await import("@/lib/supabase/service");
+    const service = createServiceClient();
+    const { data, error: dbError } = await service
+      .from("tenants")
+      .select("id, name, timezone, created_at")
+      .order("created_at", { ascending: true });
+    if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
+    return NextResponse.json({ tenants: data });
+  }
 
   const { data, error: dbError } = await supabase
     .from("tenants")

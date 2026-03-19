@@ -1,9 +1,10 @@
 import { createClient } from "./supabase/server";
 import { NextResponse } from "next/server";
+import { isAdminEmail } from "./admin-helper";
 
 /**
  * Valida sessão + membership no tenant.
- * Retorna { user, error } — se error != null, retorne o NextResponse direto.
+ * Admins do sistema (ADMIN_EMAILS) têm acesso a qualquer tenant sem membership.
  */
 export async function requireTenantAccess(tenantId: string) {
   const supabase = await createClient();
@@ -18,6 +19,11 @@ export async function requireTenantAccess(tenantId: string) {
       user: null,
       response: NextResponse.json({ error: "Não autenticado" }, { status: 401 }),
     };
+  }
+
+  // Admins do sistema têm acesso irrestrito a qualquer tenant
+  if (isAdminEmail(user.email)) {
+    return { user, membership: { id: "admin", role: "owner" as const }, response: null };
   }
 
   const { data: membership } = await supabase
