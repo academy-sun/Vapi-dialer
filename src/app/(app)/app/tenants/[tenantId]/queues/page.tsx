@@ -306,9 +306,27 @@ function CampaignWizard({
         listId = listData.leadList.id;
 
         if (leadsMode === "csv") {
-          // 2a. Import CSV
+          // 2a. Validar coluna de telefone + gerar mapeamento automático
+          const headers = csvPreview[0]?.map(h => h.toLowerCase().trim()) ?? [];
+          const PHONE_KEYS = ["phone","telefone","fone","celular","tel","mobile","numero","número"];
+          const phoneCol = csvPreview[0]?.find(h =>
+            PHONE_KEYS.some(k => h.toLowerCase().includes(k))
+          );
+          if (!phoneCol) {
+            throw new Error(
+              `CSV sem coluna de telefone. Colunas detectadas: ${(csvPreview[0] ?? []).join(", ")}. ` +
+              `Use "Lista de Leads" para mapear colunas manualmente.`
+            );
+          }
+          // Mapeamento automático: phone → "phone", resto → "__custom__" (mantém nome original)
+          const autoMappings: Record<string, string> = {};
+          (csvPreview[0] ?? []).forEach(h => {
+            autoMappings[h] = PHONE_KEYS.some(k => h.toLowerCase().includes(k)) ? "phone" : "__custom__";
+          });
+          // Import CSV com mappings
           const fd = new FormData();
           fd.append("file", csvFile!);
+          fd.append("mappings", JSON.stringify(autoMappings));
           const uploadRes = await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}/import`, {
             method: "POST", body: fd,
           });
@@ -963,14 +981,35 @@ function LeadsTab({
   async function handleImport(file: File) {
     setImporting(true);
     setImportResult(null);
-    const fd = new FormData();
-    fd.append("file", file);
-    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${queue.lead_list_id}/import`, { method: "POST", body: fd });
-    const data = await res.json();
-    setImportResult({ imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
-    setImporting(false);
-    loadLeads(1);
-    setPage(1);
+    try {
+      // Ler cabeçalho do CSV para mapeamento automático
+      const text = await file.text();
+      const raw = text.replace(/^\uFEFF/, ""); // remover BOM
+      const firstLine = raw.split(/\r?\n/)[0] ?? "";
+      const sep = firstLine.includes(";") && firstLine.split(";").length > firstLine.split(",").length ? ";" : ",";
+      const csvHeaders = firstLine.split(sep).map(h => h.trim().replace(/^"|"$/g, ""));
+      const PHONE_KEYS = ["phone","telefone","fone","celular","tel","mobile","numero","número"];
+      const phoneCol = csvHeaders.find(h => PHONE_KEYS.some(k => h.toLowerCase().includes(k)));
+      if (!phoneCol) {
+        setImportResult({ imported: 0, skipped: 0 });
+        setImporting(false);
+        return;
+      }
+      const autoMappings: Record<string, string> = {};
+      csvHeaders.forEach(h => {
+        autoMappings[h] = PHONE_KEYS.some(k => h.toLowerCase().includes(k)) ? "phone" : "__custom__";
+      });
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("mappings", JSON.stringify(autoMappings));
+      const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${queue.lead_list_id}/import`, { method: "POST", body: fd });
+      const data = await res.json();
+      setImportResult({ imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
+    } finally {
+      setImporting(false);
+      loadLeads(1);
+      setPage(1);
+    }
   }
 
   async function handleAddLead() {
@@ -1110,22 +1149,50 @@ function LeadsTab({
 
       {/* LiquidJS variables */}
       {showVars && (
-        <div className="px-5 py-3 bg-indigo-50 border-b border-indigo-100">
-          <p className="text-xs font-semibold text-indigo-700 mb-2 flex items-center gap-1.5">
+        <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100 space-y-3">
+          {/* Título */}
+          <p className="text-xs font-semibold text-indigo-700 flex items-center gap-1.5">
             <Braces className="w-3.5 h-3.5" />
-            Variáveis disponíveis no assistente Vapi (LiquidJS)
+            Variáveis personalizadas — use no prompt do assistente Vapi
           </p>
+
+          {/* Chips clicáveis */}
           <div className="flex flex-wrap gap-1.5">
             {liquidVars.map((v) => (
               <code key={v}
-                className="text-xs px-2 py-0.5 rounded bg-white border border-indigo-200 text-indigo-700 font-mono cursor-pointer select-all"
+                className="text-xs px-2 py-0.5 rounded bg-white border border-indigo-200 text-indigo-700 font-mono cursor-pointer hover:bg-indigo-100 transition-colors"
                 title={`Clique para copiar: {{${v}}}`}
-                onClick={() => navigator.clipboard?.writeText(`{{${v}}}`)}>
+                onClick={() => navigator.clipboard?.writeText(`{{${v}}}`).then(() => {})}>
                 {`{{${v}}}`}
               </code>
             ))}
           </div>
-          <p className="text-xs text-indigo-500 mt-1.5">Clique numa variável para copiar · Use no prompt do assistente Vapi</p>
+
+          {/* Como funciona */}
+          <div className="rounded-lg border border-indigo-200 bg-white p-3 space-y-2">
+            <p className="text-xs font-semibold text-indigo-800">Como funciona:</p>
+            <ol className="text-xs text-indigo-700 space-y-1 list-decimal list-inside">
+              <li>Cada coluna do CSV vira uma variável disponível acima.</li>
+              <li>No prompt do assistente Vapi, insira <code className="font-mono bg-indigo-50 px-1 rounded">{"{{nome_da_coluna}}"}</code> onde quiser usar o valor.</li>
+              <li>Na hora da ligação, o sistema substitui automaticamente pelo dado do lead.</li>
+            </ol>
+            <div className="mt-2 rounded bg-indigo-50 border border-indigo-100 px-3 py-2">
+              <p className="text-xs font-semibold text-indigo-600 mb-1">Exemplo prático:</p>
+              <p className="text-xs text-indigo-700 font-mono">
+                CSV tem coluna <strong>nome</strong> com valor <strong>João Silva</strong>
+              </p>
+              <p className="text-xs text-indigo-700 font-mono mt-0.5">
+                Prompt: <em>&ldquo;Olá, posso falar com <strong>{"{{nome}}"}</strong>?&rdquo;</em>
+              </p>
+              <p className="text-xs text-indigo-700 font-mono mt-0.5">
+                → Vapi fala: <em>&ldquo;Olá, posso falar com <strong>João Silva</strong>?&rdquo;</em>
+              </p>
+            </div>
+            <p className="text-xs text-indigo-500">
+              <strong>{"{{phone}}"}</strong> e <strong>{"{{phone_e164}}"}</strong> são sempre disponíveis (número formatado e E.164).
+              Clique em qualquer variável acima para copiar.
+            </p>
+          </div>
         </div>
       )}
 
