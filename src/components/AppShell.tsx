@@ -151,6 +151,11 @@ export default function AppShell({
           href: `/app/tenants/${activeTenantId}/queues`,
           icon: ListOrdered,
         },
+        ...(isAdminOrOwner ? [{
+          label: "Membros",
+          href: `/app/tenants/${activeTenantId}/members`,
+          icon: Users,
+        }] : []),
         {
           label: "Chamadas",
           href: `/app/tenants/${activeTenantId}/calls`,
