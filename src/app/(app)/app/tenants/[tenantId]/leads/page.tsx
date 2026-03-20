@@ -840,6 +840,7 @@ export default function LeadsPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const [lists, setLists]                   = useState<LeadList[]>([]);
   const [selectedListId, setSelectedListId] = useState("");
+  const [listConfirmed, setListConfirmed]   = useState(false);
   const [leads, setLeads]                   = useState<Lead[]>([]);
   const [loadingLeads, setLoadingLeads]     = useState(false);
   const [showCreate, setShowCreate]         = useState(false);
@@ -851,6 +852,11 @@ export default function LeadsPage() {
   const [editingListId, setEditingListId]   = useState<string | null>(null);
   const [editingListName, setEditingListName] = useState("");
   const { toasts, show: showToast } = useToast();
+
+  function handleSelectList(id: string) {
+    setSelectedListId(id);
+    setListConfirmed(false);
+  }
 
   useEffect(() => { loadLists(); }, [tenantId]);
   useEffect(() => { if (selectedListId) loadLeads(); }, [selectedListId]);
@@ -1074,7 +1080,7 @@ export default function LeadsPage() {
                   /* ── Modo normal ── */
                   <div
                     className="px-4 py-4 flex items-center justify-between cursor-pointer"
-                    onClick={() => setSelectedListId(list.id)}
+                    onClick={() => handleSelectList(list.id)}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
@@ -1119,9 +1125,19 @@ export default function LeadsPage() {
                 )}
               </div>
             ))}
+            {selectedListId && !listConfirmed && (
+              <button
+                onClick={() => setListConfirmed(true)}
+                className="btn-primary w-full justify-center mt-3"
+              >
+                <Check className="w-4 h-4" />
+                Trabalhar com &quot;{activeList?.name}&quot;
+              </button>
+            )}
           </div>
 
           {/* Coluna direita: importar CSV + tabela */}
+          {listConfirmed ? (
           <div className="lg:col-span-2 space-y-5">
 
             {/* ── CSV Import Wizard ── */}
@@ -1326,6 +1342,21 @@ export default function LeadsPage() {
               )}
             </div>
           </div>
+          ) : (
+          <div className="lg:col-span-2 flex items-center justify-center">
+            <div className="text-center py-20">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                <Users className="w-7 h-7 text-gray-300" />
+              </div>
+              <p className="text-base font-semibold text-gray-700 mb-2">
+                Selecione uma lista para continuar
+              </p>
+              <p className="text-sm text-gray-400">
+                Escolha uma lista existente à esquerda ou crie uma nova lista.
+              </p>
+            </div>
+          </div>
+          )}
         </div>
       )}
 

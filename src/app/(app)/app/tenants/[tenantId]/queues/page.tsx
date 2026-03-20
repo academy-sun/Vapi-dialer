@@ -1331,7 +1331,7 @@ export default function CampaignsPage() {
       showToast(
         action === "start" ? "Campanha iniciada!" :
         action === "pause" ? "Campanha pausada!" :
-        "Campanha parada!"
+        "Campanha encerrada!"
       );
     }
     loadQueues();
@@ -1548,7 +1548,8 @@ export default function CampaignsPage() {
                     )}
                     {q.status === "running" && (
                       <button onClick={() => queueAction(q.id, "pause")}
-                        className="btn btn-sm bg-amber-500 text-white hover:bg-amber-600">
+                        className="btn btn-sm bg-amber-500 text-white hover:bg-amber-600"
+                        title="Pausa temporariamente — os leads ficam na fila e a campanha pode ser retomada depois">
                         <Pause className="w-3.5 h-3.5" /> Pausar
                       </button>
                     )}
@@ -1566,8 +1567,9 @@ export default function CampaignsPage() {
                     )}
                     {(q.status === "running" || q.status === "paused") && (
                       <button onClick={() => queueAction(q.id, "stop")}
-                        className="btn btn-sm bg-red-100 text-red-700 hover:bg-red-200">
-                        <Square className="w-3.5 h-3.5" /> Parar
+                        className="btn btn-sm bg-red-100 text-red-700 hover:bg-red-200"
+                        title="Encerra a campanha definitivamente — para reiniciar será necessário criar uma nova campanha">
+                        <Square className="w-3.5 h-3.5" /> Encerrar
                       </button>
                     )}
                     <button onClick={() => duplicateQueue(q)}

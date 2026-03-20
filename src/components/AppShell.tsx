@@ -10,7 +10,8 @@ import {
   Users,
   ListOrdered,
   PhoneCall,
-  BarChart3,
+  BarChart2,
+  UserCheck,
   LogOut,
   Plus,
   ChevronDown,
@@ -152,11 +153,11 @@ export default function AppShell({
   // navItems só é populado após roles estarem prontos — evita renderizar menu incompleto
   const navItems = (activeTenantId && rolesLoaded)
     ? [
-        ...(isAdminOrOwner ? [{
-          label: "Configuração Vapi",
-          href: `/app/tenants/${activeTenantId}/vapi`,
-          icon: Settings2,
-        }] : []),
+        {
+          label: "Relatórios",
+          href: `/app/tenants/${activeTenantId}/calls`,
+          icon: BarChart2,
+        },
         {
           label: "Lista de Leads",
           href: `/app/tenants/${activeTenantId}/leads`,
@@ -167,21 +168,21 @@ export default function AppShell({
           href: `/app/tenants/${activeTenantId}/queues`,
           icon: ListOrdered,
         },
-        ...(isAdminOrOwner ? [{
-          label: "Membros",
-          href: `/app/tenants/${activeTenantId}/members`,
-          icon: Users,
-        }] : []),
         {
           label: "Chamadas",
           href: `/app/tenants/${activeTenantId}/calls`,
           icon: PhoneCall,
         },
         {
-          label: "Relatórios",
-          href: `/app/tenants/${activeTenantId}/analytics`,
-          icon: BarChart3,
+          label: "Membros",
+          href: `/app/tenants/${activeTenantId}/members`,
+          icon: UserCheck,
         },
+        ...(isAdminOrOwner ? [{
+          label: "Configuração Vapi",
+          href: `/app/tenants/${activeTenantId}/vapi`,
+          icon: Settings2,
+        }] : []),
       ]
     : [];
 
