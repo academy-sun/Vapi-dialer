@@ -1,11 +1,12 @@
 import { createClient } from "./supabase/server";
 import { NextResponse } from "next/server";
 import { isAdminEmail } from "./admin-helper";
-import { rateLimitApi } from "./rate-limit";
 
 /**
- * Valida sessão + membership no tenant + rate limit por userId.
+ * Valida sessão + membership no tenant.
  * Admins do sistema (ADMIN_EMAILS) têm acesso a qualquer tenant sem membership.
+ * Nota: rate limiting via Redis foi removido do auth-helper para não incluir
+ * ioredis (Node.js-only) no bundle do middleware do Next.js (Edge runtime).
  */
 export async function requireTenantAccess(tenantId: string) {
   const supabase = await createClient();
@@ -20,25 +21,6 @@ export async function requireTenantAccess(tenantId: string) {
       user: null,
       membership: null,
       response: NextResponse.json({ error: "Não autenticado" }, { status: 401 }),
-    };
-  }
-
-  // Rate limiting por usuário autenticado: 600 req/min
-  const rl = await rateLimitApi(user.id);
-  if (!rl.allowed) {
-    return {
-      user: null,
-      membership: null,
-      response: NextResponse.json(
-        { error: "Muitas requisições. Tente novamente em breve." },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(rl.resetInSeconds),
-            "X-RateLimit-Remaining": "0",
-          },
-        }
-      ),
     };
   }
 
