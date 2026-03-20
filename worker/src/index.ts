@@ -445,12 +445,14 @@ async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
   const staleThreshold = new Date(Date.now() - STALE_CALLING_MINUTES * 60 * 1000).toISOString();
 
   // 1. Buscar leads presos em "calling" há mais de STALE_CALLING_MINUTES
-  //    Usa updated_at do lead como proxy: o worker seta status="calling" e updated_at muda
+  //    Usa last_attempt_at como proxy: o worker seta status="calling" e last_attempt_at ao mesmo tempo
+  //    NOTA: updated_at não existe na tabela leads — o campo correto é last_attempt_at
   const { data: stale, error } = await supabase
     .from("leads")
     .select("id, phone_e164, lead_list_id")
     .eq("status", "calling")
-    .lt("updated_at", staleThreshold);
+    .not("last_attempt_at", "is", null)
+    .lt("last_attempt_at", staleThreshold);
 
   if (error) {
     console.error("[worker] recoverStaleCalls: erro ao buscar leads presos:", error.message);
