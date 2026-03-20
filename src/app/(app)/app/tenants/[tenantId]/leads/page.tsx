@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Papa from "papaparse";
 import {
@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  AlertTriangle,
   FileText,
   X,
   Check,
@@ -490,8 +491,10 @@ function InboundWebhookPanel({
    CSV Import Wizard
 ══════════════════════════════════════════════════════════════ */
 
+// ── Constantes de mapeamento ──────────────────────────────────────────────────
+
 const FIELD_OPTIONS = [
-  { value: "phone",      label: "phone (obrigatório)", required: true },
+  { value: "phone",      label: "phone (obrigatório)" },
   { value: "name",       label: "name" },
   { value: "last_name",  label: "last_name" },
   { value: "company",    label: "company" },
@@ -501,18 +504,18 @@ const FIELD_OPTIONS = [
 ];
 
 function autoSuggest(colName: string): string {
-  const n = colName
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+  const n = colName.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, "");
-  if (["phone","telefone","fone","celular","tel","mobile"].some((k) => n.includes(k))) return "phone";
-  if (["nome","name","firstname","primeiro"].some((k) => n.includes(k))) return "name";
-  if (["sobrenome","lastname","ultimo"].some((k) => n.includes(k))) return "last_name";
-  if (["empresa","company","companhia"].some((k) => n.includes(k))) return "company";
-  if (["email","mail","correo"].some((k) => n.includes(k))) return "email";
+  if (["phone","telefone","fone","celular","tel","mobile"].some(k => n.includes(k))) return "phone";
+  if (["nome","name","firstname","primeiro"].some(k => n.includes(k))) return "name";
+  if (["sobrenome","lastname","ultimo"].some(k => n.includes(k))) return "last_name";
+  if (["empresa","company","companhia"].some(k => n.includes(k))) return "company";
+  if (["email","mail","correo"].some(k => n.includes(k))) return "email";
   return "__custom__";
 }
+
+// ── Props ─────────────────────────────────────────────────────────────────────
 
 interface CsvImportWizardProps {
   tenantId: string;
@@ -521,16 +524,87 @@ interface CsvImportWizardProps {
   onImportComplete: (imported: number, skipped: number) => void;
 }
 
+// ── Componente ────────────────────────────────────────────────────────────────
+
 function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvImportWizardProps) {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep]               = useState<1 | 2 | 3>(1);
+  const [dragOver, setDragOver]       = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvHeaders, setCsvHeaders]   = useState<string[]>([]);
   const [previewRows, setPreviewRows] = useState<Record<string, string>[]>([]);
-  const [mappings, setMappings] = useState<Record<string, string>>({});
-  const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState("");
-  const wizardFileRef = useRef<HTMLInputElement>(null);
+  const [mappings, setMappings]       = useState<Record<string, string>>({});
+  const [importing, setImporting]     = useState(false);
+  const [result, setResult]           = useState<{ imported: number; skipped: number } | null>(null);
+  const [error, setError]             = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Validação: exatamente 1 coluna mapeada para "phone"
+  const phoneMappedCount = Object.values(mappings).filter(v => v === "phone").length;
+  const canImport = phoneMappedCount === 1;
+
+  function parseFile(file: File) {
+    setSelectedFile(file);
+    setError("");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = (e.target?.result as string) ?? "";
+      const result = Papa.parse<Record<string, string>>(text, {
+        header: true,
+        preview: 4,
+        skipEmptyLines: true,
+      });
+      const headers = result.meta.fields ?? [];
+      const rows = result.data.slice(0, 3) as Record<string, string>[];
+      setCsvHeaders(headers);
+      setPreviewRows(rows);
+      // Auto-sugestão
+      const initial: Record<string, string> = {};
+      headers.forEach(h => { initial[h] = autoSuggest(h); });
+      setMappings(initial);
+      setStep(2); // avança automaticamente para o Step 2
+    };
+    reader.readAsText(file);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file?.name.endsWith(".csv")) parseFile(file);
+    else setError("Apenas arquivos .csv são aceitos");
+  }
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) parseFile(file);
+  }
+
+  async function handleImport() {
+    if (!selectedFile || !canImport) return;
+    setImporting(true);
+    setError("");
+    try {
+      const form = new FormData();
+      form.append("file", selectedFile);
+      form.append("mappings", JSON.stringify(mappings));
+      const res = await fetch(
+        `/api/tenants/${tenantId}/lead-lists/${listId}/import`,
+        { method: "POST", body: form }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Erro ao importar");
+        setImporting(false);
+        return;
+      }
+      setResult({ imported: data.imported, skipped: data.skipped });
+      onImportComplete(data.imported, data.skipped);
+      setStep(3); // Mostra o resultado do sucesso só após as funções terminarem antes de dar loading false
+    } catch {
+      setError("Erro de conexão ao importar");
+    }
+    setImporting(false);
+  }
 
   function reset() {
     setStep(1);
@@ -538,120 +612,60 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
     setCsvHeaders([]);
     setPreviewRows([]);
     setMappings({});
-    setImportError("");
-    if (wizardFileRef.current) wizardFileRef.current.value = "";
+    setResult(null);
+    setError("");
+    if (fileRef.current) fileRef.current.value = "";
   }
 
-  async function processFile(file: File) {
-    setSelectedFile(file);
-    const text = await file.text();
-    // Papa.parse com string é síncrono e retorna ParseResult
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = Papa.parse(text, { header: true, preview: 4, skipEmptyLines: true }) as any;
-    const headers: string[] = result.meta?.fields ?? [];
-    const rows: Record<string, string>[] = (result.data ?? []).slice(0, 3);
-    setCsvHeaders(headers);
-    setPreviewRows(rows);
-    const initial: Record<string, string> = {};
-    headers.forEach((h) => { initial[h] = autoSuggest(h); });
-    setMappings(initial);
-    setStep(2);
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file?.name.endsWith(".csv")) processFile(file);
-  }
-
-  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) processFile(file);
-  }
-
-  function setMapping(col: string, value: string) {
-    setMappings((prev) => ({ ...prev, [col]: value }));
-  }
-
-  const phoneCount = Object.values(mappings).filter((v) => v === "phone").length;
-  const canImport = phoneCount === 1;
-
-  async function handleImport() {
-    if (!selectedFile || !listId || !canImport) return;
-    setStep(3);
-    setImporting(true);
-    setImportError("");
-    const form = new FormData();
-    form.append("file", selectedFile);
-    form.append("mappings", JSON.stringify(mappings));
-    try {
-      const res = await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}/import`, {
-        method: "POST",
-        body: form,
-      });
-      const data = await res.json();
-      if (res.ok) {
-        onImportComplete(data.imported ?? 0, data.skipped ?? 0);
-        reset();
-      } else {
-        setImportError(data.error ?? "Erro ao importar");
-      }
-    } catch {
-      setImportError("Erro de conexão ao importar CSV");
-    }
-    setImporting(false);
-  }
-
-  /* ── Barra de progresso ── */
-  const stepLabels = ["Upload", "Mapear colunas", "Importando"];
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="card">
-      <div className="card-header flex items-center justify-between">
-        <div>
+      {/* Header com barra de steps */}
+      <div className="card-header">
+        <div className="flex items-center justify-between mb-1">
           <h3 className="text-sm font-semibold text-gray-900">Importar Leads via CSV</h3>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Para: <span className="font-medium text-gray-600">{listName}</span>
-          </p>
+          <p className="text-xs text-gray-400">Lista: <span className="font-medium text-gray-600">{listName}</span></p>
         </div>
-        <button onClick={downloadTemplate} className="btn-secondary text-xs gap-1.5" title="Baixar modelo CSV">
-          <Download className="w-3.5 h-3.5" />
-          Template CSV
-        </button>
-      </div>
-
-      {/* Barra de steps */}
-      <div className="px-5 pt-4 pb-2">
-        <div className="flex items-center gap-1">
-          {stepLabels.map((label, i) => {
-            const idx = i + 1;
-            const isActive = step === idx;
-            const isDone = step > idx;
-            return (
-              <div key={idx} className="flex items-center gap-1 flex-1 min-w-0">
-                <div className={`flex items-center gap-1.5 text-xs font-medium ${
-                  isDone ? "text-emerald-600" : isActive ? "text-indigo-600" : "text-gray-400"
+        {/* Barra de progresso dos steps */}
+        <div className="flex items-center gap-2 mt-3">
+          {[
+            { n: 1, label: "Upload" },
+            { n: 2, label: "Mapear colunas" },
+            { n: 3, label: "Importar" },
+          ].map(({ n, label }, i) => (
+            <React.Fragment key={n}>
+              {i > 0 && (
+                <div className={`flex-1 h-0.5 ${step > i ? "bg-indigo-500" : "bg-gray-200"}`} />
+              )}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+                  step > n
+                    ? "bg-emerald-500 text-white"
+                    : step === n
+                    ? "bg-indigo-600 text-white"
+                    : "bg-gray-100 text-gray-400"
                 }`}>
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 ${
-                    isDone ? "bg-emerald-100 text-emerald-600" :
-                    isActive ? "bg-indigo-100 text-indigo-600" :
-                    "bg-gray-100 text-gray-400"
-                  }`}>
-                    {isDone ? <Check className="w-3 h-3" /> : idx}
-                  </span>
-                  <span className="truncate">{label}</span>
+                  {step > n ? "✓" : n}
                 </div>
-                {i < stepLabels.length - 1 && (
-                  <ArrowRight className="w-3.5 h-3.5 text-gray-300 shrink-0 ml-1" />
-                )}
+                <span className={`text-xs ${step === n ? "font-semibold text-gray-900" : "text-gray-400"}`}>
+                  {label}
+                </span>
               </div>
-            );
-          })}
+            </React.Fragment>
+          ))}
         </div>
       </div>
 
-      <div className="card-body space-y-4">
+      <div className="card-body">
+        {/* Erro global */}
+        {error && (
+          <div className="alert-error mb-4">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span className="text-sm">{error}</span>
+          </div>
+        )}
+
         {/* ── STEP 1: Upload ── */}
         {step === 1 && (
           <div
@@ -659,96 +673,88 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
-            onClick={() => wizardFileRef.current?.click()}
+            onClick={() => fileRef.current?.click()}
           >
-            <input
-              ref={wizardFileRef}
-              type="file"
-              accept=".csv"
-              className="hidden"
-              onChange={handleFileInput}
-            />
+            <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileInput} />
             <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-gray-700">
-              Arraste um arquivo CSV ou clique para selecionar
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              Somente arquivos <code className="bg-gray-100 px-1 rounded font-mono">.csv</code>
-            </p>
+            <p className="text-sm font-semibold text-gray-700">Arraste um CSV ou clique para selecionar</p>
+            <p className="text-xs text-gray-400 mt-1">Deve ter coluna <code className="bg-gray-100 px-1 rounded">phone</code> (ou telefone, celular)</p>
           </div>
         )}
 
-        {/* ── STEP 2: Mapear colunas ── */}
+        {/* ── STEP 2: Mapeamento de colunas ── */}
         {step === 2 && (
-          <div className="space-y-4">
-            {selectedFile && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 rounded-lg border border-indigo-100">
-                <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                <span className="text-sm text-indigo-700 truncate">{selectedFile.name}</span>
-                <span className="text-xs text-indigo-400 ml-auto shrink-0">{(selectedFile.size / 1024).toFixed(1)} KB</span>
-              </div>
-            )}
-
-            {phoneCount === 0 && (
-              <div className="alert-error">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+          <div className="space-y-5">
+            {/* Alerta de validação */}
+            {phoneMappedCount === 0 && (
+              <div className="alert-warning flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
                 <span className="text-sm">Mapeie exatamente uma coluna para <strong>phone</strong> antes de importar.</span>
               </div>
             )}
-            {phoneCount > 1 && (
-              <div className="alert-error">
+            {phoneMappedCount > 1 && (
+              <div className="alert-error flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="text-sm">Apenas <strong>uma</strong> coluna pode ser mapeada para phone.</span>
+                <span className="text-sm">Você mapeou {phoneMappedCount} colunas para phone. Escolha apenas uma.</span>
               </div>
             )}
 
-            <div className="space-y-2">
-              <div className="grid grid-cols-[1fr_auto_1fr_auto] gap-2 px-1 mb-1">
-                <span className="text-xs font-medium text-gray-500">Coluna no CSV</span>
-                <span />
-                <span className="text-xs font-medium text-gray-500">Destino</span>
-                <span className="text-xs font-medium text-gray-500">Status</span>
-              </div>
-              {csvHeaders.map((col) => {
-                const dest = mappings[col] ?? "__custom__";
-                const isPhone = dest === "phone";
-                const isIgnore = dest === "__ignore__";
-                return (
-                  <div key={col} className="grid grid-cols-[1fr_auto_1fr_auto] gap-2 items-center">
-                    <span className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-gray-100 text-xs font-mono text-gray-700 truncate">
-                      {col}
-                    </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                    <select
-                      className="form-input text-sm py-1.5"
-                      value={dest}
-                      onChange={(e) => setMapping(col, e.target.value)}
-                    >
-                      {FIELD_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <span className={`text-xs font-medium shrink-0 ${
-                      isPhone ? "text-emerald-600" :
-                      isIgnore ? "text-gray-400" :
-                      "text-indigo-600"
-                    }`}>
-                      {isPhone ? "●  phone" : isIgnore ? "✕  ignorar" : "○  mapeado"}
-                    </span>
+            {/* Tabela de mapeamento */}
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                {csvHeaders.length} colunas detectadas — defina o destino de cada uma
+              </p>
+              <div className="space-y-2">
+                {csvHeaders.map((col) => (
+                  <div key={col} className="flex items-center gap-3">
+                    {/* Coluna original */}
+                    <div className="flex-1 min-w-0">
+                      <span className="inline-flex items-center px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-700 font-mono w-full truncate">
+                        {col}
+                      </span>
+                    </div>
+                    {/* Seta */}
+                    <span className="text-gray-300 shrink-0">→</span>
+                    {/* Select de destino */}
+                    <div className="flex-1 min-w-0">
+                      <select
+                        className="select-native w-full text-sm"
+                        value={mappings[col] ?? "__custom__"}
+                        onChange={(e) => setMappings(prev => ({ ...prev, [col]: e.target.value }))}
+                      >
+                        {FIELD_OPTIONS.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Badge de status */}
+                    <div className="shrink-0 w-24 text-right">
+                      {mappings[col] === "phone" && (
+                        <span className="badge badge-green">obrigatório ✓</span>
+                      )}
+                      {mappings[col] === "__ignore__" && (
+                        <span className="badge badge-gray">ignorar</span>
+                      )}
+                      {mappings[col] !== "phone" && mappings[col] !== "__ignore__" && (
+                        <span className="badge badge-blue">mapeado</span>
+                      )}
+                    </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
 
-            {/* Preview das 3 primeiras linhas */}
+            {/* Preview das primeiras 3 linhas */}
             {previewRows.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-gray-500 mb-2">Preview (primeiras {previewRows.length} linhas):</p>
-                <div className="overflow-x-auto rounded-lg border border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Preview — primeiras {previewRows.length} linhas
+                </p>
+                <div className="table-wrapper overflow-x-auto">
                   <table className="table text-xs">
                     <thead>
                       <tr>
-                        {csvHeaders.map((h) => (
+                        {csvHeaders.map(h => (
                           <th key={h} className="whitespace-nowrap">{h}</th>
                         ))}
                       </tr>
@@ -756,8 +762,8 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
                     <tbody>
                       {previewRows.map((row, i) => (
                         <tr key={i}>
-                          {csvHeaders.map((h) => (
-                            <td key={h} className="font-mono text-gray-600 whitespace-nowrap">{row[h] ?? "—"}</td>
+                          {csvHeaders.map(h => (
+                            <td key={h} className="whitespace-nowrap font-mono">{row[h] ?? "—"}</td>
                           ))}
                         </tr>
                       ))}
@@ -767,43 +773,43 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
               </div>
             )}
 
-            <div className="flex items-center gap-3 pt-1">
+            {/* Botões de navegação */}
+            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
               <button onClick={reset} className="btn-secondary">
-                <X className="w-4 h-4" />
-                Cancelar
+                <X className="w-4 h-4" /> Cancelar
               </button>
               <button
                 onClick={handleImport}
-                disabled={!canImport}
+                disabled={!canImport || importing}
                 className="btn-primary"
               >
-                <Upload className="w-4 h-4" />
-                Importar
+                {importing ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Importando...</>
+                ) : (
+                  <><Upload className="w-4 h-4" /> Importar {csvHeaders.length > 0 ? `(${csvHeaders.length} colunas)` : ""}</>
+                )}
               </button>
             </div>
           </div>
         )}
 
-        {/* ── STEP 3: Importando ── */}
-        {step === 3 && (
-          <div className="flex flex-col items-center justify-center py-8 gap-4">
-            {importing ? (
-              <>
-                <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
-                <p className="text-sm font-semibold text-gray-700">Importando leads...</p>
-                <p className="text-xs text-gray-400">Por favor aguarde</p>
-              </>
-            ) : importError ? (
-              <>
-                <AlertCircle className="w-10 h-10 text-red-400" />
-                <p className="text-sm font-semibold text-red-700">Erro na importação</p>
-                <p className="text-xs text-red-500">{importError}</p>
-                <button onClick={reset} className="btn-secondary">
-                  <RotateCcw className="w-4 h-4" />
-                  Tentar novamente
-                </button>
-              </>
-            ) : null}
+        {/* ── STEP 3: Resultado ── */}
+        {step === 3 && result && (
+          <div className="text-center py-8 space-y-4">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-7 h-7 text-emerald-500" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-gray-900">
+                {result.imported} leads importados com sucesso
+              </p>
+              {result.skipped > 0 && (
+                <p className="text-sm text-gray-400 mt-1">{result.skipped} linhas ignoradas (telefone inválido ou duplicado)</p>
+              )}
+            </div>
+            <button onClick={reset} className="btn-secondary mx-auto">
+              <Upload className="w-4 h-4" /> Importar outro arquivo
+            </button>
           </div>
         )}
       </div>
