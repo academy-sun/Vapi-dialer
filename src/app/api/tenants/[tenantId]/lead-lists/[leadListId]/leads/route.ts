@@ -27,11 +27,12 @@ export async function GET(req: NextRequest, { params }: Params) {
     .range(offset, offset + limit - 1);
 
   if (search) {
-    // Busca por telefone (remove formatação) OU conteúdo texto de data_json
-    const phoneClean = search.replace(/[\s\-\(\)\+]/g, "");
-    // data_json::text casts the JSONB to text so ilike can search across all fields
+    // Escapar wildcards SQL especiais (%, _) para evitar table scan abusivo ou injeção de padrão
+    const escapedSearch = search.replace(/[%_\\]/g, "\\$&");
+    const phoneClean    = escapedSearch.replace(/[\s\-\(\)\+]/g, "");
+    // data_json::text casts the JSONB to text so ilike can search across all fields (names, etc.)
     query = query.or(
-      `phone_e164.ilike.%${search}%,phone_e164.ilike.%${phoneClean}%,data_json::text.ilike.%${search}%`
+      `phone_e164.ilike.%${escapedSearch}%,phone_e164.ilike.%${phoneClean}%,data_json::text.ilike.%${escapedSearch}%`
     );
   }
 

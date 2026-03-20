@@ -31,6 +31,15 @@ export async function POST(req: NextRequest, { params }: Params) {
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "Campo 'file' obrigatório" }, { status: 400 });
 
+  // Limite de 50MB para evitar OOM crash
+  const MAX_CSV_BYTES = 50 * 1024 * 1024;
+  if (file.size > MAX_CSV_BYTES) {
+    return NextResponse.json(
+      { error: `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Limite: 50MB.` },
+      { status: 413 }
+    );
+  }
+
   const rawText = await file.text();
   // Remove BOM (Excel UTF-8 salva com \uFEFF no início)
   const csvText = rawText.replace(/^\uFEFF/, "");

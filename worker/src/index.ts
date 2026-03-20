@@ -436,6 +436,53 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue): Promise
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Recovery: libera leads travados em "calling" há mais de STALE_CALLING_MINUTES
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STALE_CALLING_MINUTES = Number(process.env.STALE_CALLING_MINUTES ?? 30);
+
+async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
+  const staleThreshold = new Date(Date.now() - STALE_CALLING_MINUTES * 60 * 1000).toISOString();
+
+  // Busca leads presos em "calling" com call_record desatualizado
+  // Usa updated_at do lead como proxy de "tempo em calling"
+  const { data: stale, error } = await supabase
+    .from("leads")
+    .select("id, phone_e164, tenant_id")
+    .eq("status", "calling")
+    .lt("updated_at", staleThreshold);
+
+  if (error) {
+    console.error("[worker] recoverStaleCalls: erro ao buscar leads presos:", error.message);
+    return;
+  }
+
+  if (!stale || stale.length === 0) return;
+
+  console.warn(
+    `[worker] ⚠ Encontrados ${stale.length} lead(s) presos em "calling" há >${STALE_CALLING_MINUTES}min — resetando para "queued"`
+  );
+
+  const ids = stale.map((l: { id: string }) => l.id);
+  const retryAt = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // retry em 2 min
+
+  const { error: updateError } = await supabase
+    .from("leads")
+    .update({
+      status:          "queued",
+      last_outcome:    "stale-calling-reset",
+      next_attempt_at: retryAt,
+    })
+    .in("id", ids);
+
+  if (updateError) {
+    console.error("[worker] recoverStaleCalls: erro ao resetar leads:", updateError.message);
+  } else {
+    console.log(`[worker] ✓ ${ids.length} lead(s) resetados para "queued"`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Ciclo de polling
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -519,6 +566,9 @@ async function main(): Promise<void> {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT",  () => shutdown("SIGINT"));
 
+  // Frequência do recovery de stale calls: a cada ~60s (independente do POLL_INTERVAL_MS)
+  const STALE_RECOVERY_EVERY_N_CYCLES = Math.max(1, Math.round(60_000 / POLL_INTERVAL_MS));
+
   // Loop principal
   let cycleCount = 0;
   while (running) {
@@ -529,6 +579,20 @@ async function main(): Promise<void> {
       await pollCycle(supabase);
     } catch (err) {
       console.error(`[worker] Erro no ciclo #${cycleCount}:`, err);
+    }
+
+    // Recovery periódico de leads presos em "calling"
+    if (cycleCount % STALE_RECOVERY_EVERY_N_CYCLES === 0) {
+      try {
+        await recoverStaleCalls(supabase);
+      } catch (err) {
+        console.error("[worker] Erro no recoverStaleCalls:", err);
+      }
+    }
+
+    // Heartbeat simples no console a cada ~5 minutos (para monitoramento de logs)
+    if (cycleCount % Math.max(1, Math.round(300_000 / POLL_INTERVAL_MS)) === 0) {
+      console.log(`[worker] ♥ heartbeat | ciclo #${cycleCount} | ${new Date().toISOString()}`);
     }
 
     const elapsed = Date.now() - start;

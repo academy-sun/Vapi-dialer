@@ -149,7 +149,10 @@ async function handleEndOfCallReport(
 ) {
   const call       = message.call as Record<string, unknown> | undefined;
   const vapiCallId = call?.id as string | undefined;
-  if (!vapiCallId) return;
+  if (!vapiCallId) {
+    console.warn("[webhook] end-of-call-report sem vapiCallId — ignorado");
+    return NextResponse.json({ ok: false, reason: "no-call-id" });
+  }
 
   const endedReason         = (message.endedReason as string) ?? null;
   const cost                = (message.cost        as number) ?? null;
@@ -210,7 +213,10 @@ async function handleEndOfCallReport(
 
   // ── Fallback: call_record não encontrado (race condition ou teste manual) ──
   const customerNumber = (call?.customer as Record<string, unknown>)?.number as string | undefined;
-  if (!customerNumber) return;
+  if (!customerNumber) {
+    console.warn(`[webhook] call ${vapiCallId} sem customerNumber — ignorado`);
+    return NextResponse.json({ ok: false, reason: "no-customer-number" });
+  }
 
   const { data: lead } = await service
     .from("leads")
@@ -221,7 +227,10 @@ async function handleEndOfCallReport(
     .limit(1)
     .single();
 
-  if (!lead) return;
+  if (!lead) {
+    console.warn(`[webhook] lead não encontrado para ${customerNumber} (tenant ${tenantId})`);
+    return NextResponse.json({ ok: false, reason: "lead-not-found" });
+  }
 
   const { data: queue } = await service
     .from("dial_queues")
@@ -233,7 +242,10 @@ async function handleEndOfCallReport(
     .limit(1)
     .single();
 
-  if (!queue) return;
+  if (!queue) {
+    console.warn(`[webhook] fila não encontrada para lead ${lead.id} (tenant ${tenantId})`);
+    return NextResponse.json({ ok: false, reason: "queue-not-found" });
+  }
 
   await service.from("call_records").insert({
     tenant_id:            tenantId,
