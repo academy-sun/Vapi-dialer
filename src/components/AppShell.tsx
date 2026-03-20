@@ -43,6 +43,7 @@ export default function AppShell({
   children: React.ReactNode;
 }) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenantRoles, setTenantRoles] = useState<Record<string, string>>({});
   const [activeTenantId, setActiveTenantId] = useState<string>("");
   const [showCreateTenant, setShowCreateTenant] = useState(false);
   const [showTenantDropdown, setShowTenantDropdown] = useState(false);
@@ -74,6 +75,12 @@ export default function AppShell({
     const data = await res.json();
     if (data.tenants) {
       setTenants(data.tenants);
+      // popular mapa de roles
+      const roles: Record<string, string> = {};
+      data.tenants.forEach((t: Tenant & { role?: string }) => {
+        if (t.id && t.role) roles[t.id] = t.role;
+      });
+      setTenantRoles(roles);
       const saved = localStorage.getItem("activeTenantId");
       if (!saved && data.tenants.length > 0) {
         selectTenant(data.tenants[0].id);
@@ -85,10 +92,12 @@ export default function AppShell({
     setActiveTenantId(id);
     localStorage.setItem("activeTenantId", id);
     setShowTenantDropdown(false);
-    // Ao trocar de tenant manualmente, redireciona para a página inicial do tenant
-    // evitando que o usuário veja dados do tenant anterior na URL atual.
     if (navigate) {
-      router.push(`/app/tenants/${id}/vapi`);
+      const role = tenantRoles[id] ?? "member";
+      const destination = (role === "owner" || role === "admin")
+        ? `/app/tenants/${id}/vapi`
+        : `/app/tenants/${id}/queues`;
+      router.push(destination);
     }
   }
 
@@ -122,15 +131,23 @@ export default function AppShell({
 
   const activeTenant = tenants.find((t) => t.id === activeTenantId);
 
+  const activeRole = tenantRoles[activeTenantId] ?? "member";
+  const isAdminOrOwner = activeRole === "owner" || activeRole === "admin";
+
   const navItems = activeTenantId
     ? [
-        {
+        ...(isAdminOrOwner ? [{
           label: "Configuração Vapi",
           href: `/app/tenants/${activeTenantId}/vapi`,
           icon: Settings2,
+        }] : []),
+        {
+          label: "Lead Lists",
+          href: `/app/tenants/${activeTenantId}/leads`,
+          icon: Users,
         },
         {
-          label: "Campanhas",
+          label: "Filas de Discagem",
           href: `/app/tenants/${activeTenantId}/queues`,
           icon: ListOrdered,
         },
@@ -138,11 +155,6 @@ export default function AppShell({
           label: "Chamadas",
           href: `/app/tenants/${activeTenantId}/calls`,
           icon: PhoneCall,
-        },
-        {
-          label: "Analytics",
-          href: `/app/tenants/${activeTenantId}/analytics`,
-          icon: BarChart3,
         },
       ]
     : [];
@@ -158,14 +170,41 @@ export default function AppShell({
 
         {/* Logo */}
         <div className="sidebar-logo">
-          <div className="sidebar-logo-icon">
-            <Zap className="w-4 h-4 text-white" />
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{
+              fontFamily: "Inter, sans-serif",
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#FFFFFF",
+              letterSpacing: "-0.5px",
+              lineHeight: 1,
+            }}>
+              CALL
+            </span>
+            <span style={{
+              fontFamily: "Inter, sans-serif",
+              fontSize: "22px",
+              fontWeight: 700,
+              color: "#FF1A1A",
+              letterSpacing: "-0.5px",
+              lineHeight: 1,
+            }}>
+              X
+            </span>
           </div>
-          <span className="sidebar-logo-text">Vapi Dialer</span>
+          <div style={{
+            fontSize: "10px",
+            fontWeight: 400,
+            color: "#555555",
+            letterSpacing: "1.5px",
+            marginTop: "2px",
+          }}>
+            POWERED BY AI
+          </div>
         </div>
 
         {/* Tenant Selector */}
-        <div className="px-4 py-4" style={{ borderBottom: "1px solid hsl(224, 40%, 12%)" }}>
+        <div className="px-4 py-4" style={{ borderBottom: "1px solid #222222" }}>
           <p className="sidebar-section-label">Tenant Ativo</p>
 
           {/* Dropdown */}
@@ -174,13 +213,13 @@ export default function AppShell({
               onClick={() => setShowTenantDropdown(!showTenantDropdown)}
               className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-sm transition-all"
               style={{
-                background: "hsl(224, 40%, 10%)",
-                color: "hsl(220, 14%, 85%)",
-                border: "1px solid hsl(224, 40%, 15%)",
+                background: "#1a1a1a",
+                color: "#FFFFFF",
+                border: "1px solid #2a2a2a",
               }}
             >
               <span className="flex items-center gap-2 min-w-0">
-                <Building2 className="w-4 h-4 shrink-0" style={{ color: "hsl(238, 84%, 70%)" }} />
+                <Building2 className="w-4 h-4 shrink-0" style={{ color: "#FF1A1A" }} />
                 <span className="truncate">
                   {activeTenant?.name ?? "Selecionar tenant"}
                 </span>
@@ -195,8 +234,8 @@ export default function AppShell({
               <div
                 className="absolute top-full mt-1 left-0 right-0 rounded-lg overflow-hidden shadow-xl z-50 animate-fadeIn"
                 style={{
-                  background: "hsl(224, 55%, 7%)",
-                  border: "1px solid hsl(224, 40%, 15%)",
+                  background: "#111111",
+                  border: "1px solid #2a2a2a",
                 }}
               >
                 {tenants.map((t) => (
@@ -205,13 +244,13 @@ export default function AppShell({
                     onClick={() => selectTenant(t.id, true)}
                     className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-left transition-colors"
                     style={{
-                      color: t.id === activeTenantId ? "hsl(238, 84%, 75%)" : "hsl(220, 14%, 70%)",
+                      color: t.id === activeTenantId ? "#FF1A1A" : "hsl(220, 14%, 70%)",
                       background:
-                        t.id === activeTenantId ? "hsl(238, 84%, 12%)" : "transparent",
+                        t.id === activeTenantId ? "#1a0000" : "transparent",
                     }}
                     onMouseEnter={(e) => {
                       if (t.id !== activeTenantId)
-                        (e.currentTarget as HTMLElement).style.background = "hsl(224, 40%, 10%)";
+                        (e.currentTarget as HTMLElement).style.background = "#1a1a1a";
                     }}
                     onMouseLeave={(e) => {
                       if (t.id !== activeTenantId)
@@ -226,7 +265,7 @@ export default function AppShell({
                   </button>
                 ))}
 
-                <div style={{ borderTop: "1px solid hsl(224, 40%, 12%)" }}>
+                <div style={{ borderTop: "1px solid #222222" }}>
                   {!showCreateTenant ? (
                     <button
                       onClick={() => setShowCreateTenant(true)}
@@ -234,7 +273,7 @@ export default function AppShell({
                       style={{ color: "hsl(220, 9%, 50%)" }}
                       onMouseEnter={(e) => {
                         (e.currentTarget as HTMLElement).style.color = "hsl(220, 14%, 80%)";
-                        (e.currentTarget as HTMLElement).style.background = "hsl(224, 40%, 10%)";
+                        (e.currentTarget as HTMLElement).style.background = "#1a1a1a";
                       }}
                       onMouseLeave={(e) => {
                         (e.currentTarget as HTMLElement).style.color = "hsl(220, 9%, 50%)";
@@ -254,8 +293,8 @@ export default function AppShell({
                         onKeyDown={(e) => e.key === "Enter" && createTenant()}
                         className="w-full px-2.5 py-2 text-sm rounded-lg"
                         style={{
-                          background: "hsl(224, 40%, 10%)",
-                          border: "1px solid hsl(224, 40%, 18%)",
+                          background: "#1a1a1a",
+                          border: "1px solid #2a2a2a",
                           color: "hsl(220, 14%, 90%)",
                           outline: "none",
                         }}
@@ -266,7 +305,7 @@ export default function AppShell({
                           onClick={createTenant}
                           className="flex-1 py-1.5 text-xs rounded-lg font-medium"
                           style={{
-                            background: "hsl(238, 84%, 60%)",
+                            background: "#FF1A1A",
                             color: "white",
                           }}
                         >
@@ -276,7 +315,7 @@ export default function AppShell({
                           onClick={() => { setShowCreateTenant(false); setNewTenantName(""); }}
                           className="flex-1 py-1.5 text-xs rounded-lg"
                           style={{
-                            background: "hsl(224, 40%, 14%)",
+                            background: "#1a1a1a",
                             color: "hsl(220, 9%, 60%)",
                           }}
                         >
@@ -317,7 +356,7 @@ export default function AppShell({
 
           {/* Admin section */}
           {isAdmin && (
-            <div className="mt-4 pt-4" style={{ borderTop: "1px solid hsl(224, 40%, 12%)" }}>
+            <div className="mt-4 pt-4" style={{ borderTop: "1px solid #222222" }}>
               <p className="sidebar-section-label" style={{ color: "hsl(45, 80%, 55%)" }}>Admin</p>
               {[
                 { label: "Visão Geral",  href: "/app/admin",         icon: LayoutDashboard },
@@ -348,7 +387,7 @@ export default function AppShell({
             <div
               className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
               style={{
-                background: "linear-gradient(135deg, hsl(238, 84%, 40%), hsl(265, 84%, 50%))",
+                background: "linear-gradient(135deg, #FF1A1A, #cc0000)",
                 color: "white",
               }}
             >
@@ -357,11 +396,11 @@ export default function AppShell({
             <div className="flex-1 min-w-0">
               <p
                 className="text-xs font-medium truncate"
-                style={{ color: "hsl(220, 14%, 85%)" }}
+                style={{ color: "#FFFFFF" }}
               >
                 {user.email}
               </p>
-              <p className="text-xs" style={{ color: "hsl(220, 9%, 45%)" }}>
+              <p className="text-xs" style={{ color: "#666666" }}>
                 Conta ativa
               </p>
             </div>
@@ -371,8 +410,8 @@ export default function AppShell({
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0"
               style={{ color: "hsl(220, 9%, 50%)" }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.color = "hsl(0, 84%, 70%)";
-                (e.currentTarget as HTMLElement).style.background = "hsl(0, 40%, 12%)";
+                (e.currentTarget as HTMLElement).style.color = "#FF1A1A";
+                (e.currentTarget as HTMLElement).style.background = "#1a0000";
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLElement).style.color = "hsl(220, 9%, 50%)";
