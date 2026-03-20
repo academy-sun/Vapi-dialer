@@ -1127,6 +1127,7 @@ export default function LeadsPage() {
             {/* ── CSV Import Wizard ── */}
             {selectedListId && (
               <CsvImportWizard
+                key={selectedListId}
                 tenantId={tenantId}
                 listId={selectedListId}
                 listName={activeList?.name ?? ""}

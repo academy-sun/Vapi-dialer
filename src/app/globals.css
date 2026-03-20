@@ -108,7 +108,12 @@
   }
 
   .btn-primary {
-    @apply btn px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500;
+    @apply btn px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-offset-2;
+    background-color: #FF1A1A;
+    focus-ring-color: #FF1A1A;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: #cc0000;
   }
 
   .btn-secondary {

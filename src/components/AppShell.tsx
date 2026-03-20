@@ -161,6 +161,11 @@ export default function AppShell({
           href: `/app/tenants/${activeTenantId}/calls`,
           icon: PhoneCall,
         },
+        {
+          label: "Relatórios",
+          href: `/app/tenants/${activeTenantId}/analytics`,
+          icon: BarChart3,
+        },
       ]
     : [];
 
@@ -362,7 +367,7 @@ export default function AppShell({
           {/* Admin section — visível apenas para owner/admin do tenant */}
           {(isAdmin || isAdminOrOwner) && (
             <div className="mt-4 pt-4" style={{ borderTop: "1px solid #222222" }}>
-              <p className="sidebar-section-label" style={{ color: "hsl(45, 80%, 55%)" }}>Admin</p>
+              <p className="sidebar-section-label" style={{ color: "#FF1A1A", marginTop: "16px" }}>Admin</p>
               {[
                 { label: "Visão Geral",  href: "/app/admin",         icon: LayoutDashboard },
                 { label: "Sandbox",      href: "/app/admin/sandbox", icon: FlaskConical    },
@@ -431,7 +436,7 @@ export default function AppShell({
 
       {/* ── Main content ── */}
       <main className="flex-1 ml-64 min-h-screen overflow-auto">
-        <div className="max-w-6xl mx-auto px-8 py-8">{children}</div>
+        <div style={{ maxWidth: "100%", padding: "32px 40px" }}>{children}</div>
       </main>
 
       {/* ── Toast notifications ── */}
