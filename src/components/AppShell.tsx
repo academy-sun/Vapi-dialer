@@ -130,12 +130,7 @@ export default function AppShell({
           icon: Settings2,
         },
         {
-          label: "Lead Lists",
-          href: `/app/tenants/${activeTenantId}/leads`,
-          icon: Users,
-        },
-        {
-          label: "Filas de Discagem",
+          label: "Campanhas",
           href: `/app/tenants/${activeTenantId}/queues`,
           icon: ListOrdered,
         },
