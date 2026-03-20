@@ -135,6 +135,38 @@ export async function POST(req: NextRequest, { params }: Params) {
   }, { status: 201 });
 }
 
+// PATCH /api/tenants/:tenantId/members — atualiza role de um membro
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const { tenantId } = await params;
+  const { response, membership } = await requireTenantAccess(tenantId);
+  if (response) return response;
+
+  if (!membership || !["owner", "admin"].includes(membership.role)) {
+    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+  }
+
+  let body: { userId?: string; role?: string };
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+
+  const { userId, role } = body;
+  if (!userId) return NextResponse.json({ error: "userId obrigatório" }, { status: 400 });
+  if (!role || !["member", "admin"].includes(role)) {
+    return NextResponse.json({ error: "role inválido" }, { status: 400 });
+  }
+
+  const service = createServiceClient();
+  const { error } = await service
+    .from("memberships")
+    .update({ role })
+    .eq("tenant_id", tenantId)
+    .eq("user_id", userId);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
+
 // DELETE /api/tenants/:tenantId/members?userId=xxx — remove membership
 export async function DELETE(req: NextRequest, { params }: Params) {
   const { tenantId } = await params;

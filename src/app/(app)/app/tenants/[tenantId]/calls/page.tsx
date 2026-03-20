@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/browser";
 import {
   RefreshCw,
   PhoneCall,
@@ -288,7 +289,26 @@ export default function CallsPage() {
   const [maxDuration, setMaxDuration] = useState("30");
   const [showTranscript, setShowTranscript] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<"created_at" | "cost" | "duration">("created_at");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [userRole, setUserRole] = useState<string>("member");
   const { toasts, show: showToast } = useToast();
+
+  const isAdminOrOwner = userRole === "owner" || userRole === "admin";
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: m } = await supabase
+        .from("memberships")
+        .select("role")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", data.user.id)
+        .single();
+      if (m) setUserRole(m.role);
+    });
+  }, [tenantId]);
 
   useEffect(() => {
     fetch(`/api/tenants/${tenantId}/queues`)
@@ -339,6 +359,21 @@ export default function CallsPage() {
     return matchReason && matchPhone && matchCallId;
   });
 
+  const sortedCalls = [...filteredCalls].sort((a, b) => {
+    let va = 0, vb = 0;
+    if (sortBy === "created_at") {
+      va = new Date(a.created_at).getTime();
+      vb = new Date(b.created_at).getTime();
+    } else if (sortBy === "cost") {
+      va = a.cost ?? 0;
+      vb = b.cost ?? 0;
+    } else if (sortBy === "duration") {
+      va = a.duration_seconds ?? 0;
+      vb = b.duration_seconds ?? 0;
+    }
+    return sortDir === "desc" ? vb - va : va - vb;
+  });
+
   const totalCost   = calls.reduce((sum, c) => sum + (c.cost ?? 0), 0);
   const totalDurSec = calls.reduce((sum, c) => sum + (c.duration_seconds ?? 0), 0);
   const hasActiveFilters = filterReason !== "all" || searchPhone || filterQueue !== "all" || searchCallId;
@@ -368,7 +403,8 @@ export default function CallsPage() {
           <p className="page-subtitle">
             {calls.length > 0 && (
               <>
-                {calls.length} chamadas · Custo: ${totalCost.toFixed(4)}
+                {calls.length} chamadas
+                {isAdminOrOwner && ` · Custo: $${totalCost.toFixed(4)}`}
                 {totalDurSec > 0 && ` · Tempo total: ${formatDuration(totalDurSec)}`}
               </>
             )}
@@ -387,7 +423,7 @@ export default function CallsPage() {
 
           {queues.length > 0 && (
             <div className="flex items-center gap-2">
-              <ListOrdered className="w-4 h-4 text-indigo-400 shrink-0" />
+              <ListOrdered className="w-4 h-4 text-gray-400 shrink-0" />
               <select
                 className="select-native text-sm py-2.5"
                 value={filterQueue}
@@ -448,7 +484,7 @@ export default function CallsPage() {
 
         {/* Filtro duração curta */}
         <div className="flex items-center gap-3 pt-1 border-t border-gray-100 flex-wrap">
-          <Timer className="w-4 h-4 text-indigo-400 shrink-0" />
+          <Timer className="w-4 h-4 text-gray-400 shrink-0" />
           <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
             <input
               type="checkbox"
@@ -469,13 +505,42 @@ export default function CallsPage() {
                 onChange={(e) => setMaxDuration(e.target.value)}
               />
               <span className="text-sm text-gray-500">segundos</span>
-              <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg">
+              <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-lg">
                 Leads que atenderam mas desligaram rápido — candidatos a re-trabalho
               </span>
             </>
           )}
         </div>
       </div>
+
+      {/* Sort controls */}
+      {!loading && sortedCalls.length > 0 && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <span className="text-xs text-gray-400 font-medium">Ordenar por:</span>
+          {(["created_at", "duration", ...(isAdminOrOwner ? ["cost"] : [])] as ("created_at" | "duration" | "cost")[]).map((col) => {
+            const labels: Record<string, string> = { created_at: "Data", duration: "Duração", cost: "Custo" };
+            const active = sortBy === col;
+            return (
+              <button
+                key={col}
+                onClick={() => {
+                  if (active) setSortDir(d => d === "desc" ? "asc" : "desc");
+                  else { setSortBy(col); setSortDir("desc"); }
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
+                style={{
+                  background: active ? "#FF1A1A" : "white",
+                  color: active ? "white" : "#6b7280",
+                  border: `1px solid ${active ? "#FF1A1A" : "#e5e7eb"}`,
+                }}
+              >
+                {labels[col]}
+                {active && (sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ── Tabela — sempre largura total, sem layout shift ── */}
       {loading ? (
@@ -491,7 +556,7 @@ export default function CallsPage() {
             ))}
           </div>
         </div>
-      ) : filteredCalls.length === 0 ? (
+      ) : sortedCalls.length === 0 ? (
         <div className="card">
           <div className="empty-state">
             <div className="empty-state-icon">
@@ -521,12 +586,13 @@ export default function CallsPage() {
                 <th><span className="flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" />Duração</span></th>
                 <th>Interesse</th>
                 <th><span className="flex items-center gap-1.5"><Star className="w-3.5 h-3.5" />Score</span></th>
+                {isAdminOrOwner && <th><span className="flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" />Custo</span></th>}
                 <th><span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Data</span></th>
               </tr>
             </thead>
             <tbody>
-              {filteredCalls.map((call) => {
-                const reason = REASON_CONFIG[call.ended_reason ?? ""] ?? { label: call.ended_reason ?? "Em andamento", badge: "badge-indigo" };
+              {sortedCalls.map((call) => {
+                const reason = REASON_CONFIG[call.ended_reason ?? ""] ?? { label: call.ended_reason ?? "Em andamento", badge: "badge-gray" };
                 const { relative, full } = formatRelativeTime(call.created_at);
                 const isSelected = selected?.id === call.id;
                 const result = call.structured_outputs ? extractResult(call.structured_outputs) : null;
@@ -535,7 +601,7 @@ export default function CallsPage() {
                   <tr
                     key={call.id}
                     onClick={() => openDetail(call.id)}
-                    className={`cursor-pointer ${isSelected ? "bg-indigo-50/70 ring-1 ring-inset ring-indigo-200" : "hover:bg-gray-50/80"}`}
+                    className={`cursor-pointer ${isSelected ? "bg-red-50/40 ring-1 ring-inset ring-red-100" : "hover:bg-gray-50/80"}`}
                   >
                     <td className="font-mono font-medium text-gray-900">
                       {call.leads ? formatPhone(call.leads.phone_e164) : "—"}
@@ -552,6 +618,11 @@ export default function CallsPage() {
                     <td className="text-gray-600 font-mono text-sm">
                       {score != null ? String(score) : "—"}
                     </td>
+                    {isAdminOrOwner && (
+                      <td className="text-gray-600 font-mono text-sm">
+                        {call.cost != null ? `$${call.cost.toFixed(4)}` : "—"}
+                      </td>
+                    )}
                     <td>
                       <span title={full} className="text-gray-500 cursor-help">
                         {relative}
@@ -565,7 +636,7 @@ export default function CallsPage() {
 
           <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
             <p className="text-xs text-gray-400">
-              {filteredCalls.length} de {calls.length} chamadas
+              {sortedCalls.length} de {calls.length} chamadas
               {filterQueue !== "all" && queues.length > 0 && (
                 <> · Fila: <strong>{queues.find(q => q.id === filterQueue)?.name}</strong></>
               )}
@@ -592,13 +663,13 @@ export default function CallsPage() {
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
-                  <PhoneCall className="w-3.5 h-3.5 text-indigo-600" />
+                <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center">
+                  <PhoneCall className="w-3.5 h-3.5 text-red-600" />
                 </div>
                 <div>
                   <h2 className="text-sm font-semibold text-gray-900">Detalhe da Chamada</h2>
                   <p className="text-xs text-gray-400 font-mono truncate max-w-[240px]">
-                    {selected.vapi_call_id}
+                    {isAdminOrOwner ? selected.vapi_call_id : `${selected.vapi_call_id.slice(0, 8)}…`}
                   </p>
                 </div>
               </div>
@@ -630,19 +701,21 @@ export default function CallsPage() {
               </div>
 
               {/* Métricas rápidas */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className={`grid gap-2 ${isAdminOrOwner ? "grid-cols-3" : "grid-cols-2"}`}>
                 <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
                   <p className="text-xs text-gray-400 font-medium">Duração</p>
                   <p className="font-mono text-sm font-bold text-gray-800 mt-0.5">
                     {formatDuration(selected.duration_seconds)}
                   </p>
                 </div>
-                <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
-                  <p className="text-xs text-gray-400 font-medium">Custo</p>
-                  <p className="font-mono text-sm font-bold text-gray-800 mt-0.5">
-                    {selected.cost != null ? `$${selected.cost.toFixed(4)}` : "—"}
-                  </p>
-                </div>
+                {isAdminOrOwner && (
+                  <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
+                    <p className="text-xs text-gray-400 font-medium">Custo</p>
+                    <p className="font-mono text-sm font-bold text-gray-800 mt-0.5">
+                      {selected.cost != null ? `$${selected.cost.toFixed(4)}` : "—"}
+                    </p>
+                  </div>
+                )}
                 <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
                   <p className="text-xs text-gray-400 font-medium">Data</p>
                   <p className="text-xs font-semibold text-gray-700 mt-0.5">
@@ -687,7 +760,7 @@ export default function CallsPage() {
                         href={selected.recording_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                        className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
                       >
                         <ExternalLink className="w-3 h-3" /> Mono
                       </a>
@@ -696,7 +769,7 @@ export default function CallsPage() {
                           href={selected.stereo_recording_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                          className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
                         >
                           <ExternalLink className="w-3 h-3" /> Estéreo
                         </a>
@@ -724,12 +797,23 @@ export default function CallsPage() {
                 </div>
               )}
 
-              {/* Vapi ID */}
+              {/* Vapi ID — ID completo para admin/owner, truncado para member */}
               <div className="pt-2 border-t border-gray-50">
-                <p className="text-xs font-semibold text-gray-300 uppercase tracking-wide mb-1.5">Vapi Call ID</p>
-                <p className="font-mono text-xs text-gray-400 break-all bg-gray-50 rounded px-2 py-1.5 select-all">
-                  {selected.vapi_call_id}
-                </p>
+                {isAdminOrOwner ? (
+                  <>
+                    <p className="text-xs font-semibold text-gray-300 uppercase tracking-wide mb-1.5">Vapi Call ID</p>
+                    <p className="font-mono text-xs text-gray-400 break-all bg-gray-50 rounded px-2 py-1.5 select-all">
+                      {selected.vapi_call_id}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs font-semibold text-gray-300 uppercase tracking-wide mb-1.5">Call ID</p>
+                    <p className="font-mono text-xs text-gray-400 bg-gray-50 rounded px-2 py-1.5">
+                      {selected.vapi_call_id.slice(0, 8)}…
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>

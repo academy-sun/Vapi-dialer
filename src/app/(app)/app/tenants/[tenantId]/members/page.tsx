@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { UserPlus, Trash2, Loader2, Check, AlertCircle, X, Shield, User } from "lucide-react";
+import { createClient } from "@/lib/supabase/browser";
 
 interface Member {
   id: string;
@@ -33,6 +34,9 @@ export default function MembersPage() {
   const [role, setRole] = useState("member");
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [editingRole, setEditingRole] = useState<string>("");
   const { toasts, show: showToast } = useToast();
 
   const loadMembers = useCallback(async () => {
@@ -43,7 +47,13 @@ export default function MembersPage() {
     setLoading(false);
   }, [tenantId]);
 
-  useEffect(() => { loadMembers(); }, [loadMembers]);
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setCurrentUserId(data.user.id);
+    });
+    loadMembers();
+  }, [loadMembers]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -80,6 +90,22 @@ export default function MembersPage() {
       return;
     }
     showToast(`Acesso de ${member.email} removido`);
+    loadMembers();
+  }
+
+  async function handleUpdateRole(member: Member, newRole: string) {
+    const res = await fetch(`/api/tenants/${tenantId}/members`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: member.user_id, role: newRole }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error ?? "Erro ao atualizar", "error");
+      return;
+    }
+    showToast("Role atualizado");
+    setEditingMemberId(null);
     loadMembers();
   }
 
@@ -147,10 +173,10 @@ export default function MembersPage() {
               </select>
             </div>
             <div className="alert-info text-sm">
-              <AlertCircle className="w-4 h-4 shrink-0 text-indigo-500" />
+              <AlertCircle className="w-4 h-4 shrink-0" style={{ color: "#FF1A1A" }} />
               <div>
                 <p className="font-semibold">Como compartilhar o acesso:</p>
-                <p className="mt-0.5 text-indigo-700">
+                <p className="mt-0.5 text-gray-700">
                   Envie para o cliente:<br />
                   URL: <strong>{typeof window !== "undefined" ? window.location.origin : ""}/login</strong><br />
                   Email: <strong>{email || "o email cadastrado"}</strong><br />
@@ -173,7 +199,7 @@ export default function MembersPage() {
       {/* Lista de membros */}
       {loading ? (
         <div className="card p-8 flex justify-center">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
         </div>
       ) : members.length === 0 ? (
         <div className="card">
@@ -198,16 +224,58 @@ export default function MembersPage() {
               {members.map(m => (
                 <tr key={m.id}>
                   <td className="font-medium text-gray-900">{m.email}</td>
+
+                  {/* Célula de role — clicável para editar (exceto owner) */}
                   <td>
-                    {m.role === "owner" && <span className="badge badge-purple"><Shield className="w-3 h-3 inline mr-1" />Owner</span>}
-                    {m.role === "admin" && <span className="badge badge-indigo"><Shield className="w-3 h-3 inline mr-1" />Admin</span>}
-                    {m.role === "member" && <span className="badge badge-gray"><User className="w-3 h-3 inline mr-1" />Member</span>}
+                    {editingMemberId === m.id ? (
+                      <div className="flex items-center gap-2">
+                        <select
+                          className="select-native text-xs py-1"
+                          value={editingRole}
+                          onChange={e => setEditingRole(e.target.value)}
+                          autoFocus
+                        >
+                          <option value="member">Member</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        <button
+                          onClick={() => handleUpdateRole(m, editingRole)}
+                          className="btn-primary btn-sm px-2 py-1"
+                        >
+                          <Check className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => setEditingMemberId(null)}
+                          className="btn-secondary btn-sm px-2 py-1"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (m.role !== "owner") {
+                            setEditingMemberId(m.id);
+                            setEditingRole(m.role);
+                          }
+                        }}
+                        title={m.role !== "owner" ? "Clique para editar" : ""}
+                        style={{ cursor: m.role !== "owner" ? "pointer" : "default", background: "none", border: "none", padding: 0 }}
+                      >
+                        {m.role === "owner" && <span className="badge badge-purple"><Shield className="w-3 h-3 inline mr-1" />Owner</span>}
+                        {m.role === "admin" && <span className="badge badge-indigo"><Shield className="w-3 h-3 inline mr-1" />Admin</span>}
+                        {m.role === "member" && <span className="badge badge-gray"><User className="w-3 h-3 inline mr-1" />Member</span>}
+                      </button>
+                    )}
                   </td>
+
                   <td className="text-gray-500 text-sm">
                     {new Date(m.created_at).toLocaleDateString("pt-BR")}
                   </td>
+
+                  {/* Botão de excluir — esconder para si mesmo e para owner */}
                   <td>
-                    {m.role !== "owner" && (
+                    {m.user_id !== currentUserId && m.role !== "owner" && (
                       <button
                         onClick={() => handleRemove(m)}
                         className="btn-icon text-gray-400 hover:text-red-500"
