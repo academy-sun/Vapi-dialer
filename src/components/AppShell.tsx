@@ -10,7 +10,6 @@ import {
   Users,
   ListOrdered,
   PhoneCall,
-  BarChart2,
   UserCheck,
   LogOut,
   Plus,
@@ -153,11 +152,6 @@ export default function AppShell({
   // navItems só é populado após roles estarem prontos — evita renderizar menu incompleto
   const navItems = (activeTenantId && rolesLoaded)
     ? [
-        {
-          label: "Relatórios",
-          href: `/app/tenants/${activeTenantId}/calls`,
-          icon: BarChart2,
-        },
         {
           label: "Lista de Leads",
           href: `/app/tenants/${activeTenantId}/leads`,

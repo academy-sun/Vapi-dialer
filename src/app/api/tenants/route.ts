@@ -34,7 +34,16 @@ export async function GET() {
     .filter((m) => m.tenants)
     .map((m) => ({ ...(m.tenants as unknown as Record<string, unknown>), role: m.role }));
 
-  return NextResponse.json({ tenants });
+  // Deduplicar por id (garante que memberships duplicadas não causem tenant duplicado no dropdown)
+  const seen = new Set<string>();
+  const uniqueTenants = tenants.filter((t) => {
+    const id = (t as Record<string, unknown>).id as string;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
+  return NextResponse.json({ tenants: uniqueTenants });
 }
 
 // POST /api/tenants — cria tenant + membership owner

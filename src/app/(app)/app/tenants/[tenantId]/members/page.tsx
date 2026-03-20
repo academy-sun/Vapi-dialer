@@ -110,7 +110,7 @@ export default function MembersPage() {
   }
 
   return (
-    <div className="max-w-2xl">
+    <div>
       <div className="page-header">
         <div>
           <h1 className="page-title">Membros</h1>
