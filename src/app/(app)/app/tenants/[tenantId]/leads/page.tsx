@@ -684,86 +684,102 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
 
         {/* ── STEP 2: Mapeamento de colunas ── */}
         {step === 2 && (
-          <div className="space-y-5">
-            {/* Alerta de validação */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {/* Alertas de validação */}
             {phoneMappedCount === 0 && (
-              <div className="alert-warning flex items-center gap-2">
+              <div className="alert-warning">
                 <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
                 <span className="text-sm">Mapeie exatamente uma coluna para <strong>phone</strong> antes de importar.</span>
               </div>
             )}
             {phoneMappedCount > 1 && (
-              <div className="alert-error flex items-center gap-2">
+              <div className="alert-error">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span className="text-sm">Você mapeou {phoneMappedCount} colunas para phone. Escolha apenas uma.</span>
               </div>
             )}
 
-            {/* Tabela de mapeamento */}
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                {csvHeaders.length} colunas detectadas — defina o destino de cada uma
-              </p>
-              <div className="space-y-2">
-                {csvHeaders.map((col) => (
-                  <div key={col} className="flex items-center gap-3">
-                    {/* Coluna original */}
-                    <div className="flex-1 min-w-0">
-                      <span className="inline-flex items-center px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-700 font-mono w-full truncate">
-                        {col}
-                      </span>
-                    </div>
-                    {/* Seta */}
-                    <span className="text-gray-300 shrink-0">→</span>
-                    {/* Select de destino */}
-                    <div className="flex-1 min-w-0">
-                      <select
-                        className="select-native w-full text-sm"
-                        value={mappings[col] ?? "__custom__"}
-                        onChange={(e) => setMappings(prev => ({ ...prev, [col]: e.target.value }))}
-                      >
-                        {FIELD_OPTIONS.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    {/* Badge de status */}
-                    <div className="shrink-0 w-24 text-right">
-                      {mappings[col] === "phone" && (
-                        <span className="badge badge-green">obrigatório ✓</span>
-                      )}
-                      {mappings[col] === "__ignore__" && (
-                        <span className="badge badge-gray">ignorar</span>
-                      )}
-                      {mappings[col] !== "phone" && mappings[col] !== "__ignore__" && (
-                        <span className="badge badge-blue">mapeado</span>
-                      )}
-                    </div>
+            {/* Label contador */}
+            <p style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>
+              {csvHeaders.length} colunas detectadas — defina o destino de cada uma
+            </p>
+
+            {/* Linhas de mapeamento — UMA POR LINHA, empilhadas verticalmente */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {csvHeaders.map((col) => (
+                <div key={col} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  {/* Coluna original — largura fixa */}
+                  <div style={{ flex: "0 0 180px" }}>
+                    <span style={{
+                      display: "block",
+                      padding: "8px 12px",
+                      background: "#f9fafb",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "8px",
+                      fontSize: "13px",
+                      fontFamily: "monospace",
+                      color: "#374151",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}>
+                      {col}
+                    </span>
                   </div>
-                ))}
-              </div>
+
+                  {/* Seta */}
+                  <span style={{ color: "#d1d5db", fontSize: "16px", flexShrink: 0 }}>→</span>
+
+                  {/* Select de destino — ocupa o espaço restante */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <select
+                      className="select-native"
+                      style={{ width: "100%" }}
+                      value={mappings[col] ?? "__custom__"}
+                      onChange={(e) => setMappings(prev => ({ ...prev, [col]: e.target.value }))}
+                    >
+                      {FIELD_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Badge de status — largura fixa */}
+                  <div style={{ flex: "0 0 100px", textAlign: "right" }}>
+                    {mappings[col] === "phone" && (
+                      <span className="badge badge-green">obrigatório ✓</span>
+                    )}
+                    {mappings[col] === "__ignore__" && (
+                      <span className="badge badge-gray">ignorar</span>
+                    )}
+                    {mappings[col] !== "phone" && mappings[col] !== "__ignore__" && (
+                      <span className="badge badge-blue">mapeado</span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Preview das primeiras 3 linhas */}
             {previewRows.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                <p style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>
                   Preview — primeiras {previewRows.length} linhas
                 </p>
-                <div className="table-wrapper overflow-x-auto">
-                  <table className="table text-xs">
+                <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: "8px" }}>
+                  <table style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse" }}>
                     <thead>
-                      <tr>
+                      <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
                         {csvHeaders.map(h => (
-                          <th key={h} className="whitespace-nowrap">{h}</th>
+                          <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {previewRows.map((row, i) => (
-                        <tr key={i}>
+                        <tr key={i} style={{ borderBottom: i < previewRows.length - 1 ? "1px solid #f3f4f6" : "none" }}>
                           {csvHeaders.map(h => (
-                            <td key={h} className="whitespace-nowrap font-mono">{row[h] ?? "—"}</td>
+                            <td key={h} style={{ padding: "8px 12px", fontFamily: "monospace", color: "#374151", whiteSpace: "nowrap" }}>{row[h] ?? "—"}</td>
                           ))}
                         </tr>
                       ))}
@@ -774,7 +790,7 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
             )}
 
             {/* Botões de navegação */}
-            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px", borderTop: "1px solid #f3f4f6" }}>
               <button onClick={reset} className="btn-secondary">
                 <X className="w-4 h-4" /> Cancelar
               </button>
@@ -786,7 +802,7 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
                 {importing ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Importando...</>
                 ) : (
-                  <><Upload className="w-4 h-4" /> Importar {csvHeaders.length > 0 ? `(${csvHeaders.length} colunas)` : ""}</>
+                  <><Upload className="w-4 h-4" /> Importar ({csvHeaders.length} colunas)</>
                 )}
               </button>
             </div>

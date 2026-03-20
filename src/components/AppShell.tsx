@@ -142,12 +142,12 @@ export default function AppShell({
           icon: Settings2,
         }] : []),
         {
-          label: "Lead Lists",
+          label: "Lista de Leads",
           href: `/app/tenants/${activeTenantId}/leads`,
           icon: Users,
         },
         {
-          label: "Filas de Discagem",
+          label: "Campanhas",
           href: `/app/tenants/${activeTenantId}/queues`,
           icon: ListOrdered,
         },
@@ -354,8 +354,8 @@ export default function AppShell({
             </p>
           )}
 
-          {/* Admin section */}
-          {isAdmin && (
+          {/* Admin section — visível apenas para owner/admin do tenant */}
+          {(isAdmin || isAdminOrOwner) && (
             <div className="mt-4 pt-4" style={{ borderTop: "1px solid #222222" }}>
               <p className="sidebar-section-label" style={{ color: "hsl(45, 80%, 55%)" }}>Admin</p>
               {[
