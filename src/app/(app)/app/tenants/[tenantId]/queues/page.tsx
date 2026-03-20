@@ -6,7 +6,8 @@ import {
   Loader2, X, Pencil, Trash2, Users, ChevronLeft, ChevronRight,
   ChevronsLeft, ChevronsRight, Link2, Zap, CheckCircle2, XCircle,
   Stethoscope, Clock, Ban, Braces, Upload, ChevronDown, ChevronUp,
-  ArrowRight, FileText, Settings2, Megaphone,
+  ArrowRight, FileText, Settings2, Megaphone, Phone, Search, Webhook,
+  UserPlus, AlertCircle,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -101,9 +102,10 @@ function AdvancedConfigFields({
       <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="form-label">Concorrência</label>
-          <input className="form-input" type="number" min="1" max="10"
-            value={form.concurrency} onChange={(e) => update("concurrency", e.target.value)} />
-          <p className="text-xs text-gray-400 mt-1">Chamadas simultâneas</p>
+          <input className="form-input" type="number" min="1" max="5"
+            value={form.concurrency}
+            onChange={(e) => update("concurrency", String(Math.min(5, Math.max(1, parseInt(e.target.value) || 1))))} />
+          <p className="text-xs text-gray-400 mt-1">Máx. 5 simultâneas</p>
         </div>
         <div>
           <label className="form-label">Máx. tentativas</label>
@@ -218,12 +220,15 @@ function CampaignWizard({
   });
 
   // Step 2: leads
-  const [leadsMode, setLeadsMode] = useState<"existing" | "csv">("existing");
+  const [leadsMode, setLeadsMode] = useState<"existing" | "csv" | "manual" | "webhook">("existing");
   const [selectedListId, setSelectedListId] = useState(leadLists[0]?.id ?? "");
   const [newListName, setNewListName] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvPreview, setCsvPreview] = useState<string[][]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Manual leads
+  const [manualLeads, setManualLeads] = useState<{ id: number; phone: string; first_name: string }[]>([]);
+  const manualNextId = useRef(0);
 
   // Step 3
   const [startImmediately, setStartImmediately] = useState(false);
@@ -251,9 +256,11 @@ function CampaignWizard({
   }
 
   const step1Valid = !!(form.name.trim() && form.assistant_id && form.phone_number_id);
-  const step2Valid = leadsMode === "existing"
-    ? !!selectedListId
-    : !!(csvFile && newListName.trim());
+  const step2Valid =
+    leadsMode === "existing" ? !!selectedListId :
+    leadsMode === "csv"      ? !!(csvFile && newListName.trim()) :
+    leadsMode === "manual"   ? manualLeads.filter((l) => l.phone.trim()).length > 0 :
+    /* webhook */               true; // webhook mode sempre válido — leads virão depois
 
   const selectedAssistant  = vapiResources?.assistants.find((a) => a.id === form.assistant_id);
   const selectedPhone      = vapiResources?.phoneNumbers.find((p) => p.id === form.phone_number_id);
@@ -286,27 +293,43 @@ function CampaignWizard({
     try {
       let listId = selectedListId;
 
-      if (leadsMode === "csv") {
+      if (leadsMode === "csv" || leadsMode === "manual" || leadsMode === "webhook") {
         // 1. Create lead list
+        const listName = (leadsMode === "csv" ? newListName.trim() : "") || form.name;
         const listRes = await fetch(`/api/tenants/${tenantId}/lead-lists`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: newListName.trim() || form.name }),
+          body: JSON.stringify({ name: listName }),
         });
         const listData = await listRes.json();
         if (!listData.leadList) throw new Error(listData.error ?? "Erro ao criar lista");
         listId = listData.leadList.id;
 
-        // 2. Import CSV
-        const fd = new FormData();
-        fd.append("file", csvFile!);
-        const uploadRes = await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}/import`, {
-          method: "POST", body: fd,
-        });
-        if (!uploadRes.ok) {
-          const d = await uploadRes.json();
-          throw new Error(d.error ?? "Erro ao importar CSV");
+        if (leadsMode === "csv") {
+          // 2a. Import CSV
+          const fd = new FormData();
+          fd.append("file", csvFile!);
+          const uploadRes = await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}/import`, {
+            method: "POST", body: fd,
+          });
+          if (!uploadRes.ok) {
+            const d = await uploadRes.json();
+            throw new Error(d.error ?? "Erro ao importar CSV");
+          }
+        } else if (leadsMode === "manual") {
+          // 2b. Import manual leads one by one
+          for (const ml of manualLeads) {
+            if (!ml.phone.trim()) continue;
+            const body: Record<string, string> = { phone: ml.phone.trim() };
+            if (ml.first_name.trim()) body.first_name = ml.first_name.trim();
+            await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}/leads`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            });
+          }
         }
+        // webhook mode: list created, leads will arrive via webhook
       }
 
       // 3. Create campaign (queue)
@@ -463,20 +486,22 @@ function CampaignWizard({
               <p className="text-sm text-gray-500">Escolha como adicionar os leads a esta campanha:</p>
 
               {/* Mode selector */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 {[
-                  { mode: "existing" as const, icon: Users, title: "Lista existente", desc: "Usar leads já importados" },
-                  { mode: "csv" as const, icon: Upload, title: "Importar CSV", desc: "Nova lista a partir de arquivo" },
+                  { mode: "existing" as const, icon: Users,    title: "Lista existente",  desc: "Usar leads já importados"     },
+                  { mode: "csv"      as const, icon: Upload,   title: "Importar CSV",     desc: "Nova lista via arquivo"       },
+                  { mode: "manual"   as const, icon: UserPlus, title: "Adicionar manual", desc: "Digitar leads um a um"        },
+                  { mode: "webhook"  as const, icon: Webhook,  title: "Via Webhook",      desc: "Receber leads automaticamente"},
                 ].map(({ mode, icon: Icon, title, desc }) => (
                   <button key={mode} type="button" onClick={() => setLeadsMode(mode)}
-                    className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left ${
+                    className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
                       leadsMode === mode ? "border-indigo-400 bg-indigo-50" : "border-gray-100 hover:border-gray-200 hover:bg-gray-50"
                     }`}>
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${leadsMode === mode ? "bg-indigo-600" : "bg-gray-100"}`}>
-                      <Icon className={`w-4 h-4 ${leadsMode === mode ? "text-white" : "text-gray-500"}`} />
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${leadsMode === mode ? "bg-indigo-600" : "bg-gray-100"}`}>
+                      <Icon className={`w-3.5 h-3.5 ${leadsMode === mode ? "text-white" : "text-gray-500"}`} />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-gray-800">{title}</p>
+                      <p className="text-xs font-semibold text-gray-800">{title}</p>
                       <p className="text-xs text-gray-400">{desc}</p>
                     </div>
                   </button>
@@ -565,6 +590,93 @@ function CampaignWizard({
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Manual leads */}
+              {leadsMode === "manual" && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-gray-500">Adicione os leads um a um:</p>
+                    <button type="button"
+                      onClick={() => {
+                        const id = manualNextId.current++;
+                        setManualLeads((p) => [...p, { id, phone: "", first_name: "" }]);
+                      }}
+                      className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors">
+                      <Plus className="w-3.5 h-3.5" /> Adicionar linha
+                    </button>
+                  </div>
+
+                  {manualLeads.length === 0 ? (
+                    <button type="button"
+                      onClick={() => {
+                        const id = manualNextId.current++;
+                        setManualLeads([{ id, phone: "", first_name: "" }]);
+                      }}
+                      className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 text-center text-sm text-gray-400 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
+                      <UserPlus className="w-6 h-6 mx-auto mb-2 text-gray-300" />
+                      Clique para adicionar o primeiro lead
+                    </button>
+                  ) : (
+                    <div className="space-y-2">
+                      {/* Header */}
+                      <div className="grid grid-cols-[1fr_1fr_auto] gap-2 px-1">
+                        <span className="text-xs font-medium text-gray-500">Telefone *</span>
+                        <span className="text-xs font-medium text-gray-500">Nome</span>
+                        <span className="w-7" />
+                      </div>
+                      {manualLeads.map((ml) => (
+                        <div key={ml.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                          <input
+                            className="form-input text-sm"
+                            placeholder="+55 11 99999-9999"
+                            value={ml.phone}
+                            onChange={(e) => setManualLeads((p) => p.map((l) => l.id === ml.id ? { ...l, phone: e.target.value } : l))} />
+                          <input
+                            className="form-input text-sm"
+                            placeholder="Nome (opcional)"
+                            value={ml.first_name}
+                            onChange={(e) => setManualLeads((p) => p.map((l) => l.id === ml.id ? { ...l, first_name: e.target.value } : l))} />
+                          <button type="button"
+                            onClick={() => setManualLeads((p) => p.filter((l) => l.id !== ml.id))}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      <p className="text-xs text-gray-400 mt-1">
+                        {manualLeads.filter((l) => l.phone.trim()).length} lead(s) com telefone preenchido
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Webhook */}
+              {leadsMode === "webhook" && (
+                <div className="space-y-3">
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Webhook className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <p className="text-sm font-semibold text-indigo-800">Como funciona o webhook de entrada</p>
+                    </div>
+                    <p className="text-xs text-gray-600">
+                      Uma lista vazia será criada junto com a campanha. Após criada, você poderá enviar leads
+                      diretamente via API/webhook para essa lista. Os leads chegam já na fila de discagem.
+                    </p>
+                    <div className="bg-white rounded-lg border border-indigo-100 p-3 font-mono text-xs text-gray-700 space-y-1">
+                      <p className="text-gray-400 text-xs mb-1">Endpoint para adicionar leads:</p>
+                      <p className="break-all text-indigo-700">
+                        POST /api/tenants/<span className="text-gray-400">{"{tenantId}"}</span>/lead-lists/<span className="text-gray-400">{"{listId}"}</span>/leads
+                      </p>
+                      <p className="text-gray-400 mt-1">Body (JSON):</p>
+                      <p>{`{ "phone": "+5511999990001", "first_name": "João" }`}</p>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      O <strong>listId</strong> aparecerá nos detalhes da campanha após a criação.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
@@ -797,16 +909,32 @@ function LeadsTab({
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
   const fileImportRef = useRef<HTMLInputElement>(null);
+
+  // Search
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch]           = useState("");
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Add lead inline form
+  const [showAddLead, setShowAddLead]   = useState(false);
+  const [addPhone, setAddPhone]         = useState("");
+  const [addName, setAddName]           = useState("");
+  const [addingLead, setAddingLead]     = useState(false);
+  const [addLeadError, setAddLeadError] = useState("");
+
   const limit = 20;
 
-  const loadLeads = useCallback(async (p: number) => {
+  const loadLeads = useCallback(async (p: number, q?: string) => {
     setLoading(true);
-    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${queue.lead_list_id}/leads?page=${p}&limit=${limit}`);
+    const s = q !== undefined ? q : search;
+    const qs = new URLSearchParams({ page: String(p), limit: String(limit) });
+    if (s) qs.set("search", s);
+    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${queue.lead_list_id}/leads?${qs}`);
     const data = await res.json();
     setLeads(data.leads ?? []);
     setTotal(data.total ?? 0);
     setLoading(false);
-  }, [tenantId, queue.lead_list_id]);
+  }, [tenantId, queue.lead_list_id, search]);
 
   useEffect(() => {
     loadLeads(page);
@@ -818,6 +946,15 @@ function LeadsTab({
   function goToPage(p: number) { setPage(Math.max(1, Math.min(totalPages, p))); }
   function handlePageBlur()    { const n = parseInt(pageInput); if (!isNaN(n)) goToPage(n); else setPageInput(String(page)); }
   function handlePageKey(e: React.KeyboardEvent<HTMLInputElement>) { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }
+
+  function handleSearchChange(v: string) {
+    setSearchInput(v);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      setSearch(v);
+      setPage(1);
+    }, 400);
+  }
 
   const liquidVars: string[] = leads.length > 0
     ? ["phone", "phone_e164", ...Object.keys(leads[0].data_json ?? {})]
@@ -836,32 +973,131 @@ function LeadsTab({
     setPage(1);
   }
 
+  async function handleAddLead() {
+    if (!addPhone.trim()) return;
+    setAddingLead(true);
+    setAddLeadError("");
+    const body: Record<string, string> = { phone: addPhone.trim() };
+    if (addName.trim()) body.first_name = addName.trim();
+    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${queue.lead_list_id}/leads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setAddLeadError(data.error ?? "Erro ao adicionar lead");
+    } else {
+      setAddPhone("");
+      setAddName("");
+      setShowAddLead(false);
+      setAddLeadError("");
+      loadLeads(1);
+      setPage(1);
+    }
+    setAddingLead(false);
+  }
+
   return (
     <div>
       {/* Leads tab header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-gray-50 bg-gray-50/50">
-        <p className="text-xs text-gray-500">
-          Lista: <span className="font-medium text-gray-700">{leadListName}</span> · <strong>{total}</strong> leads
-        </p>
-        <div className="flex items-center gap-2">
-          {/* LiquidJS vars */}
-          <button onClick={() => setShowVars((v) => !v)}
-            title="Variáveis LiquidJS"
-            className={`btn-icon ${showVars ? "text-indigo-600 bg-indigo-50" : "text-gray-400 hover:text-indigo-500"}`}>
-            <Braces className="w-4 h-4" />
-          </button>
-          {/* Import CSV */}
-          <button
-            onClick={() => fileImportRef.current?.click()}
-            disabled={importing}
-            className="btn btn-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5">
-            {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-            {importing ? "Importando…" : "Importar CSV"}
-          </button>
-          <input ref={fileImportRef} type="file" accept=".csv" className="hidden"
-            onChange={(e) => { if (e.target.files?.[0]) handleImport(e.target.files[0]); }} />
+      <div className="px-5 py-3 border-b border-gray-50 bg-gray-50/50 space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-gray-500">
+            Lista: <span className="font-medium text-gray-700">{leadListName}</span> · <strong>{total}</strong> leads
+          </p>
+          <div className="flex items-center gap-2">
+            {/* LiquidJS vars */}
+            <button onClick={() => setShowVars((v) => !v)}
+              title="Variáveis LiquidJS"
+              className={`btn-icon ${showVars ? "text-indigo-600 bg-indigo-50" : "text-gray-400 hover:text-indigo-500"}`}>
+              <Braces className="w-4 h-4" />
+            </button>
+            {/* Add lead */}
+            <button
+              onClick={() => { setShowAddLead((v) => !v); setAddLeadError(""); }}
+              className={`btn btn-sm flex items-center gap-1.5 ${showAddLead ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+              <UserPlus className="w-3.5 h-3.5" />
+              Adicionar Lead
+            </button>
+            {/* Import CSV */}
+            <button
+              onClick={() => fileImportRef.current?.click()}
+              disabled={importing}
+              className="btn btn-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5">
+              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              {importing ? "Importando…" : "Importar CSV"}
+            </button>
+            <input ref={fileImportRef} type="file" accept=".csv" className="hidden"
+              onChange={(e) => { if (e.target.files?.[0]) handleImport(e.target.files[0]); }} />
+          </div>
+        </div>
+
+        {/* Search bar */}
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Buscar por telefone, nome ou campo…"
+            value={searchInput}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-300 focus:border-indigo-300 bg-white"
+          />
+          {searchInput && (
+            <button onClick={() => { setSearchInput(""); handleSearchChange(""); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Add Lead inline form */}
+      {showAddLead && (
+        <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-100">
+          <p className="text-xs font-semibold text-emerald-800 mb-2 flex items-center gap-1.5">
+            <UserPlus className="w-3.5 h-3.5" /> Adicionar lead manualmente
+          </p>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="text-xs text-gray-500 mb-1 block">Telefone *</label>
+              <input
+                className="form-input text-sm"
+                placeholder="+55 11 99999-9999"
+                value={addPhone}
+                onChange={(e) => setAddPhone(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddLead()}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-gray-500 mb-1 block">Nome (opcional)</label>
+              <input
+                className="form-input text-sm"
+                placeholder="Nome do lead"
+                value={addName}
+                onChange={(e) => setAddName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddLead()}
+              />
+            </div>
+            <button
+              onClick={handleAddLead}
+              disabled={addingLead || !addPhone.trim()}
+              className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-40">
+              {addingLead ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              {addingLead ? "Adicionando…" : "Adicionar"}
+            </button>
+            <button onClick={() => { setShowAddLead(false); setAddLeadError(""); setAddPhone(""); setAddName(""); }}
+              className="btn-icon text-gray-400 hover:text-gray-600">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {addLeadError && (
+            <p className="text-xs text-red-600 mt-2 flex items-center gap-1.5">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {addLeadError}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Import result */}
       {importResult && (
@@ -900,11 +1136,17 @@ function LeadsTab({
         </div>
       ) : leads.length === 0 ? (
         <div className="text-center text-gray-400 py-12 text-sm">
-          Nenhum lead nesta lista.
-          <button onClick={() => fileImportRef.current?.click()}
-            className="block mx-auto mt-3 text-xs text-indigo-600 hover:text-indigo-800 underline">
-            Importar CSV agora
-          </button>
+          {search ? (
+            <>Nenhum lead encontrado para &ldquo;<strong>{search}</strong>&rdquo;.</>
+          ) : (
+            <>
+              Nenhum lead nesta lista.
+              <button onClick={() => fileImportRef.current?.click()}
+                className="block mx-auto mt-3 text-xs text-indigo-600 hover:text-indigo-800 underline">
+                Importar CSV agora
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -920,11 +1162,12 @@ function LeadsTab({
             <tbody className="divide-y divide-gray-50">
               {leads.map((lead) => {
                 const sc   = LEAD_STATUS_CONFIG[lead.status] ?? { label: lead.status, color: "text-gray-600 bg-gray-50" };
-                const name = lead.data_json?.first_name ?? lead.data_json?.name ?? lead.data_json?.nome ?? "—";
+                const dj   = lead.data_json ?? {};
+                const name = dj.first_name ?? dj.nome ?? dj.name ?? dj.Name ?? dj.Nome ?? dj.full_name ?? dj.fullName ?? dj.cliente ?? dj.contact ?? "";
                 return (
                   <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-2.5 font-mono text-xs text-gray-700">{lead.phone_e164}</td>
-                    <td className="px-4 py-2.5 text-gray-700 truncate max-w-[140px]">{name}</td>
+                    <td className="px-4 py-2.5 text-gray-700 truncate max-w-[140px]">{name || <span className="text-gray-300">—</span>}</td>
                     <td className="px-4 py-2.5">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${sc.color}`}>
                         {sc.label}

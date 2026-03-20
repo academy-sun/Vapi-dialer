@@ -293,6 +293,38 @@ async function updateLeadAfterCall(
     return;
   }
 
+  // Erros do provedor SIP (503, 408, etc.) — re-queuar sem contar como tentativa
+  const isProviderFault = endedReason
+    ? endedReason.includes("error-providerfault") ||
+      endedReason.includes("sip-503") ||
+      endedReason.includes("sip-408") ||
+      endedReason.includes("sip-500") ||
+      endedReason.includes("sip-502") ||
+      endedReason.includes("sip-504")
+    : false;
+
+  if (isProviderFault) {
+    console.log(`[webhook] Provider fault detectado (${endedReason}) — re-queue sem contar tentativa`);
+    const { data: currentLead } = await service
+      .from("leads")
+      .select("attempt_count")
+      .eq("id", leadId)
+      .single();
+    const prevAttempts = Math.max(0, (currentLead?.attempt_count ?? 1) - 1);
+    const retryAt = new Date(Date.now() + 3 * 60 * 1000).toISOString(); // retry em 3 min
+    await service
+      .from("leads")
+      .update({
+        status:          "queued",
+        last_outcome:    endedReason,
+        next_attempt_at: retryAt,
+        attempt_count:   prevAttempts, // desfaz o incremento do worker
+      })
+      .eq("id", leadId);
+    // Não disparar webhook externo para provider faults — é ruído
+    return;
+  }
+
   const noAnswerReasons = ["no-answer", "busy", "voicemail", "machine_end_silence", "machine_end_other"];
   const isNoAnswer = endedReason ? noAnswerReasons.some((r) => endedReason.includes(r)) : false;
 
