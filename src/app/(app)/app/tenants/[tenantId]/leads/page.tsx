@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
+import Papa from "papaparse";
 import {
   Plus,
   Upload,
@@ -24,6 +25,7 @@ import {
   Eye,
   EyeOff,
   RotateCcw,
+  ArrowRight,
 } from "lucide-react";
 
 interface LeadList {
@@ -485,6 +487,331 @@ function InboundWebhookPanel({
 }
 
 /* ══════════════════════════════════════════════════════════════
+   CSV Import Wizard
+══════════════════════════════════════════════════════════════ */
+
+const FIELD_OPTIONS = [
+  { value: "phone",      label: "phone (obrigatório)", required: true },
+  { value: "name",       label: "name" },
+  { value: "last_name",  label: "last_name" },
+  { value: "company",    label: "company" },
+  { value: "email",      label: "email" },
+  { value: "__custom__", label: "manter nome original" },
+  { value: "__ignore__", label: "ignorar coluna" },
+];
+
+function autoSuggest(colName: string): string {
+  const n = colName
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+  if (["phone","telefone","fone","celular","tel","mobile"].some((k) => n.includes(k))) return "phone";
+  if (["nome","name","firstname","primeiro"].some((k) => n.includes(k))) return "name";
+  if (["sobrenome","lastname","ultimo"].some((k) => n.includes(k))) return "last_name";
+  if (["empresa","company","companhia"].some((k) => n.includes(k))) return "company";
+  if (["email","mail","correo"].some((k) => n.includes(k))) return "email";
+  return "__custom__";
+}
+
+interface CsvImportWizardProps {
+  tenantId: string;
+  listId: string;
+  listName: string;
+  onImportComplete: (imported: number, skipped: number) => void;
+}
+
+function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvImportWizardProps) {
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [previewRows, setPreviewRows] = useState<Record<string, string>[]>([]);
+  const [mappings, setMappings] = useState<Record<string, string>>({});
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+  const wizardFileRef = useRef<HTMLInputElement>(null);
+
+  function reset() {
+    setStep(1);
+    setSelectedFile(null);
+    setCsvHeaders([]);
+    setPreviewRows([]);
+    setMappings({});
+    setImportError("");
+    if (wizardFileRef.current) wizardFileRef.current.value = "";
+  }
+
+  async function processFile(file: File) {
+    setSelectedFile(file);
+    const text = await file.text();
+    // Papa.parse com string é síncrono e retorna ParseResult
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = Papa.parse(text, { header: true, preview: 4, skipEmptyLines: true }) as any;
+    const headers: string[] = result.meta?.fields ?? [];
+    const rows: Record<string, string>[] = (result.data ?? []).slice(0, 3);
+    setCsvHeaders(headers);
+    setPreviewRows(rows);
+    const initial: Record<string, string> = {};
+    headers.forEach((h) => { initial[h] = autoSuggest(h); });
+    setMappings(initial);
+    setStep(2);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file?.name.endsWith(".csv")) processFile(file);
+  }
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) processFile(file);
+  }
+
+  function setMapping(col: string, value: string) {
+    setMappings((prev) => ({ ...prev, [col]: value }));
+  }
+
+  const phoneCount = Object.values(mappings).filter((v) => v === "phone").length;
+  const canImport = phoneCount === 1;
+
+  async function handleImport() {
+    if (!selectedFile || !listId || !canImport) return;
+    setStep(3);
+    setImporting(true);
+    setImportError("");
+    const form = new FormData();
+    form.append("file", selectedFile);
+    form.append("mappings", JSON.stringify(mappings));
+    try {
+      const res = await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}/import`, {
+        method: "POST",
+        body: form,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onImportComplete(data.imported ?? 0, data.skipped ?? 0);
+        reset();
+      } else {
+        setImportError(data.error ?? "Erro ao importar");
+      }
+    } catch {
+      setImportError("Erro de conexão ao importar CSV");
+    }
+    setImporting(false);
+  }
+
+  /* ── Barra de progresso ── */
+  const stepLabels = ["Upload", "Mapear colunas", "Importando"];
+
+  return (
+    <div className="card">
+      <div className="card-header flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Importar Leads via CSV</h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Para: <span className="font-medium text-gray-600">{listName}</span>
+          </p>
+        </div>
+        <button onClick={downloadTemplate} className="btn-secondary text-xs gap-1.5" title="Baixar modelo CSV">
+          <Download className="w-3.5 h-3.5" />
+          Template CSV
+        </button>
+      </div>
+
+      {/* Barra de steps */}
+      <div className="px-5 pt-4 pb-2">
+        <div className="flex items-center gap-1">
+          {stepLabels.map((label, i) => {
+            const idx = i + 1;
+            const isActive = step === idx;
+            const isDone = step > idx;
+            return (
+              <div key={idx} className="flex items-center gap-1 flex-1 min-w-0">
+                <div className={`flex items-center gap-1.5 text-xs font-medium ${
+                  isDone ? "text-emerald-600" : isActive ? "text-indigo-600" : "text-gray-400"
+                }`}>
+                  <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0 ${
+                    isDone ? "bg-emerald-100 text-emerald-600" :
+                    isActive ? "bg-indigo-100 text-indigo-600" :
+                    "bg-gray-100 text-gray-400"
+                  }`}>
+                    {isDone ? <Check className="w-3 h-3" /> : idx}
+                  </span>
+                  <span className="truncate">{label}</span>
+                </div>
+                {i < stepLabels.length - 1 && (
+                  <ArrowRight className="w-3.5 h-3.5 text-gray-300 shrink-0 ml-1" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="card-body space-y-4">
+        {/* ── STEP 1: Upload ── */}
+        {step === 1 && (
+          <div
+            className={`upload-area ${dragOver ? "dragover" : ""}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => wizardFileRef.current?.click()}
+          >
+            <input
+              ref={wizardFileRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleFileInput}
+            />
+            <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-gray-700">
+              Arraste um arquivo CSV ou clique para selecionar
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Somente arquivos <code className="bg-gray-100 px-1 rounded font-mono">.csv</code>
+            </p>
+          </div>
+        )}
+
+        {/* ── STEP 2: Mapear colunas ── */}
+        {step === 2 && (
+          <div className="space-y-4">
+            {selectedFile && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 rounded-lg border border-indigo-100">
+                <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                <span className="text-sm text-indigo-700 truncate">{selectedFile.name}</span>
+                <span className="text-xs text-indigo-400 ml-auto shrink-0">{(selectedFile.size / 1024).toFixed(1)} KB</span>
+              </div>
+            )}
+
+            {phoneCount === 0 && (
+              <div className="alert-error">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span className="text-sm">Mapeie exatamente uma coluna para <strong>phone</strong> antes de importar.</span>
+              </div>
+            )}
+            {phoneCount > 1 && (
+              <div className="alert-error">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span className="text-sm">Apenas <strong>uma</strong> coluna pode ser mapeada para phone.</span>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <div className="grid grid-cols-[1fr_auto_1fr_auto] gap-2 px-1 mb-1">
+                <span className="text-xs font-medium text-gray-500">Coluna no CSV</span>
+                <span />
+                <span className="text-xs font-medium text-gray-500">Destino</span>
+                <span className="text-xs font-medium text-gray-500">Status</span>
+              </div>
+              {csvHeaders.map((col) => {
+                const dest = mappings[col] ?? "__custom__";
+                const isPhone = dest === "phone";
+                const isIgnore = dest === "__ignore__";
+                return (
+                  <div key={col} className="grid grid-cols-[1fr_auto_1fr_auto] gap-2 items-center">
+                    <span className="inline-flex items-center px-2.5 py-1.5 rounded-md bg-gray-100 text-xs font-mono text-gray-700 truncate">
+                      {col}
+                    </span>
+                    <ArrowRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <select
+                      className="form-input text-sm py-1.5"
+                      value={dest}
+                      onChange={(e) => setMapping(col, e.target.value)}
+                    >
+                      {FIELD_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <span className={`text-xs font-medium shrink-0 ${
+                      isPhone ? "text-emerald-600" :
+                      isIgnore ? "text-gray-400" :
+                      "text-indigo-600"
+                    }`}>
+                      {isPhone ? "●  phone" : isIgnore ? "✕  ignorar" : "○  mapeado"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Preview das 3 primeiras linhas */}
+            {previewRows.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">Preview (primeiras {previewRows.length} linhas):</p>
+                <div className="overflow-x-auto rounded-lg border border-gray-100">
+                  <table className="table text-xs">
+                    <thead>
+                      <tr>
+                        {csvHeaders.map((h) => (
+                          <th key={h} className="whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewRows.map((row, i) => (
+                        <tr key={i}>
+                          {csvHeaders.map((h) => (
+                            <td key={h} className="font-mono text-gray-600 whitespace-nowrap">{row[h] ?? "—"}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 pt-1">
+              <button onClick={reset} className="btn-secondary">
+                <X className="w-4 h-4" />
+                Cancelar
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={!canImport}
+                className="btn-primary"
+              >
+                <Upload className="w-4 h-4" />
+                Importar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── STEP 3: Importando ── */}
+        {step === 3 && (
+          <div className="flex flex-col items-center justify-center py-8 gap-4">
+            {importing ? (
+              <>
+                <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
+                <p className="text-sm font-semibold text-gray-700">Importando leads...</p>
+                <p className="text-xs text-gray-400">Por favor aguarde</p>
+              </>
+            ) : importError ? (
+              <>
+                <AlertCircle className="w-10 h-10 text-red-400" />
+                <p className="text-sm font-semibold text-red-700">Erro na importação</p>
+                <p className="text-xs text-red-500">{importError}</p>
+                <button onClick={reset} className="btn-secondary">
+                  <RotateCcw className="w-4 h-4" />
+                  Tentar novamente
+                </button>
+              </>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
    Página principal
 ══════════════════════════════════════════════════════════════ */
 export default function LeadsPage() {
@@ -493,18 +820,14 @@ export default function LeadsPage() {
   const [selectedListId, setSelectedListId] = useState("");
   const [leads, setLeads]                   = useState<Lead[]>([]);
   const [loadingLeads, setLoadingLeads]     = useState(false);
-  const [importing, setImporting]           = useState(false);
   const [showCreate, setShowCreate]         = useState(false);
   const [showAddLead, setShowAddLead]       = useState(false);
-  const [dragOver, setDragOver]             = useState(false);
-  const [selectedFile, setSelectedFile]     = useState<File | null>(null);
   const [resettingStuck, setResettingStuck] = useState(false);
   const [searchLead, setSearchLead]         = useState("");
   const [pageError, setPageError]           = useState<string | null>(null);
   // Edição inline de nome da lista
   const [editingListId, setEditingListId]   = useState<string | null>(null);
   const [editingListName, setEditingListName] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
   const { toasts, show: showToast } = useToast();
 
   useEffect(() => { loadLists(); }, [tenantId]);
@@ -609,44 +932,12 @@ export default function LeadsPage() {
     loadLeads();
   }
 
-  async function importCSV(file: File) {
-    if (!file || !selectedListId) return;
-    setImporting(true);
-    const form = new FormData();
-    form.append("file", file);
-    const res  = await fetch(
-      `/api/tenants/${tenantId}/lead-lists/${selectedListId}/import`,
-      { method: "POST", body: form }
+  function handleImportComplete(imported: number, skipped: number) {
+    showToast(
+      `✓ ${imported} leads importados${skipped > 0 ? `, ${skipped} ignorados` : ""}`,
+      "success"
     );
-    const data = await res.json();
-    if (res.ok) {
-      showToast(
-        `✓ ${data.imported} leads importados${data.skipped > 0 ? `, ${data.skipped} ignorados` : ""}`,
-        "success"
-      );
-      if (data.errors?.length > 0) {
-        setTimeout(() => showToast(`Atenção: ${data.errors[0]}`, "error"), 600);
-      }
-      loadLeads();
-    } else {
-      showToast(`Erro: ${data.error}`, "error");
-    }
-    setImporting(false);
-    setSelectedFile(null);
-    if (fileRef.current) fileRef.current.value = "";
-  }
-
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file?.name.endsWith(".csv")) setSelectedFile(file);
-    else showToast("Apenas arquivos .csv são aceitos", "error");
-  }
-
-  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) setSelectedFile(file);
+    loadLeads();
   }
 
   const activeList  = lists.find((l) => l.id === selectedListId);
@@ -811,113 +1102,15 @@ export default function LeadsPage() {
           {/* Coluna direita: importar CSV + tabela */}
           <div className="lg:col-span-2 space-y-5">
 
-            {/* ── Card: Importar CSV ── */}
-            <div className="card">
-              <div className="card-header flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">Importar Leads via CSV</h3>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Para: <span className="font-medium text-gray-600">{activeList?.name}</span>
-                  </p>
-                </div>
-                <button
-                  onClick={downloadTemplate}
-                  className="btn-secondary text-xs gap-1.5"
-                  title="Baixar modelo CSV com o formato correto"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Template CSV
-                </button>
-              </div>
-
-              <div className="card-body space-y-4">
-                {/* Instruções de formato */}
-                <div className="alert-info text-xs">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-indigo-500" />
-                  <div className="space-y-1.5">
-                    <p className="font-semibold text-indigo-800">Formato esperado do CSV</p>
-                    <p className="text-indigo-700">
-                      Coluna obrigatória:{" "}
-                      <code className="bg-indigo-100 px-1 rounded font-mono">phone</code>
-                      {" · "}Opcionais:{" "}
-                      <code className="bg-indigo-100 px-1 rounded font-mono">name</code>,{" "}
-                      <code className="bg-indigo-100 px-1 rounded font-mono">company</code>{" "}
-                      (ou qualquer outra coluna extra)
-                    </p>
-                    <pre className="font-mono bg-indigo-100/60 px-2 py-1.5 rounded text-indigo-800 text-xs leading-relaxed">
-{`phone,name,company
-+5511999990001,João Silva,Empresa A
-11988880002,Maria Santos,`}
-                    </pre>
-                    <p className="text-indigo-600">
-                      Aceita com/sem <code className="bg-indigo-100 px-1 rounded font-mono">+55</code> e com/sem máscara.
-                      Clique em <strong>Template CSV</strong> para baixar um modelo pronto.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Drop zone */}
-                <div
-                  className={`upload-area ${dragOver ? "dragover" : ""}`}
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={handleDrop}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  <input
-                    ref={fileRef}
-                    type="file"
-                    accept=".csv"
-                    className="hidden"
-                    onChange={handleFileInput}
-                  />
-                  <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
-                  {selectedFile ? (
-                    <div>
-                      <p className="text-sm font-semibold text-indigo-700">{selectedFile.name}</p>
-                      <p className="text-xs text-indigo-400 mt-1">
-                        {(selectedFile.size / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700">
-                        Arraste um arquivo CSV ou clique para selecionar
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        Somente arquivos <code className="bg-gray-100 px-1 rounded font-mono">.csv</code>
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {selectedFile && (
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 flex-1 px-3 py-2.5 bg-indigo-50 rounded-lg border border-indigo-100">
-                      <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
-                      <span className="text-sm text-indigo-700 truncate">{selectedFile.name}</span>
-                    </div>
-                    <button
-                      onClick={() => importCSV(selectedFile)}
-                      disabled={importing}
-                      className="btn-primary shrink-0"
-                    >
-                      {importing ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" />Importando...</>
-                      ) : (
-                        <><Upload className="w-4 h-4" />Importar</>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => { setSelectedFile(null); if (fileRef.current) fileRef.current.value = ""; }}
-                      className="btn-secondary"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+            {/* ── CSV Import Wizard ── */}
+            {selectedListId && (
+              <CsvImportWizard
+                tenantId={tenantId}
+                listId={selectedListId}
+                listName={activeList?.name ?? ""}
+                onImportComplete={handleImportComplete}
+              />
+            )}
 
             {/* ── Webhook de Entrada ── */}
             {selectedListId && (

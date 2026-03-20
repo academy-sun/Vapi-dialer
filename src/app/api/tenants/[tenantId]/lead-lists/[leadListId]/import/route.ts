@@ -6,23 +6,28 @@ import { rateLimitCsvImport } from "@/lib/rate-limit";
 
 type Params = { params: Promise<{ tenantId: string; leadListId: string }> };
 
+function toSnakeCase(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
 // POST /api/tenants/:tenantId/lead-lists/:leadListId/import
-// Body: multipart/form-data com campo "file" (CSV)
-// CSV deve ter coluna "phone" (obrigatória) + quaisquer outras (ficam em data_json)
+// Body: multipart/form-data com campo "file" (CSV) e opcional "mappings" (JSON)
 export async function POST(req: NextRequest, { params }: Params) {
   const { tenantId, leadListId } = await params;
   const { response, user } = await requireTenantAccess(tenantId);
   if (response) return response;
 
-  // Rate limit: 10 imports CSV/hora por usuário (operação pesada)
+  // Rate limit: 10 imports CSV/hora por usuário
   const rl = await rateLimitCsvImport(user!.id);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Limite de importações atingido. Tente novamente em 1 hora." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(rl.resetInSeconds) },
-      }
+      { status: 429, headers: { "Retry-After": String(rl.resetInSeconds) } }
     );
   }
 
@@ -44,7 +49,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const file = formData.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "Campo 'file' obrigatório" }, { status: 400 });
 
-  // Limite de 50MB para evitar OOM crash
+  // Limite de 50MB
   const MAX_CSV_BYTES = 50 * 1024 * 1024;
   if (file.size > MAX_CSV_BYTES) {
     return NextResponse.json(
@@ -52,6 +57,19 @@ export async function POST(req: NextRequest, { params }: Params) {
       { status: 413 }
     );
   }
+
+  // Ler mappings do wizard (se presente)
+  let mappings: Record<string, string> = {};
+  const mappingsRaw = formData.get("mappings");
+  if (mappingsRaw && typeof mappingsRaw === "string") {
+    try {
+      mappings = JSON.parse(mappingsRaw);
+    } catch {
+      return NextResponse.json({ error: "mappings inválido" }, { status: 400 });
+    }
+  }
+
+  const useMappings = Object.keys(mappings).length > 0;
 
   const rawText = await file.text();
   // Remove BOM (Excel UTF-8 salva com \uFEFF no início)
@@ -61,49 +79,114 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "CSV vazio ou sem dados" }, { status: 400 });
   }
 
-  // Auto-detectar separador: Excel BR usa ";" por padrão, internacional usa ","
+  // Auto-detectar separador: Excel BR usa ";" por padrão
   const firstLine = lines[0];
-  const sep = firstLine.includes(";") && firstLine.split(";").length > firstLine.split(",").length
-    ? ";"
-    : ",";
+  const sep =
+    firstLine.includes(";") && firstLine.split(";").length > firstLine.split(",").length
+      ? ";"
+      : ",";
 
-  const headers = firstLine.split(sep).map((h) => h.trim().replace(/^"|"$/g, "").toLowerCase());
-  const phoneIdx = headers.findIndex((h) => h === "phone" || h === "telefone" || h === "fone" || h === "celular");
-  if (phoneIdx === -1) {
-    return NextResponse.json({
-      error: `Coluna de telefone não encontrada. O CSV deve ter uma coluna chamada "phone", "telefone", "fone" ou "celular". Colunas encontradas: ${headers.join(", ")}`,
-    }, { status: 400 });
-  }
-
-  // Recriar headers com capitalização original para data_json
-  const headersOriginal = firstLine.split(sep).map((h) => h.trim().replace(/^"|"$/g, ""));
+  const headersRaw = firstLine.split(sep).map((h) => h.trim().replace(/^"|"$/g, ""));
+  const headers = headersRaw.map((h) => h.toLowerCase());
 
   const toInsert: object[] = [];
   const errors: string[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(sep).map((c) => c.trim().replace(/^"|"$/g, ""));
-    const rawPhone = cols[phoneIdx];
-    if (!rawPhone) continue;
-
-    const parsed = parsePhoneNumberFromString(rawPhone, "BR");
-    if (!parsed || !parsed.isValid()) {
-      errors.push(`Linha ${i + 1}: telefone inválido "${rawPhone}"`);
-      continue;
+  if (useMappings) {
+    // ── Modo wizard: usar mapeamento customizado ────────────────────────────
+    const phoneCol = Object.entries(mappings).find(([, v]) => v === "phone")?.[0];
+    if (!phoneCol) {
+      return NextResponse.json(
+        { error: "Nenhuma coluna mapeada para phone" },
+        { status: 400 }
+      );
     }
 
-    const dataJson: Record<string, string> = {};
-    headersOriginal.forEach((h, idx) => {
-      if (idx !== phoneIdx && cols[idx]) dataJson[h] = cols[idx];
-    });
+    // Índice da coluna que foi mapeada para phone (comparação case-insensitive)
+    const phoneIdx = headersRaw.findIndex(
+      (h) => h.toLowerCase() === phoneCol.toLowerCase()
+    );
+    if (phoneIdx === -1) {
+      return NextResponse.json(
+        { error: `Coluna "${phoneCol}" não encontrada no CSV` },
+        { status: 400 }
+      );
+    }
 
-    toInsert.push({
-      tenant_id: tenantId,
-      lead_list_id: leadListId,
-      phone_e164: parsed.format("E.164"),
-      data_json: dataJson,
-      status: "new",
-    });
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(sep).map((c) => c.trim().replace(/^"|"$/g, ""));
+      const rawPhone = cols[phoneIdx];
+      if (!rawPhone) continue;
+
+      const parsed = parsePhoneNumberFromString(rawPhone, "BR");
+      if (!parsed || !parsed.isValid()) {
+        errors.push(`Linha ${i + 1}: telefone inválido "${rawPhone}"`);
+        continue;
+      }
+
+      const dataJson: Record<string, string> = {};
+      headersRaw.forEach((origHeader, idx) => {
+        if (idx === phoneIdx) return; // já é o phone
+        const dest = mappings[origHeader];
+        if (!dest || dest === "__ignore__") return;
+
+        const val = cols[idx];
+        if (!val) return;
+
+        if (dest === "__custom__") {
+          dataJson[toSnakeCase(origHeader)] = val;
+        } else {
+          // campo conhecido: name, last_name, company, email, etc.
+          dataJson[dest] = val;
+        }
+      });
+
+      toInsert.push({
+        tenant_id: tenantId,
+        lead_list_id: leadListId,
+        phone_e164: parsed.format("E.164"),
+        data_json: dataJson,
+        status: "new",
+      });
+    }
+  } else {
+    // ── Modo legado: busca coluna phone por nome no header ──────────────────
+    const phoneIdx = headers.findIndex(
+      (h) => h === "phone" || h === "telefone" || h === "fone" || h === "celular"
+    );
+    if (phoneIdx === -1) {
+      return NextResponse.json(
+        {
+          error: `Coluna de telefone não encontrada. O CSV deve ter uma coluna chamada "phone", "telefone", "fone" ou "celular". Colunas encontradas: ${headers.join(", ")}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(sep).map((c) => c.trim().replace(/^"|"$/g, ""));
+      const rawPhone = cols[phoneIdx];
+      if (!rawPhone) continue;
+
+      const parsed = parsePhoneNumberFromString(rawPhone, "BR");
+      if (!parsed || !parsed.isValid()) {
+        errors.push(`Linha ${i + 1}: telefone inválido "${rawPhone}"`);
+        continue;
+      }
+
+      const dataJson: Record<string, string> = {};
+      headersRaw.forEach((h, idx) => {
+        if (idx !== phoneIdx && cols[idx]) dataJson[h] = cols[idx];
+      });
+
+      toInsert.push({
+        tenant_id: tenantId,
+        lead_list_id: leadListId,
+        phone_e164: parsed.format("E.164"),
+        data_json: dataJson,
+        status: "new",
+      });
+    }
   }
 
   let inserted = 0;
@@ -122,6 +205,6 @@ export async function POST(req: NextRequest, { params }: Params) {
   return NextResponse.json({
     imported: inserted,
     skipped: errors.length,
-    errors: errors.slice(0, 20), // retornar até 20 erros
+    errors: errors.slice(0, 20),
   });
 }
