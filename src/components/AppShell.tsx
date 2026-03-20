@@ -88,38 +88,16 @@ export default function AppShell({
     }
   }
 
-  function selectTenant(id: string, navigate = false, roleOverride?: string) {
+  function selectTenant(id: string, navigate = false) {
     setActiveTenantId(id);
     localStorage.setItem("activeTenantId", id);
     setShowTenantDropdown(false);
     if (navigate) {
-      const role = roleOverride ?? tenantRoles[id];
-      if (!role) {
-        // Role ainda não carregou (ex: tenant recém-criado) — buscar e navegar depois
-        fetch("/api/tenants")
-          .then(r => r.json())
-          .then(data => {
-            if (data.tenants) {
-              const roles: Record<string, string> = {};
-              (data.tenants as Array<{ id: string; role?: string }>).forEach(t => {
-                if (t.id && t.role) roles[t.id] = t.role;
-              });
-              setTenantRoles(roles);
-              const resolved = roles[id] ?? "member";
-              router.push(
-                resolved === "owner" || resolved === "admin"
-                  ? `/app/tenants/${id}/vapi`
-                  : `/app/tenants/${id}/queues`
-              );
-            }
-          });
-        return;
-      }
-      router.push(
-        role === "owner" || role === "admin"
-          ? `/app/tenants/${id}/vapi`
-          : `/app/tenants/${id}/queues`
-      );
+      const role = tenantRoles[id] ?? "member";
+      const destination = (role === "owner" || role === "admin")
+        ? `/app/tenants/${id}/vapi`
+        : `/app/tenants/${id}/queues`;
+      router.push(destination);
     }
   }
 
@@ -139,10 +117,7 @@ export default function AppShell({
     const data = await res.json();
     if (data.tenant) {
       setTenants((prev) => [...prev, data.tenant]);
-      // CRÍTICO: registrar role "owner" imediatamente para isAdminOrOwner renderizar certo
-      setTenantRoles((prev) => ({ ...prev, [data.tenant.id]: "owner" }));
-      // Navegar com roleOverride para não depender do estado async de tenantRoles
-      selectTenant(data.tenant.id, true, "owner");
+      selectTenant(data.tenant.id);
       setNewTenantName("");
       setShowCreateTenant(false);
       showToast(`Tenant "${data.tenant.name}" criado com sucesso!`);

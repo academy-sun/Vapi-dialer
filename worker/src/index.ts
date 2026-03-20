@@ -201,14 +201,7 @@ async function initiateVapiCall(
   variableValues.phone_e164 = phoneE164;
 
   // customer: apenas campos aceitos pelo Vapi (number, name, extension)
-  // Suporta colunas comuns de nome: name, Name, nome, first_name, primeiro_nome
-  const nameValue =
-    customerData.name       ??
-    customerData.Name       ??
-    customerData.nome       ??
-    customerData.first_name ??
-    customerData.primeiro_nome ??
-    null;
+  const nameValue = customerData.name ?? customerData.Name ?? customerData.nome ?? null;
   const customerPayload: Record<string, unknown> = {
     number: phoneE164,
     ...(nameValue ? { name: String(nameValue) } : {}),
