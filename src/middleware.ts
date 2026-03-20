@@ -9,13 +9,9 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
+        getAll() { return request.cookies.getAll(); },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -25,24 +21,39 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Refresh session — IMPORTANTE: não adicionar código entre createServerClient e getUser
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getUser() faz chamada HTTP ao Supabase — proteger com timeout para evitar
+  // MIDDLEWARE_INVOCATION_TIMEOUT caso o Supabase esteja lento ou inacessível.
+  let user: { id: string } | null = null;
+  try {
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("supabase_timeout")), 8000)
+      ),
+    ]);
+    user = result.data.user;
+  } catch {
+    // Se o Supabase não responder em 8s ou der erro de rede:
+    // - rotas públicas (/login, /signup) → liberar sem autenticação
+    // - rotas protegidas (/app) → redirecionar para /login (fail-safe)
+    const { pathname } = request.nextUrl;
+    if (pathname.startsWith("/app")) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = "/login";
+      return NextResponse.redirect(redirectUrl);
+    }
+    return supabaseResponse;
+  }
 
   const { pathname } = request.nextUrl;
 
-  // Rotas protegidas: qualquer coisa sob /app
-  if (pathname.startsWith("/app")) {
-    if (!user) {
-      const redirectUrl = request.nextUrl.clone();
-      redirectUrl.pathname = "/login";
-      redirectUrl.searchParams.set("redirectTo", pathname);
-      return NextResponse.redirect(redirectUrl);
-    }
+  if (pathname.startsWith("/app") && !user) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("redirectTo", pathname);
+    return NextResponse.redirect(redirectUrl);
   }
 
-  // Se estiver no login e já autenticado → redireciona para /app
   if (pathname === "/login" && user) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/app";
@@ -54,14 +65,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Aplica middleware em todas as rotas exceto:
-     * - _next/static (arquivos estáticos)
-     * - _next/image (otimização de imagens)
-     * - favicon.ico
-     * - arquivos de imagem
-     * - rotas de webhook (autenticação própria via secret)
-     */
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api/webhooks).*)",
   ],
 };
