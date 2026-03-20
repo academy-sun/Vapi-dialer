@@ -201,7 +201,13 @@ async function initiateVapiCall(
   variableValues.phone_e164 = phoneE164;
 
   // customer: apenas campos aceitos pelo Vapi (number, name, extension)
-  const nameValue = customerData.name ?? customerData.Name ?? customerData.nome ?? null;
+  const nameValue =
+    customerData.name ??
+    customerData.Name ??
+    customerData.nome ??
+    customerData.first_name ??
+    customerData.primeiro_nome ??
+    null;
   const customerPayload: Record<string, unknown> = {
     number: phoneE164,
     ...(nameValue ? { name: String(nameValue) } : {}),
@@ -555,14 +561,14 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
 
   if (!queues || queues.length === 0) return;
 
-  // Processar cada fila (sequencial — evita sobrecarga no Supabase)
-  for (const queue of queues as DialQueue[]) {
-    try {
-      await processQueue(supabase, queue);
-    } catch (err) {
-      console.error(`[worker] Erro inesperado na fila ${queue.id}:`, err);
-    }
-  }
+  // Processar todas as filas em paralelo — múltiplas campanhas rodam simultaneamente
+  await Promise.all(
+    (queues as DialQueue[]).map((queue) =>
+      processQueue(supabase, queue).catch((err) =>
+        console.error(`[worker] Erro inesperado na fila ${queue.id}:`, err)
+      )
+    )
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

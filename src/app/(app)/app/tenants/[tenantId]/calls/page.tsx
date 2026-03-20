@@ -429,7 +429,7 @@ export default function CallsPage() {
                 value={filterQueue}
                 onChange={(e) => setFilterQueue(e.target.value)}
               >
-                <option value="all">Todas as filas</option>
+                <option value="all">Todas as campanhas</option>
                 {queues.map((q) => (
                   <option key={q.id} value={q.id}>{q.name}</option>
                 ))}
