@@ -45,6 +45,7 @@ export default function AppShell({
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantRoles, setTenantRoles] = useState<Record<string, string>>({});
   const [activeTenantId, setActiveTenantId] = useState<string>("");
+  const [rolesLoaded, setRolesLoaded] = useState(false);
   const [showCreateTenant, setShowCreateTenant] = useState(false);
   const [showTenantDropdown, setShowTenantDropdown] = useState(false);
   const [newTenantName, setNewTenantName] = useState("");
@@ -56,8 +57,6 @@ export default function AppShell({
 
   useEffect(() => {
     loadTenants();
-    const saved = localStorage.getItem("activeTenantId");
-    if (saved) setActiveTenantId(saved);
   }, []);
 
   useEffect(() => {
@@ -75,25 +74,37 @@ export default function AppShell({
     const data = await res.json();
     if (data.tenants) {
       setTenants(data.tenants);
-      // popular mapa de roles
+
+      // 1. Popular roles ANTES de definir o tenant ativo — elimina race condition
       const roles: Record<string, string> = {};
       data.tenants.forEach((t: Tenant & { role?: string }) => {
         if (t.id && t.role) roles[t.id] = t.role;
       });
       setTenantRoles(roles);
+
+      // 2. Só depois definir o tenant ativo, validando contra a lista real
       const saved = localStorage.getItem("activeTenantId");
-      if (!saved && data.tenants.length > 0) {
-        selectTenant(data.tenants[0].id);
+      const validId = (saved && data.tenants.find((t: Tenant) => t.id === saved))
+        ? saved
+        : data.tenants[0]?.id;
+      if (validId) {
+        setActiveTenantId(validId);
+        localStorage.setItem("activeTenantId", validId);
       }
+
+      // 3. Sinalizar que roles + tenant ativo estão prontos para renderizar o menu
+      setRolesLoaded(true);
     }
   }
 
-  function selectTenant(id: string, navigate = false) {
+  function selectTenant(id: string, navigate = false, rolesSnapshot?: Record<string, string>) {
     setActiveTenantId(id);
     localStorage.setItem("activeTenantId", id);
     setShowTenantDropdown(false);
     if (navigate) {
-      const role = tenantRoles[id] ?? "member";
+      // Usar snapshot passado ou tenantRoles atual — evita ler state stale
+      const resolvedRoles = rolesSnapshot ?? tenantRoles;
+      const role = resolvedRoles[id] ?? "member";
       const destination = (role === "owner" || role === "admin")
         ? `/app/tenants/${id}/vapi`
         : `/app/tenants/${id}/queues`;
@@ -116,8 +127,11 @@ export default function AppShell({
     });
     const data = await res.json();
     if (data.tenant) {
+      // Novo tenant sempre tem role "owner" para quem criou
+      const newRoles = { ...tenantRoles, [data.tenant.id]: "owner" };
+      setTenantRoles(newRoles);
       setTenants((prev) => [...prev, data.tenant]);
-      selectTenant(data.tenant.id);
+      selectTenant(data.tenant.id, false, newRoles);
       setNewTenantName("");
       setShowCreateTenant(false);
       showToast(`Tenant "${data.tenant.name}" criado com sucesso!`);
@@ -132,9 +146,11 @@ export default function AppShell({
   const activeTenant = tenants.find((t) => t.id === activeTenantId);
 
   const activeRole = tenantRoles[activeTenantId] ?? "member";
-  const isAdminOrOwner = activeRole === "owner" || activeRole === "admin";
+  // isAdminOrOwner só é verdadeiro após roles estarem carregados — evita flash de menu incorreto
+  const isAdminOrOwner = rolesLoaded && (activeRole === "owner" || activeRole === "admin");
 
-  const navItems = activeTenantId
+  // navItems só é populado após roles estarem prontos — evita renderizar menu incompleto
+  const navItems = (activeTenantId && rolesLoaded)
     ? [
         ...(isAdminOrOwner ? [{
           label: "Configuração Vapi",
