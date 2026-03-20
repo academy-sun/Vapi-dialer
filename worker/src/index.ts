@@ -444,11 +444,11 @@ const STALE_CALLING_MINUTES = Number(process.env.STALE_CALLING_MINUTES ?? 30);
 async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
   const staleThreshold = new Date(Date.now() - STALE_CALLING_MINUTES * 60 * 1000).toISOString();
 
-  // Busca leads presos em "calling" com call_record desatualizado
-  // Usa updated_at do lead como proxy de "tempo em calling"
+  // 1. Buscar leads presos em "calling" há mais de STALE_CALLING_MINUTES
+  //    Usa updated_at do lead como proxy: o worker seta status="calling" e updated_at muda
   const { data: stale, error } = await supabase
     .from("leads")
-    .select("id, phone_e164, tenant_id")
+    .select("id, phone_e164, lead_list_id")
     .eq("status", "calling")
     .lt("updated_at", staleThreshold);
 
@@ -456,14 +456,47 @@ async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
     console.error("[worker] recoverStaleCalls: erro ao buscar leads presos:", error.message);
     return;
   }
-
   if (!stale || stale.length === 0) return;
 
-  console.warn(
-    `[worker] ⚠ Encontrados ${stale.length} lead(s) presos em "calling" há >${STALE_CALLING_MINUTES}min — resetando para "queued"`
+  // 2. Verificar quais lead_lists têm fila RUNNING ou PAUSED
+  //    Leads de filas STOPPED não devem ser resetados para "queued" —
+  //    a fila foi encerrada intencionalmente; resetar causaria chamadas
+  //    indesejadas se a fila for reiniciada.
+  const listIds = [...new Set(stale.map((l: { lead_list_id: string }) => l.lead_list_id))];
+
+  const { data: activeLists, error: queueErr } = await supabase
+    .from("dial_queues")
+    .select("lead_list_id, status")
+    .in("lead_list_id", listIds)
+    .in("status", ["running", "paused"]);
+
+  if (queueErr) {
+    console.error("[worker] recoverStaleCalls: erro ao checar filas:", queueErr.message);
+    return;
+  }
+
+  const recoverableListIds = new Set(
+    (activeLists ?? []).map((q: { lead_list_id: string }) => q.lead_list_id)
   );
 
-  const ids = stale.map((l: { id: string }) => l.id);
+  // 3. Filtrar apenas leads cujas filas estão ativas ou pausadas
+  const recoverableIds = stale
+    .filter((l: { id: string; lead_list_id: string }) => recoverableListIds.has(l.lead_list_id))
+    .map((l: { id: string }) => l.id);
+
+  const skippedCount = stale.length - recoverableIds.length;
+  if (skippedCount > 0) {
+    console.log(
+      `[worker] recoverStaleCalls: ${skippedCount} lead(s) ignorados (fila stopped/inexistente)`
+    );
+  }
+
+  if (recoverableIds.length === 0) return;
+
+  console.warn(
+    `[worker] ⚠ ${recoverableIds.length} lead(s) presos em "calling" há >${STALE_CALLING_MINUTES}min — resetando para "queued"`
+  );
+
   const retryAt = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // retry em 2 min
 
   const { error: updateError } = await supabase
@@ -473,12 +506,12 @@ async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
       last_outcome:    "stale-calling-reset",
       next_attempt_at: retryAt,
     })
-    .in("id", ids);
+    .in("id", recoverableIds);
 
   if (updateError) {
     console.error("[worker] recoverStaleCalls: erro ao resetar leads:", updateError.message);
   } else {
-    console.log(`[worker] ✓ ${ids.length} lead(s) resetados para "queued"`);
+    console.log(`[worker] ✓ ${recoverableIds.length} lead(s) resetados para "queued"`);
   }
 }
 
