@@ -365,7 +365,7 @@ export default function AppShell({
             const isActive = pathname === item.href;
             return (
               <Link
-                key={item.href}
+                key={item.label}
                 href={item.href}
                 className={`sidebar-nav-item ${isActive ? "active" : ""}`}
               >
