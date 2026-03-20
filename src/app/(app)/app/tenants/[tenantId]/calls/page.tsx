@@ -20,6 +20,8 @@ import {
   ChevronUp,
   Mic,
   ExternalLink,
+  Hash,
+  AlertCircle,
 } from "lucide-react";
 
 interface Queue { id: string; name: string }
@@ -281,34 +283,44 @@ export default function CallsPage() {
   const [filterReason, setFilterReason] = useState("all");
   const [filterQueue, setFilterQueue] = useState("all");
   const [searchPhone, setSearchPhone] = useState("");
+  const [searchCallId, setSearchCallId] = useState("");
   const [shortDurationMode, setShortDurationMode] = useState(false);
   const [maxDuration, setMaxDuration] = useState("30");
   const [showTranscript, setShowTranscript] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
   const { toasts, show: showToast } = useToast();
 
   useEffect(() => {
     fetch(`/api/tenants/${tenantId}/queues`)
       .then((r) => r.json())
-      .then((d) => setQueues(d.queues ?? []));
+      .then((d) => setQueues(d.queues ?? []))
+      .catch(() => setPageError("Falha ao carregar filas."));
   }, [tenantId]);
 
   const loadCalls = useCallback(async (showRefresh = false) => {
+    setPageError(null);
     if (showRefresh) setRefreshing(true);
     else setLoading(true);
 
-    const params = new URLSearchParams({ limit: "100" });
-    if (filterQueue !== "all") params.set("queueId", filterQueue);
-    if (shortDurationMode) {
-      params.set("answered_only", "true");
-      params.set("max_duration", maxDuration);
-    }
+    try {
+      const params = new URLSearchParams({ limit: "100" });
+      if (filterQueue !== "all") params.set("queueId", filterQueue);
+      if (shortDurationMode) {
+        params.set("answered_only", "true");
+        params.set("max_duration", maxDuration);
+      }
 
-    const res = await fetch(`/api/tenants/${tenantId}/calls?${params}`);
-    const data = await res.json();
-    setCalls(data.calls ?? []);
-    setLoading(false);
-    setRefreshing(false);
-    if (showRefresh) showToast("Chamadas atualizadas!");
+      const res = await fetch(`/api/tenants/${tenantId}/calls?${params}`);
+      if (!res.ok) { setPageError("Falha ao carregar chamadas."); setLoading(false); setRefreshing(false); return; }
+      const data = await res.json();
+      setCalls(data.calls ?? []);
+      if (showRefresh) showToast("Chamadas atualizadas!");
+    } catch {
+      setPageError("Erro de conexão ao carregar chamadas.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [tenantId, filterQueue, shortDurationMode, maxDuration, showToast]);
 
   useEffect(() => { loadCalls(); }, [loadCalls]);
@@ -322,13 +334,14 @@ export default function CallsPage() {
 
   const filteredCalls = calls.filter((c) => {
     const matchReason = filterReason === "all" || c.ended_reason === filterReason;
-    const matchPhone = !searchPhone || (c.leads?.phone_e164 ?? "").includes(searchPhone.replace(/\D/g, ""));
-    return matchReason && matchPhone;
+    const matchPhone  = !searchPhone  || (c.leads?.phone_e164 ?? "").includes(searchPhone.replace(/\D/g, ""));
+    const matchCallId = !searchCallId || c.vapi_call_id.toLowerCase().includes(searchCallId.trim().toLowerCase());
+    return matchReason && matchPhone && matchCallId;
   });
 
   const totalCost   = calls.reduce((sum, c) => sum + (c.cost ?? 0), 0);
   const totalDurSec = calls.reduce((sum, c) => sum + (c.duration_seconds ?? 0), 0);
-  const hasActiveFilters = filterReason !== "all" || searchPhone || filterQueue !== "all";
+  const hasActiveFilters = filterReason !== "all" || searchPhone || filterQueue !== "all" || searchCallId;
 
   // Valores únicos de ended_reason presentes nos dados (inclui erros dinâmicos do Vapi)
   const dynamicReasons: string[] = Array.from(
@@ -337,6 +350,17 @@ export default function CallsPage() {
 
   return (
     <div>
+      {/* Error banner */}
+      {pageError && (
+        <div className="alert-error flex items-center gap-3 mb-4 rounded-xl px-4 py-3">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span className="text-sm">{pageError}</span>
+          <button onClick={() => setPageError(null)} className="ml-auto text-red-400 hover:text-red-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="page-header">
         <div>
@@ -377,13 +401,26 @@ export default function CallsPage() {
             </div>
           )}
 
-          <input
-            type="text"
-            className="form-input max-w-xs text-sm"
-            placeholder="Buscar por telefone..."
-            value={searchPhone}
-            onChange={(e) => setSearchPhone(e.target.value)}
-          />
+          <div className="relative">
+            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              className="form-input pl-9 max-w-xs text-sm"
+              placeholder="Buscar por telefone..."
+              value={searchPhone}
+              onChange={(e) => setSearchPhone(e.target.value)}
+            />
+          </div>
+          <div className="relative">
+            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+            <input
+              type="text"
+              className="form-input pl-9 max-w-xs text-sm font-mono"
+              placeholder="Buscar por Vapi Call ID..."
+              value={searchCallId}
+              onChange={(e) => setSearchCallId(e.target.value)}
+            />
+          </div>
           <select
             className="select-native text-sm py-2.5 max-w-xs"
             value={filterReason}
@@ -401,7 +438,7 @@ export default function CallsPage() {
           </select>
           {hasActiveFilters && (
             <button
-              onClick={() => { setFilterReason("all"); setSearchPhone(""); setFilterQueue("all"); }}
+              onClick={() => { setFilterReason("all"); setSearchPhone(""); setSearchCallId(""); setFilterQueue("all"); }}
               className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
             >
               <X className="w-3.5 h-3.5" /> Limpar filtros

@@ -499,6 +499,8 @@ export default function LeadsPage() {
   const [dragOver, setDragOver]             = useState(false);
   const [selectedFile, setSelectedFile]     = useState<File | null>(null);
   const [resettingStuck, setResettingStuck] = useState(false);
+  const [searchLead, setSearchLead]         = useState("");
+  const [pageError, setPageError]           = useState<string | null>(null);
   // Edição inline de nome da lista
   const [editingListId, setEditingListId]   = useState<string | null>(null);
   const [editingListName, setEditingListName] = useState("");
@@ -509,10 +511,16 @@ export default function LeadsPage() {
   useEffect(() => { if (selectedListId) loadLeads(); }, [selectedListId]);
 
   async function loadLists() {
+    setPageError(null);
+    try {
     const res  = await fetch(`/api/tenants/${tenantId}/lead-lists`);
+    if (!res.ok) { setPageError("Falha ao carregar listas de leads."); return; }
     const data = await res.json();
     setLists(data.leadLists ?? []);
-    if (data.leadLists?.length > 0) setSelectedListId(data.leadLists[0].id);
+    // BUG FIX: só auto-seleciona o primeiro item se NADA estiver selecionado
+    // Evita resetar a seleção quando loadLists é chamado após criar/renomear lista
+    setSelectedListId((prev) => prev || data.leadLists?.[0]?.id || "");
+    } catch { setPageError("Erro de conexão ao carregar listas."); }
   }
 
   async function loadLeads() {
@@ -644,8 +652,30 @@ export default function LeadsPage() {
   const activeList  = lists.find((l) => l.id === selectedListId);
   const stuckCount  = leads.filter((l) => l.status === "calling").length;
 
+  const filteredLeads = searchLead.trim()
+    ? leads.filter((lead) => {
+        const q = searchLead.trim().toLowerCase().replace(/\D/g, "") || searchLead.trim().toLowerCase();
+        const phoneMatch = lead.phone_e164.replace(/\D/g, "").includes(q);
+        const nameMatch  = Object.values(lead.data_json ?? {}).some((v) =>
+          String(v).toLowerCase().includes(searchLead.trim().toLowerCase())
+        );
+        return phoneMatch || nameMatch;
+      })
+    : leads;
+
   return (
     <div>
+      {/* Error banner */}
+      {pageError && (
+        <div className="alert-error flex items-center gap-3 mb-4 rounded-xl px-4 py-3">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span className="text-sm">{pageError}</span>
+          <button onClick={() => setPageError(null)} className="ml-auto text-red-400 hover:text-red-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="page-header">
         <div>
@@ -901,13 +931,32 @@ export default function LeadsPage() {
 
             {/* ── Tabela de leads ── */}
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide shrink-0">
                   Leads da Lista{" "}
                   {leads.length > 0 && (
-                    <span className="text-gray-400 font-normal normal-case">({leads.length})</span>
+                    <span className="text-gray-400 font-normal normal-case">
+                      ({filteredLeads.length}{filteredLeads.length !== leads.length ? ` de ${leads.length}` : ""})
+                    </span>
                   )}
                 </h3>
+                {leads.length > 0 && (
+                  <div className="relative flex-1 max-w-xs">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      className="form-input pl-9 py-1.5 text-sm w-full"
+                      placeholder="Buscar por telefone ou nome..."
+                      value={searchLead}
+                      onChange={(e) => setSearchLead(e.target.value)}
+                    />
+                    {searchLead && (
+                      <button onClick={() => setSearchLead("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   {/* Botão de reset aparece só se há leads travados em 'calling' */}
                   {stuckCount > 0 && (
@@ -968,7 +1017,13 @@ export default function LeadsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {leads.map((lead) => {
+                      {filteredLeads.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="text-center py-8 text-gray-400 text-sm">
+                            Nenhum lead encontrado para "{searchLead}"
+                          </td>
+                        </tr>
+                      ) : filteredLeads.map((lead) => {
                         const statusCfg = STATUS_CONFIG[lead.status] ?? { label: lead.status, badge: "badge-gray" };
                         const { name, company, nome, empresa, ...rest } = lead.data_json ?? {};
                         const displayName = name ?? nome;

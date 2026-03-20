@@ -28,6 +28,8 @@ const ENCRYPTION_KEY_B64  = process.env.ENCRYPTION_KEY_BASE64!;
 const POLL_INTERVAL_MS    = Number(process.env.POLL_INTERVAL_MS   ?? 5_000);
 const VAPI_TIMEOUT_MS     = Number(process.env.VAPI_TIMEOUT_MS    ?? 15_000);
 const VAPI_BASE_URL       = process.env.VAPI_BASE_URL ?? "https://api.vapi.ai";
+// Delay entre cada disparo de chamada dentro de um ciclo (evita 503/408 do provedor SIP)
+const DISPATCH_DELAY_MS   = Number(process.env.DISPATCH_DELAY_MS  ?? 3_000);
 // URL base do app (ex: https://meuapp.vercel.app) — usado para construir o serverUrl do Vapi
 // Sem isso, o Vapi usa a URL global do painel, que pode estar errada
 const APP_BASE_URL        = (process.env.APP_BASE_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
@@ -308,6 +310,27 @@ async function processLead(
       );
     }
 
+    // ── Erros de provedor SIP (503 / 408) ── não consomem tentativa
+    // O provedor estava sobrecarregado ou deu timeout — reagendar em 60s sem debitar attempt_count
+    const isProviderFault = httpStatus === 503 || httpStatus === 408;
+    if (isProviderFault) {
+      const nextAt = new Date(Date.now() + 60_000).toISOString();
+      console.warn(
+        `[worker] ⚠ Provedor SIP indisponível (HTTP ${httpStatus}) — ` +
+        `reagendando lead ${lead.id} em 60s SEM debitar tentativa`
+      );
+      await supabase
+        .from("leads")
+        .update({
+          status:          "queued",
+          // attempt_count NÃO é incrementado — falha do provedor, não do lead
+          next_attempt_at: nextAt,
+          last_outcome:    `provider-${httpStatus}`,
+        })
+        .eq("id", lead.id);
+      return;
+    }
+
     if (newAttemptCount < queue.max_attempts) {
       // Ainda tem tentativas — reagendar com delay
       const delayMin = isRateLimit ? queue.retry_delay_minutes * 2 : queue.retry_delay_minutes;
@@ -404,11 +427,11 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue): Promise
     return;
   }
 
-  // ── Processar leads em sequência (um por um para não sobrecarregar a Vapi) ──
-  // Intervalo de 1.5s entre chamadas para evitar HTTP 429 (rate limit do Vapi)
+  // ── Processar leads em sequência (um por um para não sobrecarregar a Vapi/SIP) ──
+  // DISPATCH_DELAY_MS entre chamadas: evita HTTP 429 (Vapi rate limit) e 503/408 (SIP overload)
   for (const lead of leads) {
     await processLead(supabase, queue, lead, vapiKey);
-    await sleep(1_500);
+    await sleep(DISPATCH_DELAY_MS);
   }
 }
 
@@ -456,9 +479,10 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function main(): Promise<void> {
   console.log("═══════════════════════════════════════════════════");
   console.log("  Vapi Dialer — Worker iniciando");
-  console.log(`  Poll interval : ${POLL_INTERVAL_MS}ms`);
-  console.log(`  Vapi timeout  : ${VAPI_TIMEOUT_MS}ms`);
-  console.log(`  Vapi base URL : ${VAPI_BASE_URL}`);
+  console.log(`  Poll interval  : ${POLL_INTERVAL_MS}ms`);
+  console.log(`  Vapi timeout   : ${VAPI_TIMEOUT_MS}ms`);
+  console.log(`  Vapi base URL  : ${VAPI_BASE_URL}`);
+  console.log(`  Dispatch delay : ${DISPATCH_DELAY_MS}ms (entre chamadas)`);
   console.log("═══════════════════════════════════════════════════");
 
   // Validar variáveis obrigatórias
