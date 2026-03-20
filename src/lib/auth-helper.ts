@@ -1,9 +1,10 @@
 import { createClient } from "./supabase/server";
 import { NextResponse } from "next/server";
 import { isAdminEmail } from "./admin-helper";
+import { rateLimitApi } from "./rate-limit";
 
 /**
- * Valida sessão + membership no tenant.
+ * Valida sessão + membership no tenant + rate limit por userId.
  * Admins do sistema (ADMIN_EMAILS) têm acesso a qualquer tenant sem membership.
  */
 export async function requireTenantAccess(tenantId: string) {
@@ -17,7 +18,27 @@ export async function requireTenantAccess(tenantId: string) {
   if (sessionError || !user) {
     return {
       user: null,
+      membership: null,
       response: NextResponse.json({ error: "Não autenticado" }, { status: 401 }),
+    };
+  }
+
+  // Rate limiting por usuário autenticado: 600 req/min
+  const rl = await rateLimitApi(user.id);
+  if (!rl.allowed) {
+    return {
+      user: null,
+      membership: null,
+      response: NextResponse.json(
+        { error: "Muitas requisições. Tente novamente em breve." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rl.resetInSeconds),
+            "X-RateLimit-Remaining": "0",
+          },
+        }
+      ),
     };
   }
 
@@ -36,6 +57,7 @@ export async function requireTenantAccess(tenantId: string) {
   if (!membership) {
     return {
       user: null,
+      membership: null,
       response: NextResponse.json({ error: "Acesso negado" }, { status: 403 }),
     };
   }

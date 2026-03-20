@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireTenantAccess } from "@/lib/auth-helper";
 import { createServiceClient } from "@/lib/supabase/service";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { rateLimitCsvImport } from "@/lib/rate-limit";
 
 type Params = { params: Promise<{ tenantId: string; leadListId: string }> };
 
@@ -10,8 +11,20 @@ type Params = { params: Promise<{ tenantId: string; leadListId: string }> };
 // CSV deve ter coluna "phone" (obrigatória) + quaisquer outras (ficam em data_json)
 export async function POST(req: NextRequest, { params }: Params) {
   const { tenantId, leadListId } = await params;
-  const { response } = await requireTenantAccess(tenantId);
+  const { response, user } = await requireTenantAccess(tenantId);
   if (response) return response;
+
+  // Rate limit: 10 imports CSV/hora por usuário (operação pesada)
+  const rl = await rateLimitCsvImport(user!.id);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Limite de importações atingido. Tente novamente em 1 hora." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(rl.resetInSeconds) },
+      }
+    );
+  }
 
   const service = createServiceClient();
 

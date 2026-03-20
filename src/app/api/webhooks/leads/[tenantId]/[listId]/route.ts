@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { rateLimitWebhookLeads } from "@/lib/rate-limit";
 
 type Params = { params: Promise<{ tenantId: string; listId: string }> };
 
@@ -22,6 +23,21 @@ type Params = { params: Promise<{ tenantId: string; listId: string }> };
  */
 export async function POST(req: NextRequest, { params }: Params) {
   const { tenantId, listId } = await params;
+
+  // Rate limit: 120 req/min por listId — aplicado antes de qualquer query ao banco
+  const rl = await rateLimitWebhookLeads(listId);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit atingido. Tente novamente em breve." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rl.resetInSeconds),
+          "X-RateLimit-Remaining": "0",
+        },
+      }
+    );
+  }
 
   const service = createServiceClient();
 
