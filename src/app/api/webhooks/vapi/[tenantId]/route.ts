@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { parseCallbackTime } from "@/lib/callback-parser";
-import { rateLimitWebhookVapi } from "@/lib/rate-limit";
 
 type Params = { params: Promise<{ tenantId: string }> };
 
@@ -9,19 +8,6 @@ type Params = { params: Promise<{ tenantId: string }> };
 // Não usa sessão — usa service role com tenantId explícito
 export async function POST(req: NextRequest, { params }: Params) {
   const { tenantId } = await params;
-
-  // Rate limit: 300 req/min por tenantId
-  // Vapi faz retry automático em 429 — eventos end-of-call-report não se perdem
-  const rl = await rateLimitWebhookVapi(tenantId);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Rate limit atingido." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(rl.resetInSeconds) },
-      }
-    );
-  }
 
   const body = await req.json();
   const { message } = body;
