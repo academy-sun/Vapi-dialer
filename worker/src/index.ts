@@ -33,6 +33,14 @@ const DISPATCH_DELAY_MS   = Number(process.env.DISPATCH_DELAY_MS  ?? 3_000);
 // URL base do app (ex: https://meuapp.vercel.app) — usado para construir o serverUrl do Vapi
 // Sem isso, o Vapi usa a URL global do painel, que pode estar errada
 const APP_BASE_URL        = (process.env.APP_BASE_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
+// Isolamento por tenant: lista de tenant IDs separados por vírgula.
+// Quando definido, o worker só processa filas desses tenants.
+// Exemplo Railway: TENANT_ID_FILTER=uuid1,uuid2,uuid3
+// Deixar vazio (ou não definir) para processar TODOS os tenants (modo legacy).
+const TENANT_ID_FILTER: string[] = (process.env.TENANT_ID_FILTER ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos
@@ -470,12 +478,19 @@ async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
   // 1. Buscar leads presos em "calling" há mais de STALE_CALLING_MINUTES
   //    Usa last_attempt_at como proxy: o worker seta status="calling" e last_attempt_at ao mesmo tempo
   //    NOTA: updated_at não existe na tabela leads — o campo correto é last_attempt_at
-  const { data: stale, error } = await supabase
+  let staleQuery = supabase
     .from("leads")
-    .select("id, phone_e164, lead_list_id")
+    .select("id, phone_e164, lead_list_id, tenant_id")
     .eq("status", "calling")
     .not("last_attempt_at", "is", null)
     .lt("last_attempt_at", staleThreshold);
+
+  // Respeitar isolamento por tenant no recovery
+  if (TENANT_ID_FILTER.length > 0) {
+    staleQuery = staleQuery.in("tenant_id", TENANT_ID_FILTER);
+  }
+
+  const { data: stale, error } = await staleQuery;
 
   if (error) {
     console.error("[worker] recoverStaleCalls: erro ao buscar leads presos:", error.message);
@@ -545,7 +560,7 @@ async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function pollCycle(supabase: SupabaseClient): Promise<void> {
-  const { data: queues, error } = await supabase
+  let queueQuery = supabase
     .from("dial_queues")
     .select(`
       id, tenant_id, name, assistant_id, phone_number_id, lead_list_id,
@@ -553,6 +568,13 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
       allowed_days, allowed_time_window
     `)
     .eq("status", "running");
+
+  // Isolamento por tenant: filtrar se TENANT_ID_FILTER estiver definido
+  if (TENANT_ID_FILTER.length > 0) {
+    queueQuery = queueQuery.in("tenant_id", TENANT_ID_FILTER);
+  }
+
+  const { data: queues, error } = await queueQuery;
 
   if (error) {
     console.error("[worker] Erro ao buscar filas ativas:", error.message);
@@ -588,6 +610,11 @@ async function main(): Promise<void> {
   console.log(`  Vapi timeout   : ${VAPI_TIMEOUT_MS}ms`);
   console.log(`  Vapi base URL  : ${VAPI_BASE_URL}`);
   console.log(`  Dispatch delay : ${DISPATCH_DELAY_MS}ms (entre chamadas)`);
+  if (TENANT_ID_FILTER.length > 0) {
+    console.log(`  Tenant filter  : ${TENANT_ID_FILTER.join(", ")} (${TENANT_ID_FILTER.length} tenant(s))`);
+  } else {
+    console.log("  Tenant filter  : TODOS os tenants (TENANT_ID_FILTER não definido)");
+  }
   console.log("═══════════════════════════════════════════════════");
 
   // Validar variáveis obrigatórias
