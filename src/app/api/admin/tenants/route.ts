@@ -28,6 +28,8 @@ export async function GET() {
     { data: queueCounts },
     { data: vapiConnections },
     { data: memberCounts },
+    { data: activeCallLeads },
+    { data: activeCampaigns },
   ] = await Promise.all([
     // Total de leads por tenant
     service
@@ -55,28 +57,46 @@ export async function GET() {
       .from("memberships")
       .select("tenant_id")
       .in("tenant_id", tenantIds),
+    // Chamadas ativas agora (leads em discagem)
+    service
+      .from("leads")
+      .select("tenant_id")
+      .in("tenant_id", tenantIds)
+      .eq("status", "calling"),
+    // Campanhas running/paused com detalhes (para controle remoto no admin)
+    service
+      .from("dial_queues")
+      .select("id, tenant_id, name, status, concurrency")
+      .in("tenant_id", tenantIds)
+      .in("status", ["running", "paused"]),
   ]);
 
   // Agregar por tenant
   const aggregated = tenants.map((t) => {
-    const leads      = (leadCounts ?? []).filter((r) => r.tenant_id === t.id).length;
-    const calls      = (callCounts ?? []).filter((r) => r.tenant_id === t.id).length;
-    const queues     = (queueCounts ?? []).filter((r) => r.tenant_id === t.id);
-    const running    = queues.filter((q) => q.status === "running").length;
-    const totalQ     = queues.length;
-    const vapiOk     = (vapiConnections ?? []).some((v) => v.tenant_id === t.id);
-    const members    = (memberCounts ?? []).filter((m) => m.tenant_id === t.id).length;
+    const leads       = (leadCounts ?? []).filter((r) => r.tenant_id === t.id).length;
+    const calls       = (callCounts ?? []).filter((r) => r.tenant_id === t.id).length;
+    const queues      = (queueCounts ?? []).filter((r) => r.tenant_id === t.id);
+    const running     = queues.filter((q) => q.status === "running").length;
+    const totalQ      = queues.length;
+    const vapiOk      = (vapiConnections ?? []).some((v) => v.tenant_id === t.id);
+    const members     = (memberCounts ?? []).filter((m) => m.tenant_id === t.id).length;
+    const activeCalls = (activeCallLeads ?? []).filter((r) => r.tenant_id === t.id).length;
+    const campaigns   = (activeCampaigns ?? [])
+      .filter((c) => c.tenant_id === t.id)
+      .map((c) => ({ id: c.id, name: c.name, status: c.status, concurrency: c.concurrency }));
 
     return {
       ...t,
       stats: {
         leads,
         calls,
-        queues:         totalQ,
-        running_queues: running,
+        queues:          totalQ,
+        running_queues:  running,
         vapi_configured: vapiOk,
         members,
+        active_calls:    activeCalls,
       },
+      campaigns,
     };
   });
 
