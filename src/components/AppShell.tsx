@@ -19,6 +19,7 @@ import {
   X,
   FlaskConical,
   LayoutDashboard,
+  BarChart2,
 } from "lucide-react";
 
 interface Tenant {
@@ -152,6 +153,11 @@ export default function AppShell({
   // navItems só é populado após roles estarem prontos — evita renderizar menu incompleto
   const navItems = (activeTenantId && rolesLoaded)
     ? [
+        {
+          label: "Relatórios",
+          href: `/app/tenants/${activeTenantId}/calls`,
+          icon: BarChart2,
+        },
         {
           label: "Lista de Leads",
           href: `/app/tenants/${activeTenantId}/leads`,
@@ -375,8 +381,8 @@ export default function AppShell({
             </p>
           )}
 
-          {/* Admin section — visível apenas para owner/admin do tenant */}
-          {(isAdmin || isAdminOrOwner) && (
+          {/* Admin section — visível apenas para admins do sistema (ADMIN_EMAILS) */}
+          {isAdmin && (
             <div className="mt-4 pt-4" style={{ borderTop: "1px solid #222222" }}>
               <p className="sidebar-section-label" style={{ color: "#FF1A1A", marginTop: "16px" }}>Admin</p>
               {[
