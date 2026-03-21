@@ -237,7 +237,7 @@ export default function AssistantsClient() {
                 {card.loading ? (
                   <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Carregando configurações do Vapi&hellip;
+                    Carregando configurações&hellip;
                   </div>
                 ) : (
                   <>
@@ -245,14 +245,6 @@ export default function AssistantsClient() {
                       <div className="alert-error">
                         <AlertTriangle className="w-4 h-4 shrink-0" />
                         <span className="text-sm">{card.error}</span>
-                      </div>
-                    )}
-
-                    {/* Structured output fields badge */}
-                    {card.allFields.length > 0 && (
-                      <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-100">
-                        <p className="text-xs font-medium text-indigo-700 mb-1">Campos do Structured Output:</p>
-                        <p className="text-xs text-indigo-600 font-mono">{card.allFields.join(", ")}</p>
                       </div>
                     )}
 
@@ -301,7 +293,7 @@ export default function AssistantsClient() {
                       <div className="flex items-center gap-2 text-xs text-gray-400 p-3 bg-gray-50 rounded-lg">
                         <Mic className="w-3.5 h-3.5 shrink-0" />
                         <span>
-                          Voz: {String(card.config.voice.provider ?? "")} / {String(card.config.voice.voiceId ?? card.config.voice.voice ?? "—")}
+                          Voz: {String(card.config.voice.voiceId ?? card.config.voice.voice ?? "—")}
                         </span>
                       </div>
                     )}
@@ -317,11 +309,11 @@ export default function AssistantsClient() {
                         className="btn-primary"
                       >
                         {card.saving ? (
-                          <><Loader2 className="w-4 h-4 animate-spin" />Salvando no Vapi&hellip;</>
+                          <><Loader2 className="w-4 h-4 animate-spin" />Salvando&hellip;</>
                         ) : card.saved ? (
                           <><Check className="w-4 h-4" />Salvo!</>
                         ) : (
-                          <><Save className="w-4 h-4" />Salvar no Vapi</>
+                          <><Save className="w-4 h-4" />Salvar Alterações</>
                         )}
                       </button>
                     </div>
