@@ -105,7 +105,7 @@ function AdvancedConfigFields({
           <input className="form-input" type="number" min="1" max="5"
             value={form.concurrency}
             onChange={(e) => update("concurrency", String(Math.min(5, Math.max(1, parseInt(e.target.value) || 1))))} />
-          <p className="text-xs text-gray-400 mt-1">Máx. 5 simultâneas</p>
+          <p className="text-xs text-gray-400 mt-1">Máx. 5 por campanha</p>
         </div>
         <div>
           <label className="form-label">Máx. tentativas</label>
@@ -123,6 +123,18 @@ function AdvancedConfigFields({
           </div>
           <p className="text-xs text-gray-400 mt-1">Entre tentativas</p>
         </div>
+      </div>
+
+      {/* Aviso sobre limite de concorrência da org Vapi */}
+      <div className="flex items-start gap-2 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-700">
+        <svg className="w-3.5 h-3.5 shrink-0 mt-0.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" />
+        </svg>
+        <span>
+          <span className="font-medium">Slots compartilhados:</span> o limite total de chamadas simultâneas é definido pelo plano da sua conta Vapi (ex: 10 slots).
+          Com várias campanhas ativas ao mesmo tempo, o sistema distribui esses slots automaticamente entre elas —
+          configure o limite da organização em <span className="font-medium">Configuração Vapi → Slots simultâneos</span>.
+        </span>
       </div>
 
       {/* Time window */}

@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const service = createServiceClient();
   const { data, error } = await service
     .from("vapi_connections")
-    .select("id, label, is_active, created_at, updated_at, assistant_id, success_field, success_value")
+    .select("id, label, is_active, created_at, updated_at, assistant_id, success_field, success_value, concurrency_limit")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .single();
@@ -72,7 +72,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (response) return response;
 
   const body = await req.json();
-  const { assistantId, successField, successValue } = body;
+  const { assistantId, successField, successValue, concurrencyLimit } = body;
 
   const service = createServiceClient();
   const { error } = await service
@@ -81,6 +81,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       assistant_id: assistantId ?? null,
       success_field: successField ?? null,
       success_value: successValue ?? null,
+      ...(concurrencyLimit !== undefined && { concurrency_limit: Math.max(1, Math.min(100, Number(concurrencyLimit))) }),
       updated_at: new Date().toISOString(),
     })
     .eq("tenant_id", tenantId)
