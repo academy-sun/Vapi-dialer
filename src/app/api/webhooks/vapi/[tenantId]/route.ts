@@ -338,7 +338,17 @@ async function updateLeadAfterCall(
     return;
   }
 
-  const noAnswerReasons = ["no-answer", "busy", "voicemail", "machine_end_silence", "machine_end_other"];
+  // Inclui razões do Vapi v1 e v2
+  const noAnswerReasons = [
+    "no-answer",                  // Vapi v1
+    "customer-did-not-answer",    // Vapi v2
+    "busy",                       // Vapi v1
+    "customer-busy",              // Vapi v2
+    "voicemail",
+    "machine_end_silence",
+    "machine_end_other",
+    "silence-timed-out",          // Vapi v2: silêncio = caixa postal / não atendeu
+  ];
   const isNoAnswer = endedReason ? noAnswerReasons.some((r) => endedReason.includes(r)) : false;
 
   if (isNoAnswer) {
