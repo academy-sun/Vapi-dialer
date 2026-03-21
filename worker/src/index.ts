@@ -33,14 +33,53 @@ const DISPATCH_DELAY_MS   = Number(process.env.DISPATCH_DELAY_MS  ?? 3_000);
 // URL base do app (ex: https://meuapp.vercel.app) — usado para construir o serverUrl do Vapi
 // Sem isso, o Vapi usa a URL global do painel, que pode estar errada
 const APP_BASE_URL        = (process.env.APP_BASE_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
-// Isolamento por tenant: lista de tenant IDs separados por vírgula.
-// Quando definido, o worker só processa filas desses tenants.
-// Exemplo Railway: TENANT_ID_FILTER=uuid1,uuid2,uuid3
-// Deixar vazio (ou não definir) para processar TODOS os tenants (modo legacy).
+// ── Distribuição automática de tenants entre workers ──────────────────────────
+// Cada worker recebe um índice (0-based) e o total de workers.
+// Ex: 4 workers → Worker 0 pega tenants 0,4,8…  Worker 1 pega 1,5,9… etc.
+// Novo tenant é distribuído automaticamente — sem atualizar variáveis manuais.
+//
+// Railway: definir em cada serviço:
+//   WORKER_INDEX=0  WORKER_COUNT=4
+//   WORKER_INDEX=1  WORKER_COUNT=4  … etc.
+//
+// Se WORKER_COUNT não estiver definido (ou = 1), o worker processa tudo.
+const WORKER_INDEX = Number(process.env.WORKER_INDEX ?? 0);
+const WORKER_COUNT = Number(process.env.WORKER_COUNT ?? 1);
+
+// Fallback manual: lista de tenant IDs separados por vírgula.
+// Só usado se WORKER_COUNT <= 1 E TENANT_ID_FILTER estiver definido.
+// Mantido para compatibilidade — preferir WORKER_INDEX/WORKER_COUNT.
 const TENANT_ID_FILTER: string[] = (process.env.TENANT_ID_FILTER ?? "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+
+// Retorna os tenant IDs que este worker deve processar.
+// Busca todos os tenants do Supabase, ordena por id (estável),
+// e retorna os que caem no slot deste worker (index % count).
+async function resolveMyTenants(supabase: SupabaseClient): Promise<string[] | null> {
+  // Modo manual explícito (legado)
+  if (WORKER_COUNT <= 1 && TENANT_ID_FILTER.length > 0) {
+    return TENANT_ID_FILTER;
+  }
+  // Modo único worker sem filtro — processa tudo
+  if (WORKER_COUNT <= 1) {
+    return null; // null = sem filtro
+  }
+  // Modo auto-distribuição
+  const { data, error } = await supabase
+    .from("tenants")
+    .select("id")
+    .order("id", { ascending: true });
+  if (error || !data) {
+    console.error("[worker] Erro ao buscar tenants para distribuição:", error?.message);
+    return null;
+  }
+  const mine = data
+    .map((t: { id: string }) => t.id)
+    .filter((_: string, i: number) => i % WORKER_COUNT === WORKER_INDEX);
+  return mine;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tipos
@@ -478,6 +517,9 @@ async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
   // 1. Buscar leads presos em "calling" há mais de STALE_CALLING_MINUTES
   //    Usa last_attempt_at como proxy: o worker seta status="calling" e last_attempt_at ao mesmo tempo
   //    NOTA: updated_at não existe na tabela leads — o campo correto é last_attempt_at
+  // Respeitar isolamento por tenant no recovery
+  const myTenants = await resolveMyTenants(supabase);
+
   let staleQuery = supabase
     .from("leads")
     .select("id, phone_e164, lead_list_id, tenant_id")
@@ -485,9 +527,9 @@ async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
     .not("last_attempt_at", "is", null)
     .lt("last_attempt_at", staleThreshold);
 
-  // Respeitar isolamento por tenant no recovery
-  if (TENANT_ID_FILTER.length > 0) {
-    staleQuery = staleQuery.in("tenant_id", TENANT_ID_FILTER);
+  if (myTenants !== null) {
+    if (myTenants.length === 0) return;
+    staleQuery = staleQuery.in("tenant_id", myTenants);
   }
 
   const { data: stale, error } = await staleQuery;
@@ -560,6 +602,9 @@ async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function pollCycle(supabase: SupabaseClient): Promise<void> {
+  // Resolver quais tenants este worker processa neste ciclo
+  const myTenants = await resolveMyTenants(supabase);
+
   let queueQuery = supabase
     .from("dial_queues")
     .select(`
@@ -569,9 +614,9 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
     `)
     .eq("status", "running");
 
-  // Isolamento por tenant: filtrar se TENANT_ID_FILTER estiver definido
-  if (TENANT_ID_FILTER.length > 0) {
-    queueQuery = queueQuery.in("tenant_id", TENANT_ID_FILTER);
+  if (myTenants !== null) {
+    if (myTenants.length === 0) return; // este worker não tem tenants ainda
+    queueQuery = queueQuery.in("tenant_id", myTenants);
   }
 
   const { data: queues, error } = await queueQuery;
@@ -610,10 +655,12 @@ async function main(): Promise<void> {
   console.log(`  Vapi timeout   : ${VAPI_TIMEOUT_MS}ms`);
   console.log(`  Vapi base URL  : ${VAPI_BASE_URL}`);
   console.log(`  Dispatch delay : ${DISPATCH_DELAY_MS}ms (entre chamadas)`);
-  if (TENANT_ID_FILTER.length > 0) {
-    console.log(`  Tenant filter  : ${TENANT_ID_FILTER.join(", ")} (${TENANT_ID_FILTER.length} tenant(s))`);
+  if (WORKER_COUNT > 1) {
+    console.log(`  Modo worker    : ${WORKER_INDEX + 1} de ${WORKER_COUNT} (auto-distribuição por índice)`);
+  } else if (TENANT_ID_FILTER.length > 0) {
+    console.log(`  Tenant filter  : ${TENANT_ID_FILTER.join(", ")} (${TENANT_ID_FILTER.length} tenant(s)) [modo legado]`);
   } else {
-    console.log("  Tenant filter  : TODOS os tenants (TENANT_ID_FILTER não definido)");
+    console.log("  Modo worker    : único — processa TODOS os tenants");
   }
   console.log("═══════════════════════════════════════════════════");
 
