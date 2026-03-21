@@ -99,14 +99,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (response) return response;
 
   const body = await req.json() as {
+    action?: string;
     assistantId: string;
+    serverUrl?: string;
     name?: string;
     firstMessage?: string;
     systemPrompt?: string;
     voice?: Record<string, unknown>;
   };
 
-  const { assistantId, name, firstMessage, systemPrompt, voice } = body;
+  const { action, assistantId, serverUrl, name, firstMessage, systemPrompt, voice } = body;
   if (!assistantId) return NextResponse.json({ error: "assistantId obrigatório" }, { status: 400 });
 
   const apiKey = await getApiKey(tenantId);
@@ -114,6 +116,43 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
   const signal = AbortSignal.timeout(10_000);
+
+  // ── Action: update-webhook — only patches serverUrl + serverMessages, no snapshot ──
+  if (action === "update-webhook") {
+    if (!serverUrl) return NextResponse.json({ error: "serverUrl obrigatório" }, { status: 400 });
+
+    console.log(`[update-webhook] tenant=${tenantId} assistantId=${assistantId} serverUrl=${serverUrl}`);
+
+    const patchBody = {
+      serverUrl,
+      serverMessages: ["end-of-call-report", "status-update", "tool-calls", "transcript"],
+    };
+    console.log(`[update-webhook] PATCH payload:`, JSON.stringify(patchBody));
+
+    const patchRes = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(patchBody),
+      signal,
+    });
+
+    const rawBody = await patchRes.text();
+    console.log(`[update-webhook] Vapi status=${patchRes.status} body=${rawBody.slice(0, 400)}`);
+
+    if (!patchRes.ok) {
+      console.error(`[update-webhook] ✗ Failed — assistantId=${assistantId} status=${patchRes.status}`);
+      return NextResponse.json(
+        { error: `Vapi error ${patchRes.status}: ${rawBody.slice(0, 300)}` },
+        { status: 502 }
+      );
+    }
+
+    let updated: Record<string, unknown> = {};
+    try { updated = JSON.parse(rawBody); } catch { /* ignore */ }
+    console.log(`[update-webhook] ✓ OK — assistantId=${updated.id ?? assistantId} serverUrl=${updated.serverUrl ?? serverUrl}`);
+
+    return NextResponse.json({ ok: true, assistantId: updated.id ?? assistantId, serverUrl: updated.serverUrl ?? serverUrl });
+  }
 
   // Fetch current state for snapshot — read body ONCE into a variable
   let currentData: Record<string, unknown> = {};
