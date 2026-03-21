@@ -99,14 +99,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (response) return response;
 
   const body = await req.json() as {
+    action?: string;
     assistantId: string;
+    serverUrl?: string;
     name?: string;
     firstMessage?: string;
     systemPrompt?: string;
     voice?: Record<string, unknown>;
   };
 
-  const { assistantId, name, firstMessage, systemPrompt, voice } = body;
+  const { action, assistantId, serverUrl, name, firstMessage, systemPrompt, voice } = body;
   if (!assistantId) return NextResponse.json({ error: "assistantId obrigatório" }, { status: 400 });
 
   const apiKey = await getApiKey(tenantId);
@@ -114,6 +116,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
   const signal = AbortSignal.timeout(10_000);
+
+  // ── Action: update-webhook — only patches serverUrl + serverMessages, no snapshot ──
+  if (action === "update-webhook") {
+    if (!serverUrl) return NextResponse.json({ error: "serverUrl obrigatório" }, { status: 400 });
+    const patchRes = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({
+        serverUrl,
+        serverMessages: ["end-of-call-report", "status-update", "tool-calls", "transcript"],
+      }),
+      signal,
+    });
+    if (!patchRes.ok) {
+      const err = await patchRes.text().catch(() => "");
+      return NextResponse.json({ error: `Vapi error: ${patchRes.status} ${err.slice(0, 200)}` }, { status: 502 });
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   // Fetch current state for snapshot — read body ONCE into a variable
   let currentData: Record<string, unknown> = {};

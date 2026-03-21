@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import {
   Key, Lock, Eye, EyeOff, Copy, Check, AlertTriangle, CheckCircle2,
   Loader2, Link, Info, Bot, ChevronDown, ChevronUp, Save, RotateCcw,
-  Sparkles, Zap, Trash2, Plus, Pencil,
+  Sparkles, Zap, Trash2, Plus, Pencil, Webhook,
 } from "lucide-react";
 
 interface Connection {
@@ -77,6 +77,11 @@ export default function VapiConnectionClient() {
   });
   const [loadingFields, setLoadingFields] = useState(false);
   const [savingAssistantConfig, setSavingAssistantConfig] = useState(false);
+
+  // ── Section 1.7: Webhook do Assistente ──
+  const [webhookAssistantId, setWebhookAssistantId] = useState("");
+  const [updatingWebhook, setUpdatingWebhook] = useState(false);
+  const [webhookStatus, setWebhookStatus] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // ── Section 3: Assistant Editor (prompt/voice no Vapi) ──
   const [editorOpen, setEditorOpen] = useState(false);
@@ -252,16 +257,43 @@ export default function VapiConnectionClient() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleUpdateWebhook() {
+    if (!webhookAssistantId) return;
+    setUpdatingWebhook(true);
+    setWebhookStatus(null);
+    try {
+      const res = await fetch(`/api/tenants/${tenantId}/vapi-assistant`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-webhook",
+          assistantId: webhookAssistantId,
+          serverUrl: webhookUrl,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setWebhookStatus({ ok: true, msg: "Webhook atualizado com sucesso no assistente!" });
+      } else {
+        setWebhookStatus({ ok: false, msg: data.error ?? "Erro ao atualizar webhook" });
+      }
+    } catch {
+      setWebhookStatus({ ok: false, msg: "Erro de conexão. Tente novamente." });
+    } finally {
+      setUpdatingWebhook(false);
+    }
+  }
+
   return (
-    <div className="max-w-2xl">
+    <div className="max-w-5xl">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Configuracao Vapi</h1>
+          <h1 className="page-title">Configurações Vapi</h1>
           <p className="page-subtitle">Gerencie sua chave de API, assistente e webhook do Vapi</p>
         </div>
       </div>
 
-      {/* Status da conexao */}
+      {/* Status da conexao — full width */}
       {fetchingConn ? (
         <div className="card p-5 mb-5">
           <div className="flex items-center gap-3">
@@ -292,113 +324,202 @@ export default function VapiConnectionClient() {
         </div>
       )}
 
-      {/* Section 1: API Key */}
-      <div className="card mb-5">
-        <div className="card-header">
-          <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <Key className="w-4 h-4 text-indigo-500" />
-            {connection ? "Atualizar" : "Adicionar"} Vapi API Key
-          </h2>
-        </div>
-        <form onSubmit={handleSaveKey} className="card-body space-y-5">
-          {keyError && (
-            <div className="alert-error">
-              <AlertTriangle className="w-4 h-4 shrink-0" />
-              <span className="text-sm">{keyError}</span>
-            </div>
-          )}
-          <div>
-            <label className="form-label">Label</label>
-            <input
-              type="text"
-              className="form-input"
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder="Ex: producao, staging, default"
-            />
-          </div>
-          <div>
-            <label className="form-label flex items-center gap-1.5">
-              <Lock className="w-3.5 h-3.5 text-gray-500" />
-              Vapi API Key (privada)
-            </label>
-            <div className="relative">
-              <input
-                type={showKey ? "text" : "password"}
-                className="form-input pr-10 font-mono"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk_live_"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowKey(!showKey)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-            <p className="text-xs text-gray-400 mt-1.5">
-              Criptografada com <span className="font-medium">AES-256-GCM</span> antes de ser armazenada.
-            </p>
-          </div>
-          <div className="flex justify-end pt-1">
-            <button type="submit" disabled={savingKey || !apiKey.trim()} className="btn-primary">
-              {savingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              Salvar Key
-            </button>
-          </div>
-        </form>
-      </div>
+      {/* 2-column grid — top cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
 
-      {/* Section 1.5: Limite de Concorrência da Org Vapi */}
-      {connection && (
-        <div className="card mb-5">
+        {/* Section 1: API Key */}
+        <div className="card">
           <div className="card-header">
             <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-indigo-500" />
-              Limite de chamadas simultâneas (org Vapi)
+              <Key className="w-4 h-4 text-indigo-500" />
+              {connection ? "Atualizar" : "Adicionar"} Vapi API Key
             </h2>
           </div>
-          <div className="card-body space-y-4">
+          <form onSubmit={handleSaveKey} className="card-body space-y-5">
+            {keyError && (
+              <div className="alert-error">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span className="text-sm">{keyError}</span>
+              </div>
+            )}
+            <div>
+              <label className="form-label">Label</label>
+              <input
+                type="text"
+                className="form-input"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="Ex: producao, staging, default"
+              />
+            </div>
+            <div>
+              <label className="form-label flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5 text-gray-500" />
+                Vapi API Key (privada)
+              </label>
+              <div className="relative">
+                <input
+                  type={showKey ? "text" : "password"}
+                  className="form-input pr-10 font-mono"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk_live_"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(!showKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-1.5">
+                Criptografada com <span className="font-medium">AES-256-GCM</span> antes de ser armazenada.
+              </p>
+            </div>
+            <div className="flex justify-end pt-1">
+              <button type="submit" disabled={savingKey || !apiKey.trim()} className="btn-primary">
+                {savingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                Salvar Key
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Section 1.7: Webhook do Assistente */}
+        {connection && (
+          <div className="card">
+            <div className="card-header">
+              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Webhook className="w-4 h-4 text-indigo-500" />
+                Webhook do Assistente
+              </h2>
+            </div>
+            <div className="card-body space-y-4">
+              <p className="text-xs text-gray-500">
+                Mantém o assistente sincronizado para receber eventos de fim de chamada em tempo real.
+              </p>
+              <div>
+                <label className="form-label">URL gerada automaticamente</label>
+                <div className="copy-field text-xs font-mono text-gray-600 break-all">
+                  <span className="flex-1 select-all">{webhookUrl}</span>
+                </div>
+              </div>
+              <div>
+                <label className="form-label">Assistente a atualizar</label>
+                <select
+                  className="form-input"
+                  value={webhookAssistantId}
+                  onChange={(e) => { setWebhookAssistantId(e.target.value); setWebhookStatus(null); }}
+                >
+                  <option value="">Selecione um assistente…</option>
+                  {assistants.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+              {webhookStatus && (
+                <div className={webhookStatus.ok ? "alert-success" : "alert-error"}>
+                  {webhookStatus.ok
+                    ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                    : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                  <span className="text-sm">{webhookStatus.msg}</span>
+                </div>
+              )}
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={handleUpdateWebhook}
+                  disabled={updatingWebhook || !webhookAssistantId}
+                  className="btn-primary"
+                >
+                  {updatingWebhook
+                    ? <><Loader2 className="w-4 h-4 animate-spin" />Atualizando…</>
+                    : <><Webhook className="w-4 h-4" />Atualizar no Assistente</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Section 1.5: Limite de Concorrência da Org Vapi */}
+        {connection && (
+          <div className="card">
+            <div className="card-header">
+              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-indigo-500" />
+                Limite de chamadas simultâneas (org Vapi)
+              </h2>
+            </div>
+            <div className="card-body space-y-4">
+              <div className="alert-info text-sm">
+                <Info className="w-4 h-4 shrink-0 mt-0.5 text-indigo-600" />
+                <span>
+                  Cada conta Vapi tem um número máximo de chamadas simultâneas (slots de concorrência da org).
+                  O worker distribui esses slots proporcionalmente entre todas as campanhas ativas deste tenant.
+                  Verifique seu limite em: <span className="font-medium">Vapi Dashboard → Billing / Plan</span>.
+                </span>
+              </div>
+              <div className="flex items-end gap-4">
+                <div className="flex-1">
+                  <label className="form-label">Slots simultâneos da org Vapi</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min={1}
+                    max={100}
+                    value={concurrencyLimit}
+                    onChange={(e) => setConcurrencyLimit(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                  />
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    Dividido igualmente entre campanhas ativas. Ex: 10 slots ÷ 3 campanhas = 3 + 3 + 4.
+                  </p>
+                </div>
+                <button
+                  onClick={handleSaveConcurrency}
+                  disabled={savingConcurrency}
+                  className="btn-primary shrink-0"
+                >
+                  {savingConcurrency ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Salvar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Webhook URL */}
+        <div className="card">
+          <div className="card-header flex items-center gap-2">
+            <Link className="w-4 h-4 text-indigo-500" />
+            <h2 className="text-sm font-semibold text-gray-900">URL do Webhook Vapi</h2>
+          </div>
+          <div className="card-body space-y-3">
+            <p className="text-sm text-gray-500">
+              Configure esta URL no painel do Vapi em{" "}
+              <span className="font-medium text-gray-700">Settings → Webhooks</span>:
+            </p>
+            <div className="copy-field">
+              <span className="flex-1 break-all select-all text-sm">{webhookUrl}</span>
+              <button
+                onClick={handleCopy}
+                className="shrink-0 p-1.5 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-gray-500" />}
+              </button>
+            </div>
             <div className="alert-info text-sm">
               <Info className="w-4 h-4 shrink-0 mt-0.5 text-indigo-600" />
               <span>
-                Cada conta Vapi tem um número máximo de chamadas simultâneas (slots de concorrência da org).
-                O worker distribui esses slots proporcionalmente entre todas as campanhas ativas deste tenant.
-                Verifique seu limite em: <span className="font-medium">Vapi Dashboard → Billing / Plan</span>.
+                Cada tenant tem sua própria URL de webhook. Não compartilhe entre tenants.
               </span>
-            </div>
-            <div className="flex items-end gap-4">
-              <div className="flex-1">
-                <label className="form-label">Slots simultâneos da org Vapi</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  min={1}
-                  max={100}
-                  value={concurrencyLimit}
-                  onChange={(e) => setConcurrencyLimit(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
-                />
-                <p className="text-xs text-gray-400 mt-1.5">
-                  Dividido igualmente entre campanhas ativas. Ex: 10 slots ÷ 3 campanhas = 3 + 3 + 4.
-                </p>
-              </div>
-              <button
-                onClick={handleSaveConcurrency}
-                disabled={savingConcurrency}
-                className="btn-primary shrink-0"
-              >
-                {savingConcurrency ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Salvar
-              </button>
             </div>
           </div>
         </div>
-      )}
 
-      {/* Section 2: Assistentes configurados */}
+      </div>{/* end grid */}
+
+      {/* Section 2: Assistentes configurados — full width */}
       {connection && (
         <div className="card mb-5">
           <div className="card-header flex items-center justify-between">
@@ -657,35 +778,6 @@ export default function VapiConnectionClient() {
           </div>
         </div>
       )}
-
-      {/* Webhook URL */}
-      <div className="card mb-5">
-        <div className="card-header flex items-center gap-2">
-          <Link className="w-4 h-4 text-indigo-500" />
-          <h2 className="text-sm font-semibold text-gray-900">URL do Webhook Vapi</h2>
-        </div>
-        <div className="card-body space-y-3">
-          <p className="text-sm text-gray-500">
-            Configure esta URL no painel do Vapi em{" "}
-            <span className="font-medium text-gray-700">Settings - Webhooks</span>:
-          </p>
-          <div className="copy-field">
-            <span className="flex-1 break-all select-all">{webhookUrl}</span>
-            <button
-              onClick={handleCopy}
-              className="shrink-0 p-1.5 rounded-md hover:bg-gray-200 transition-colors"
-            >
-              {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-gray-500" />}
-            </button>
-          </div>
-          <div className="alert-info text-sm">
-            <Info className="w-4 h-4 shrink-0 mt-0.5 text-indigo-600" />
-            <span>
-              Cada tenant tem sua propria URL de webhook. Nao compartilhe entre tenants.
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* Toasts */}
       <div className="toast-container">
