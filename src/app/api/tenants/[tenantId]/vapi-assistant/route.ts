@@ -123,11 +123,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     console.log(`[update-webhook] tenant=${tenantId} assistantId=${assistantId} serverUrl=${serverUrl}`);
 
-    // Vapi API usa objeto "server" aninhado — NÃO aceita serverUrl/serverMessages flat
+    // Vapi API: campo "server" só aceita "url" — "messages" não é suportado no PATCH do assistente
     const patchBody = {
       server: {
         url: serverUrl,
-        messages: ["end-of-call-report", "status-update", "tool-calls", "transcript"],
       },
     };
     console.log(`[update-webhook] PATCH payload:`, JSON.stringify(patchBody));
