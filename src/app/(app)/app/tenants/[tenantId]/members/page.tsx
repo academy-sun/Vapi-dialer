@@ -109,6 +109,10 @@ export default function MembersPage() {
     loadMembers();
   }
 
+  // Role do usuário logado neste tenant
+  const currentMember = members.find(m => m.user_id === currentUserId);
+  const canManage = !loading && (currentMember?.role === "owner" || currentMember?.role === "admin");
+
   return (
     <div>
       <div className="page-header">
@@ -116,14 +120,16 @@ export default function MembersPage() {
           <h1 className="page-title">Membros</h1>
           <p className="page-subtitle">Gerencie quem tem acesso a este tenant</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="btn-primary">
-          <UserPlus className="w-4 h-4" />
-          Criar acesso
-        </button>
+        {canManage && (
+          <button onClick={() => setShowForm(!showForm)} className="btn-primary">
+            <UserPlus className="w-4 h-4" />
+            Criar acesso
+          </button>
+        )}
       </div>
 
-      {/* Formulário de criação */}
-      {showForm && (
+      {/* Formulário de criação — só para owner/admin */}
+      {canManage && showForm && (
         <div className="card mb-6">
           <div className="card-header flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-900">Novo acesso</h2>
@@ -225,9 +231,9 @@ export default function MembersPage() {
                 <tr key={m.id}>
                   <td className="font-medium text-gray-900">{m.email}</td>
 
-                  {/* Célula de role — clicável para editar (exceto owner) */}
+                  {/* Célula de role — clicável para editar apenas se owner/admin */}
                   <td>
-                    {editingMemberId === m.id ? (
+                    {canManage && editingMemberId === m.id ? (
                       <div className="flex items-center gap-2">
                         <select
                           className="select-native text-xs py-1"
@@ -254,13 +260,13 @@ export default function MembersPage() {
                     ) : (
                       <button
                         onClick={() => {
-                          if (m.role !== "owner") {
+                          if (canManage && m.role !== "owner") {
                             setEditingMemberId(m.id);
                             setEditingRole(m.role);
                           }
                         }}
-                        title={m.role !== "owner" ? "Clique para editar" : ""}
-                        style={{ cursor: m.role !== "owner" ? "pointer" : "default", background: "none", border: "none", padding: 0 }}
+                        title={canManage && m.role !== "owner" ? "Clique para editar" : ""}
+                        style={{ cursor: canManage && m.role !== "owner" ? "pointer" : "default", background: "none", border: "none", padding: 0 }}
                       >
                         {m.role === "owner" && <span className="badge badge-purple"><Shield className="w-3 h-3 inline mr-1" />Owner</span>}
                         {m.role === "admin" && <span className="badge badge-indigo"><Shield className="w-3 h-3 inline mr-1" />Admin</span>}
@@ -273,9 +279,9 @@ export default function MembersPage() {
                     {new Date(m.created_at).toLocaleDateString("pt-BR")}
                   </td>
 
-                  {/* Botão de excluir — esconder para si mesmo e para owner */}
+                  {/* Botão de excluir — só para owner/admin, e não para si mesmo nem para owner */}
                   <td>
-                    {m.user_id !== currentUserId && m.role !== "owner" && (
+                    {canManage && m.user_id !== currentUserId && m.role !== "owner" && (
                       <button
                         onClick={() => handleRemove(m)}
                         className="btn-icon text-gray-400 hover:text-red-500"

@@ -46,7 +46,7 @@ export default function LoginPage() {
           </span>
         </div>
         <p style={{ fontSize: "11px", color: "#555555", letterSpacing: "2px", marginTop: "4px" }}>
-          POWERED BY AI
+          by MX3
         </p>
       </div>
 

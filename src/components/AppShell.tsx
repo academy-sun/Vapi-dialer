@@ -232,7 +232,7 @@ export default function AppShell({
             letterSpacing: "1.5px",
             marginTop: "2px",
           }}>
-            POWERED BY AI
+            by MX3
           </div>
         </div>
 
@@ -299,7 +299,7 @@ export default function AppShell({
                 ))}
 
                 <div style={{ borderTop: "1px solid #222222" }}>
-                  {!showCreateTenant ? (
+                  {isAdmin && !showCreateTenant ? (
                     <button
                       onClick={() => setShowCreateTenant(true)}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors"
@@ -316,7 +316,7 @@ export default function AppShell({
                       <Plus className="w-3.5 h-3.5" />
                       Criar nova organização
                     </button>
-                  ) : (
+                  ) : isAdmin && showCreateTenant ? (
                     <div className="p-2 space-y-2">
                       <input
                         type="text"
@@ -356,7 +356,7 @@ export default function AppShell({
                         </button>
                       </div>
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
             )}
