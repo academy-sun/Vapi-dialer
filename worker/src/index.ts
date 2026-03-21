@@ -30,6 +30,8 @@ const VAPI_TIMEOUT_MS     = Number(process.env.VAPI_TIMEOUT_MS    ?? 15_000);
 const VAPI_BASE_URL       = process.env.VAPI_BASE_URL ?? "https://api.vapi.ai";
 // Delay entre cada disparo de chamada dentro de um ciclo (evita 503/408 do provedor SIP)
 const DISPATCH_DELAY_MS   = Number(process.env.DISPATCH_DELAY_MS  ?? 3_000);
+// Bypass de horário para testes — NUNCA ativar em produção
+const BYPASS_TIME_WINDOW  = process.env.BYPASS_TIME_WINDOW === "true";
 // URL base do app (ex: https://meuapp.vercel.app) — usado para construir o serverUrl do Vapi
 // Sem isso, o Vapi usa a URL global do painel, que pode estar errada
 const APP_BASE_URL        = (process.env.APP_BASE_URL || process.env.NEXTAUTH_URL || "").replace(/\/$/, "");
@@ -171,6 +173,9 @@ function isWithinTimeWindow(
   allowedDays: number[] | null | undefined,
   window: TimeWindow | null | undefined
 ): boolean {
+  // Modo de teste: ignora janela de horário
+  if (BYPASS_TIME_WINDOW) return true;
+
   // Se não configurado (lista vazia ou null) → sem restrição → sempre permitido
   if (!allowedDays || allowedDays.length === 0) return true;
   if (!window?.start || !window?.end || !window?.timezone)   return true;
