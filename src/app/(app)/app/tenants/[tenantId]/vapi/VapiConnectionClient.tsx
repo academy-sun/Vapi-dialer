@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import {
   Key, Lock, Eye, EyeOff, Copy, Check, AlertTriangle, CheckCircle2,
   Loader2, Link, Info, Bot, ChevronDown, ChevronUp, Save, RotateCcw,
-  Sparkles, Zap,
+  Sparkles, Zap, Trash2, Plus, Pencil,
 } from "lucide-react";
 
 interface Connection {
@@ -12,16 +12,22 @@ interface Connection {
   label: string;
   is_active: boolean;
   created_at: string;
-  assistant_id: string | null;
-  success_field: string | null;
-  success_value: string | null;
   concurrency_limit: number | null;
 }
 
 interface Assistant { id: string; name: string }
 interface StructuredOutput { id: string; fields: string[] }
 
+// Config por assistente (nova tabela assistant_configs)
 interface AssistantConfig {
+  assistant_id:  string;
+  name:          string | null;
+  success_field: string | null;
+  success_value: string | null;
+}
+
+// Config do assistente para edição no Vapi
+interface AssistantEditorConfig {
   id: string;
   name: string;
   firstMessage: string;
@@ -59,19 +65,23 @@ export default function VapiConnectionClient() {
   const [concurrencyLimit, setConcurrencyLimit] = useState<number>(10);
   const [savingConcurrency, setSavingConcurrency] = useState(false);
 
-  // ── Section 2: Assistant Config ──
+  // ── Section 2: Assistentes configurados (assistant_configs) ──
   const [assistants, setAssistants] = useState<Assistant[]>([]);
-  const [selectedAssistantId, setSelectedAssistantId] = useState<string>("");
-  const [structuredOutputs, setStructuredOutputs] = useState<StructuredOutput[]>([]);
-  const [allFields, setAllFields] = useState<string[]>([]);
-  const [successField, setSuccessField] = useState<string>("");
-  const [successValue, setSuccessValue] = useState<string>("sim");
-  const [loadingStructured, setLoadingStructured] = useState(false);
-  const [savingConfig, setSavingConfig] = useState(false);
+  const [assistantConfigs, setAssistantConfigs] = useState<AssistantConfig[]>([]);
+  const [loadingAssistants, setLoadingAssistants] = useState(false);
 
-  // ── Section 3: Assistant Editor ──
+  // Edição de um assistente (inline form)
+  const [editingAssistantId, setEditingAssistantId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{ name: string; successField: string; successValue: string; fields: string[] }>({
+    name: "", successField: "", successValue: "sim", fields: [],
+  });
+  const [loadingFields, setLoadingFields] = useState(false);
+  const [savingAssistantConfig, setSavingAssistantConfig] = useState(false);
+
+  // ── Section 3: Assistant Editor (prompt/voice no Vapi) ──
   const [editorOpen, setEditorOpen] = useState(false);
-  const [assistantConfig, setAssistantConfig] = useState<AssistantConfig | null>(null);
+  const [editorAssistantId, setEditorAssistantId] = useState<string>("");
+  const [assistantEditorConfig, setAssistantEditorConfig] = useState<AssistantEditorConfig | null>(null);
   const [editName, setEditName] = useState("");
   const [editFirstMessage, setEditFirstMessage] = useState("");
   const [editSystemPrompt, setEditSystemPrompt] = useState("");
@@ -88,48 +98,91 @@ export default function VapiConnectionClient() {
     const data = await res.json();
     const conn = data.connection as Connection | null;
     setConnection(conn);
-    if (conn?.assistant_id) setSelectedAssistantId(conn.assistant_id);
-    if (conn?.success_field) setSuccessField(conn.success_field);
-    if (conn?.success_value) setSuccessValue(conn.success_value ?? "sim");
     if (conn?.concurrency_limit != null) setConcurrencyLimit(conn.concurrency_limit);
     setFetchingConn(false);
 
     if (conn) {
       loadAssistants();
+      loadAssistantConfigs();
     }
   }
 
   async function loadAssistants() {
+    setLoadingAssistants(true);
     const res = await fetch(`/api/tenants/${tenantId}/vapi-resources`);
     const data = await res.json();
     setAssistants(data.assistants ?? []);
+    setLoadingAssistants(false);
   }
 
-  // When selectedAssistantId changes, fetch structured outputs
-  useEffect(() => {
-    if (!selectedAssistantId || !connection) return;
-    loadStructuredOutputs(selectedAssistantId);
-  }, [selectedAssistantId, connection]);
+  async function loadAssistantConfigs() {
+    const res = await fetch(`/api/tenants/${tenantId}/assistant-configs`);
+    const data = await res.json();
+    setAssistantConfigs(data.configs ?? []);
+  }
 
-  async function loadStructuredOutputs(assistantId: string) {
-    setLoadingStructured(true);
-    setAllFields([]);
-    setStructuredOutputs([]);
+  async function startEditAssistant(assistantId: string) {
+    const existing = assistantConfigs.find((c) => c.assistant_id === assistantId);
+    setEditForm({
+      name:         existing?.name ?? (assistants.find((a) => a.id === assistantId)?.name ?? ""),
+      successField: existing?.success_field ?? "",
+      successValue: existing?.success_value ?? "sim",
+      fields:       [],
+    });
+    setEditingAssistantId(assistantId);
+    // Buscar structured output fields desse assistente
+    setLoadingFields(true);
     try {
       const res = await fetch(`/api/tenants/${tenantId}/vapi-assistant?assistantId=${assistantId}`);
-      const data = await res.json();
-      setStructuredOutputs(data.structuredOutputs ?? []);
-      setAllFields(data.allFields ?? []);
-      // Load assistant config for editor
-      if (data.assistant) {
-        const a = data.assistant as AssistantConfig;
-        setAssistantConfig(a);
-        setEditName((a.name as string) ?? "");
-        setEditFirstMessage((a.firstMessage as string) ?? "");
-        setEditSystemPrompt((a.systemPrompt as string) ?? "");
+      const d = await res.json();
+      setEditForm((prev) => ({ ...prev, fields: d.allFields ?? [] }));
+      // Se é o primeiro load do editor de prompt, pré-carrega também
+      if (d.assistant) {
+        const a = d.assistant as AssistantEditorConfig;
+        setAssistantEditorConfig(a);
+        setEditorAssistantId(assistantId);
+        setEditName(a.name ?? "");
+        setEditFirstMessage(a.firstMessage ?? "");
+        setEditSystemPrompt(a.systemPrompt ?? "");
       }
     } finally {
-      setLoadingStructured(false);
+      setLoadingFields(false);
+    }
+  }
+
+  async function handleSaveAssistantConfig() {
+    if (!editingAssistantId) return;
+    setSavingAssistantConfig(true);
+    const res = await fetch(`/api/tenants/${tenantId}/assistant-configs`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        assistantId:  editingAssistantId,
+        name:         editForm.name || null,
+        successField: editForm.successField || null,
+        successValue: editForm.successValue || null,
+      }),
+    });
+    if (res.ok) {
+      showToast("Configuração do assistente salva!");
+      setEditingAssistantId(null);
+      loadAssistantConfigs();
+    } else {
+      const d = await res.json();
+      showToast(d.error ?? "Erro ao salvar", "error");
+    }
+    setSavingAssistantConfig(false);
+  }
+
+  async function handleDeleteAssistantConfig(assistantId: string) {
+    const res = await fetch(`/api/tenants/${tenantId}/assistant-configs?assistantId=${assistantId}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      showToast("Configuração removida");
+      loadAssistantConfigs();
+    } else {
+      showToast("Erro ao remover", "error");
     }
   }
 
@@ -170,37 +223,15 @@ export default function VapiConnectionClient() {
     setSavingConcurrency(false);
   }
 
-  async function handleSaveConfig() {
-    if (!successField) { showToast("Selecione o campo de sucesso", "error"); return; }
-    setSavingConfig(true);
-    const res = await fetch(`/api/tenants/${tenantId}/vapi-connection`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        assistantId: selectedAssistantId || null,
-        successField: successField || null,
-        successValue: successValue || "sim",
-      }),
-    });
-    if (res.ok) {
-      showToast("Configuracao salva!");
-      loadConnection();
-    } else {
-      const d = await res.json();
-      showToast(d.error ?? "Erro ao salvar", "error");
-    }
-    setSavingConfig(false);
-  }
-
   async function handleSaveAssistant() {
-    if (!selectedAssistantId) return;
+    if (!editorAssistantId) return;
     setSavingAssistant(true);
     const res = await fetch(`/api/tenants/${tenantId}/vapi-assistant`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        assistantId: selectedAssistantId,
-        name: editName,
+        assistantId:  editorAssistantId,
+        name:         editName,
         firstMessage: editFirstMessage,
         systemPrompt: editSystemPrompt,
       }),
@@ -367,110 +398,195 @@ export default function VapiConnectionClient() {
         </div>
       )}
 
-      {/* Section 2: Assistente + Campo de Sucesso (only when connected) */}
+      {/* Section 2: Assistentes configurados */}
       {connection && (
         <div className="card mb-5">
-          <div className="card-header">
+          <div className="card-header flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-indigo-500" />
-              Configuracao do Assistente
+              Assistentes configurados
             </h2>
+            {loadingAssistants && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
           </div>
-          <div className="card-body space-y-5">
-            {/* Assistant selector */}
-            <div>
-              <label className="form-label">Assistente principal</label>
-              <select
-                className="form-input"
-                value={selectedAssistantId}
-                onChange={(e) => setSelectedAssistantId(e.target.value)}
-              >
-                <option value="">Selecione um assistente...</option>
-                {assistants.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-400 mt-1.5">
-                O assistente Vapi usado nas campanhas deste tenant.
-              </p>
-            </div>
+          <div className="card-body space-y-4">
+            <p className="text-xs text-gray-500">
+              Configure o critério de sucesso para cada assistente da conta Vapi.
+              O sistema usa esse critério para calcular a taxa de conversão nos relatórios.
+            </p>
 
-            {/* Structured outputs field selector */}
-            {selectedAssistantId && (
-              <>
-                {loadingStructured ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-400">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Carregando campos do assistente...
-                  </div>
-                ) : allFields.length > 0 ? (
-                  <>
-                    <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-100">
-                      <p className="text-xs font-medium text-indigo-700 mb-1">
-                        Campos disponíveis no Structured Output:
-                      </p>
-                      <p className="text-xs text-indigo-600 font-mono">
-                        {allFields.join(", ")}
-                      </p>
-                    </div>
+            {/* Lista de assistentes da conta Vapi */}
+            {assistants.length === 0 && !loadingAssistants ? (
+              <p className="text-sm text-gray-400">Nenhum assistente encontrado na conta Vapi.</p>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {assistants.map((assistant) => {
+                  const cfg = assistantConfigs.find((c) => c.assistant_id === assistant.id);
+                  const isEditing = editingAssistantId === assistant.id;
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="form-label">Campo de conversao</label>
-                        <select
-                          className="form-input"
-                          value={successField}
-                          onChange={(e) => setSuccessField(e.target.value)}
-                        >
-                          <option value="">Selecione o campo...</option>
-                          {allFields.map((f) => (
-                            <option key={f} value={f}>{f}</option>
-                          ))}
-                        </select>
-                        <p className="text-xs text-gray-400 mt-1">
-                          Qual campo indica sucesso?
-                        </p>
+                  return (
+                    <div key={assistant.id} className="py-3">
+                      {/* Row header */}
+                      <div className="flex items-center justify-between mb-1">
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">
+                            {cfg?.name ?? assistant.name}
+                          </p>
+                          <p className="text-xs text-gray-400 font-mono">{assistant.id}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {cfg?.success_field ? (
+                            <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">
+                              {cfg.success_field} = {cfg.success_value}
+                            </span>
+                          ) : (
+                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                              Sem critério configurado
+                            </span>
+                          )}
+                          <button
+                            onClick={() => isEditing ? setEditingAssistantId(null) : startEditAssistant(assistant.id)}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                            title="Editar configuração"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          {cfg && (
+                            <button
+                              onClick={() => handleDeleteAssistantConfig(assistant.id)}
+                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              title="Remover configuração"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="form-label">Valor de sucesso</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={successValue}
-                          onChange={(e) => setSuccessValue(e.target.value)}
-                          placeholder="sim, yes, true, 1..."
-                        />
-                        <p className="text-xs text-gray-400 mt-1">
-                          Qual valor desse campo = convertido?
-                        </p>
-                      </div>
+                      {/* Inline edit form */}
+                      {isEditing && (
+                        <div className="mt-3 p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
+                          {/* Nome legível */}
+                          <div>
+                            <label className="form-label">Nome legível (opcional)</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              value={editForm.name}
+                              onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                              placeholder={assistant.name}
+                            />
+                            <p className="text-xs text-gray-400 mt-1">Ex: "Agente Imobiliária", "Agente Cobrança"</p>
+                          </div>
+
+                          {/* Structured output fields */}
+                          {loadingFields ? (
+                            <div className="flex items-center gap-2 text-sm text-gray-400">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Carregando campos do assistente...
+                            </div>
+                          ) : editForm.fields.length > 0 ? (
+                            <>
+                              <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-100">
+                                <p className="text-xs font-medium text-indigo-700 mb-1">
+                                  Campos disponíveis no Structured Output:
+                                </p>
+                                <p className="text-xs text-indigo-600 font-mono">
+                                  {editForm.fields.join(", ")}
+                                </p>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="form-label">Campo de conversão</label>
+                                  <select
+                                    className="form-input"
+                                    value={editForm.successField}
+                                    onChange={(e) => setEditForm((p) => ({ ...p, successField: e.target.value }))}
+                                  >
+                                    <option value="">Selecione o campo...</option>
+                                    {editForm.fields.map((f) => (
+                                      <option key={f} value={f}>{f}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="form-label">Valor de sucesso</label>
+                                  <input
+                                    type="text"
+                                    className="form-input"
+                                    value={editForm.successValue}
+                                    onChange={(e) => setEditForm((p) => ({ ...p, successValue: e.target.value }))}
+                                    placeholder="sim, yes, true..."
+                                  />
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="form-label">Campo de conversão</label>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  value={editForm.successField}
+                                  onChange={(e) => setEditForm((p) => ({ ...p, successField: e.target.value }))}
+                                  placeholder="ex: QuerReuniao"
+                                />
+                                <p className="text-xs text-gray-400 mt-1">Assistente sem Structured Outputs — digite manualmente</p>
+                              </div>
+                              <div>
+                                <label className="form-label">Valor de sucesso</label>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  value={editForm.successValue}
+                                  onChange={(e) => setEditForm((p) => ({ ...p, successValue: e.target.value }))}
+                                  placeholder="sim"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setEditingAssistantId(null)}
+                              className="btn-ghost text-sm"
+                            >
+                              Cancelar
+                            </button>
+                            <div className="flex gap-2">
+                              {/* Botão para abrir editor de prompt */}
+                              <button
+                                type="button"
+                                onClick={() => { setEditorAssistantId(assistant.id); setEditorOpen(true); }}
+                                className="btn-secondary text-sm flex items-center gap-1.5"
+                              >
+                                <Bot className="w-3.5 h-3.5" />
+                                Editar prompt
+                              </button>
+                              <button
+                                onClick={handleSaveAssistantConfig}
+                                disabled={savingAssistantConfig}
+                                className="btn-primary"
+                              >
+                                {savingAssistantConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                Salvar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </>
-                ) : (
-                  <div className="text-sm text-gray-400">
-                    Este assistente nao tem Structured Outputs configurados.
-                  </div>
-                )}
-              </>
+                  );
+                })}
+              </div>
             )}
-
-            <div className="flex justify-end pt-1">
-              <button
-                onClick={handleSaveConfig}
-                disabled={savingConfig || !selectedAssistantId}
-                className="btn-primary"
-              >
-                {savingConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                Salvar configuracao
-              </button>
-            </div>
           </div>
         </div>
       )}
 
-      {/* Section 3: Assistant Editor (only when assistant selected and config loaded) */}
-      {connection && selectedAssistantId && assistantConfig && (
+      {/* Section 3: Assistant Editor (prompt/voice no Vapi) */}
+      {connection && editorAssistantId && assistantEditorConfig && editorOpen && (
         <div className="card mb-5">
           <button
             className="card-header w-full flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
@@ -483,64 +599,62 @@ export default function VapiConnectionClient() {
             {editorOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
           </button>
 
-          {editorOpen && (
-            <div className="card-body space-y-5">
-              <div>
-                <label className="form-label">Nome do assistente</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Nome do assistente"
-                />
-              </div>
-
-              <div>
-                <label className="form-label">Primeira mensagem</label>
-                <textarea
-                  className="form-input min-h-[80px] resize-y"
-                  value={editFirstMessage}
-                  onChange={(e) => setEditFirstMessage(e.target.value)}
-                  placeholder="Ola! Sou a IA da empresa X..."
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Primeira coisa que o assistente diz quando a chamada e atendida.
-                </p>
-              </div>
-
-              <div>
-                <label className="form-label">Prompt do sistema</label>
-                <textarea
-                  className="form-input min-h-[200px] resize-y font-mono text-sm"
-                  value={editSystemPrompt}
-                  onChange={(e) => setEditSystemPrompt(e.target.value)}
-                  placeholder="Voce e um assistente de vendas..."
-                />
-                <p className="text-xs text-gray-400 mt-1">
-                  Instrucoes completas de comportamento do assistente.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-between pt-1">
-                <p className="text-xs text-gray-400 flex items-center gap-1">
-                  <RotateCcw className="w-3 h-3" />
-                  Snapshot automatico antes de salvar
-                </p>
-                <button
-                  onClick={handleSaveAssistant}
-                  disabled={savingAssistant}
-                  className="btn-primary"
-                >
-                  {savingAssistant ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" />Salvando no Vapi...</>
-                  ) : (
-                    <><Save className="w-4 h-4" />Salvar no Vapi</>
-                  )}
-                </button>
-              </div>
+          <div className="card-body space-y-5">
+            <div>
+              <label className="form-label">Nome do assistente</label>
+              <input
+                type="text"
+                className="form-input"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Nome do assistente"
+              />
             </div>
-          )}
+
+            <div>
+              <label className="form-label">Primeira mensagem</label>
+              <textarea
+                className="form-input min-h-[80px] resize-y"
+                value={editFirstMessage}
+                onChange={(e) => setEditFirstMessage(e.target.value)}
+                placeholder="Ola! Sou a IA da empresa X..."
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Primeira coisa que o assistente diz quando a chamada e atendida.
+              </p>
+            </div>
+
+            <div>
+              <label className="form-label">Prompt do sistema</label>
+              <textarea
+                className="form-input min-h-[200px] resize-y font-mono text-sm"
+                value={editSystemPrompt}
+                onChange={(e) => setEditSystemPrompt(e.target.value)}
+                placeholder="Voce e um assistente de vendas..."
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Instrucoes completas de comportamento do assistente.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-xs text-gray-400 flex items-center gap-1">
+                <RotateCcw className="w-3 h-3" />
+                Snapshot automatico antes de salvar
+              </p>
+              <button
+                onClick={handleSaveAssistant}
+                disabled={savingAssistant}
+                className="btn-primary"
+              >
+                {savingAssistant ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Salvando no Vapi...</>
+                ) : (
+                  <><Save className="w-4 h-4" />Salvar no Vapi</>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

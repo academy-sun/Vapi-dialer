@@ -165,7 +165,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const service = createServiceClient();
 
-  // Fetch tenant vapi_connection config for success field/value
+  // Fetch tenant vapi_connection config (fallback — deprecated em favor de assistant_configs)
   const { data: vapiConn } = await service
     .from("vapi_connections")
     .select("success_field, success_value")
@@ -176,6 +176,25 @@ export async function GET(req: NextRequest, { params }: Params) {
   const configuredSuccessField = vapiConn?.success_field ?? null;
   const configuredSuccessValue = vapiConn?.success_value ?? null;
 
+  // Fetch per-assistant configs (nova tabela) — sobrescreve o fallback tenant-level
+  const { data: assistantConfigsRaw } = await service
+    .from("assistant_configs")
+    .select("assistant_id, name, success_field, success_value")
+    .eq("tenant_id", tenantId);
+
+  const assistantConfigMap = new Map<string, {
+    name:          string | null;
+    success_field: string | null;
+    success_value: string | null;
+  }>();
+  for (const ac of (assistantConfigsRaw ?? [])) {
+    assistantConfigMap.set(ac.assistant_id, {
+      name:          ac.name,
+      success_field: ac.success_field,
+      success_value: ac.success_value,
+    });
+  }
+
   // ── 1. Campanhas disponíveis (dropdown de filtro) ──
   const { data: campaignsRaw } = await service
     .from("dial_queues")
@@ -183,14 +202,27 @@ export async function GET(req: NextRequest, { params }: Params) {
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false });
 
-  // Build assistants list from distinct assistant_ids in queues
+  // Mapa queueId → assistantId para lookup no cálculo de conversão
+  const queueAssistantMap = new Map<string, string>();
+  for (const q of (campaignsRaw ?? [])) {
+    if (q.assistant_id) queueAssistantMap.set(q.id, q.assistant_id);
+  }
+
+  // Build assistants list com nomes de assistant_configs (se disponível)
   const assistantsMap = new Map<string, string>();
   for (const q of (campaignsRaw ?? [])) {
     if (q.assistant_id && !assistantsMap.has(q.assistant_id)) {
-      assistantsMap.set(q.assistant_id, q.assistant_id);
+      const cfg = assistantConfigMap.get(q.assistant_id);
+      assistantsMap.set(q.assistant_id, cfg?.name ?? q.assistant_id);
     }
   }
-  const assistantsList = Array.from(assistantsMap.entries()).map(([id]) => ({ id, name: id }));
+  const assistantsList = Array.from(assistantsMap.entries()).map(([id, name]) => ({ id, name }));
+
+  // Configuração de sucesso para o contexto atual do filtro
+  // Se filtrando por assistente específico: usa config daquele assistente (com fallback tenant)
+  const filterAssistantCfg = assistantId ? (assistantConfigMap.get(assistantId) ?? null) : null;
+  const contextSuccessField = filterAssistantCfg?.success_field ?? configuredSuccessField;
+  const contextSuccessValue = filterAssistantCfg?.success_value ?? configuredSuccessValue;
 
   const campaigns = (campaignsRaw ?? []).map((q) => ({ id: q.id, name: q.name, assistantId: q.assistant_id }));
 
@@ -230,8 +262,8 @@ export async function GET(req: NextRequest, { params }: Params) {
         structuredSuccessCalls: 0,
         structuredOutputsConfigured: false,
         costPerConversion: null,
-        successField: configuredSuccessField,
-        successValue: configuredSuccessValue,
+        successField: contextSuccessField,
+        successValue: contextSuccessValue,
         engagement: { under10s: 0, tenTo60s: 0, over60s: 0 },
         engagementRate: 0,
         byHour: {},
@@ -294,13 +326,25 @@ export async function GET(req: NextRequest, { params }: Params) {
   // Structured outputs
   const structuredWithOutput = calls.filter((c) => c.structured_outputs != null).length;
 
-  const structuredSuccessCalls = configuredSuccessField
-    ? calls.filter((c) =>
-        isConversionConfigured(c.structured_outputs, configuredSuccessField, configuredSuccessValue ?? "true")
-      ).length
-    : calls.filter((c) => isConversion(c.structured_outputs)).length;
+  // Cálculo de conversão por chamada, usando a config do assistente correto:
+  //   1. Busca assistantId da chamada via queueAssistantMap
+  //   2. Busca config em assistant_configs para aquele assistantId
+  //   3. Fallback para vapi_connections (tenant-level) se não houver config por assistente
+  //   4. Fallback para heurística se nem tenant-level estiver configurado
+  const structuredSuccessCalls = calls.filter((c) => {
+    const callAssistantId = c.dial_queue_id ? queueAssistantMap.get(c.dial_queue_id) : undefined;
+    const assistantCfg    = callAssistantId ? (assistantConfigMap.get(callAssistantId) ?? null) : null;
+    const sfField = assistantCfg?.success_field ?? configuredSuccessField;
+    const sfValue = assistantCfg?.success_value ?? configuredSuccessValue;
+    if (sfField) {
+      return isConversionConfigured(c.structured_outputs, sfField, sfValue ?? "true");
+    }
+    return isConversion(c.structured_outputs);
+  }).length;
 
-  const structuredOutputsConfigured = structuredWithOutput > 0 && configuredSuccessField != null;
+  // Configurado = tem structured outputs E ao menos uma config (por assistente ou tenant)
+  const hasAnyConfig = assistantConfigsRaw != null && assistantConfigsRaw.length > 0;
+  const structuredOutputsConfigured = structuredWithOutput > 0 && (configuredSuccessField != null || hasAnyConfig);
 
   // ROI: null se não configurado OU 0 conversões (evita mostrar valor quebrado)
   const costPerConversion: number | null =
@@ -392,8 +436,8 @@ export async function GET(req: NextRequest, { params }: Params) {
     structuredOutputsConfigured,
     costPerConversion,
 
-    successField: configuredSuccessField,
-    successValue: configuredSuccessValue,
+    successField: contextSuccessField,
+    successValue: contextSuccessValue,
 
     engagement,
     engagementRate,
