@@ -252,6 +252,28 @@ async function initiateVapiCall(
   variableValues.phone      = phoneE164;
   variableValues.phone_e164 = phoneE164;
 
+  // Aliases bidirecionais entre nomes canônicos e nomes originais de colunas.
+  // Garante que {{first_name}} funcione se o CSV tinha coluna "nome" (e vice-versa),
+  // e que {{empresa}} funcione se o CSV tinha coluna "company".
+  const FIELD_ALIASES: Array<[string, string[]]> = [
+    ["first_name", ["name", "nome", "primeiro_nome"]],
+    ["name",       ["first_name", "nome"]],
+    ["empresa",    ["company", "companhia"]],
+    ["company",    ["empresa", "companhia"]],
+    ["last_name",  ["sobrenome", "ultimo_nome"]],
+    ["sobrenome",  ["last_name"]],
+  ];
+  for (const [target, sources] of FIELD_ALIASES) {
+    if (!variableValues[target]) {
+      for (const src of sources) {
+        if (variableValues[src]) {
+          variableValues[target] = variableValues[src];
+          break;
+        }
+      }
+    }
+  }
+
   // customer: apenas campos aceitos pelo Vapi (number, name, extension)
   const nameValue =
     customerData.name ??
