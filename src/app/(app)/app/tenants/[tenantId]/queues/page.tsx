@@ -38,6 +38,7 @@ interface Lead {
   id: string; phone_e164: string; status: string;
   attempt_count: number; data_json: Record<string, string>;
   last_outcome?: string; created_at: string;
+  next_attempt_at?: string;
 }
 interface ToastMsg { id: string; message: string; type: "success" | "error" }
 
@@ -1169,6 +1170,8 @@ function LeadsTab({
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Nome</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>
                 <th className="text-center px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Tent.</th>
+                <th className="text-center px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Atendido?</th>
+                <th className="text-left px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Próx. tentativa</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -1186,6 +1189,23 @@ function LeadsTab({
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-gray-500 text-center font-mono text-xs">{lead.attempt_count}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      {(lead.status === "completed" || lead.status === "callbackScheduled") ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />
+                      ) : (
+                        <span className="text-gray-200">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-gray-500">
+                      {lead.next_attempt_at ? (
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-indigo-400 shrink-0" />
+                          {new Date(lead.next_attempt_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      ) : (
+                        <span className="text-gray-200">—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -1550,6 +1570,30 @@ export default function CampaignsPage() {
                     </div>
                   )}
 
+                  {/* Lista esgotada banner */}
+                  {prog && prog.total > 0 && prog.pending === 0 && prog.calling === 0 && (q.status === "running" || q.status === "paused") && (
+                    <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-amber-800">Todos os leads já foram contatados</p>
+                          <p className="text-xs text-amber-600">Adicione mais leads para continuar ou encerre a campanha.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={() => { setExpandedId(q.id); setActiveTab((p) => ({ ...p, [q.id]: "leads" })); }}
+                          className="btn btn-sm bg-amber-100 text-amber-800 hover:bg-amber-200">
+                          <UserPlus className="w-3.5 h-3.5" /> Adicionar leads
+                        </button>
+                        <button onClick={() => queueAction(q.id, "stop")}
+                          className="btn btn-sm bg-red-100 text-red-700 hover:bg-red-200">
+                          <Square className="w-3.5 h-3.5" /> Encerrar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Actions */}
                   <div className="flex gap-2 flex-wrap">
                     {q.status === "draft" && (
@@ -1628,6 +1672,26 @@ export default function CampaignsPage() {
                     {/* Tab: Visão Geral */}
                     {tab === "overview" && (
                       <div className="p-5 space-y-4">
+                        {/* Summary stats */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                            <p className="text-xs text-gray-400 mb-1">Status</p>
+                            <span className={statusCfg.badge}>{statusCfg.label}</span>
+                          </div>
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                            <p className="text-xs text-gray-400 mb-1">Sucessos</p>
+                            <p className="text-xl font-bold text-emerald-600">{prog?.byStatus?.completed ?? 0}</p>
+                          </div>
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                            <p className="text-xs text-gray-400 mb-1">Falhas</p>
+                            <p className="text-xl font-bold text-red-500">{prog?.byStatus?.failed ?? 0}</p>
+                          </div>
+                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                            <p className="text-xs text-gray-400 mb-1">Falta ligar para</p>
+                            <p className="text-xl font-bold text-indigo-600">{prog?.pending ?? "—"}</p>
+                          </div>
+                        </div>
+
                         {/* Webhook */}
                         {q.webhook_url && (
                           <div className="space-y-1.5">
