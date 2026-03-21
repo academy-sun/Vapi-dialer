@@ -169,11 +169,6 @@ export default function AppShell({
           icon: ListOrdered,
         },
         {
-          label: "Chamadas",
-          href: `/app/tenants/${activeTenantId}/calls`,
-          icon: PhoneCall,
-        },
-        {
           label: "Membros",
           href: `/app/tenants/${activeTenantId}/members`,
           icon: UserCheck,

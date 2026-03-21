@@ -10,10 +10,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { response, membership } = await requireTenantAccess(tenantId);
   if (response) return response;
 
-  // Só owner e admin podem ver membros
-  if (!membership || !["owner", "admin"].includes(membership.role)) {
-    return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
-  }
+  // Membros podem visualizar a lista — só owner e admin podem criar/editar/remover
 
   const service = createServiceClient();
 
