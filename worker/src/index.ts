@@ -460,7 +460,7 @@ async function processLead(
 // Processar fila
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function processQueue(supabase: SupabaseClient, queue: DialQueue): Promise<void> {
+async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSlotBudget?: number): Promise<void> {
   // ── Verificar janela de horário ──
   // allowed_days vem como JSONB do Supabase; garantir array numérico antes de verificar
   const allowedDays = Array.isArray(queue.allowed_days) ? (queue.allowed_days as unknown as number[]) : [];
@@ -474,7 +474,12 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue): Promise
     .eq("lead_list_id", queue.lead_list_id)
     .eq("status",       "calling");
 
-  const slots = queue.concurrency - (activeCount ?? 0);
+  // Slots disponíveis desta fila (limite per-queue)
+  const perQueueAvailable = queue.concurrency - (activeCount ?? 0);
+  // Se tiver budget de tenant, respeita o menor dos dois limites
+  const slots = tenantSlotBudget !== undefined
+    ? Math.min(perQueueAvailable, tenantSlotBudget)
+    : perQueueAvailable;
   if (slots <= 0) return; // Concorrência máxima atingida
 
   const now = new Date().toISOString();
@@ -655,10 +660,76 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
 
   if (!queues || queues.length === 0) return;
 
+  // ── Distribuição proporcional de slots Vapi por tenant ──────────────────────
+  // Cada tenant tem um limite de concorrência no nível da org Vapi (ex: 10 slots).
+  // Quando há múltiplas campanhas ativas no mesmo tenant, dividimos os slots livres
+  // proporcionalmente entre elas — nenhuma campanha ultrapassa o teto da org.
+  const allQueues = queues as DialQueue[];
+
+  // Agrupar filas por tenant
+  const queuesByTenant = new Map<string, DialQueue[]>();
+  for (const queue of allQueues) {
+    if (!queuesByTenant.has(queue.tenant_id)) queuesByTenant.set(queue.tenant_id, []);
+    queuesByTenant.get(queue.tenant_id)!.push(queue);
+  }
+
+  // Calcular budget de slots para cada fila
+  const queueSlotBudgets = new Map<string, number>(); // queueId → slots disponíveis
+
+  await Promise.all(
+    Array.from(queuesByTenant.entries()).map(async ([tenantId, tenantQueues]) => {
+      // Buscar limite configurado da org Vapi
+      const { data: conn } = await supabase
+        .from("vapi_connections")
+        .select("concurrency_limit")
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
+        .single();
+
+      const tenantLimit: number = (conn as { concurrency_limit?: number } | null)?.concurrency_limit ?? 10;
+
+      // Contar chamadas ativas do tenant (todas as filas somadas)
+      const { count: tenantActiveCalls } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .eq("status", "calling");
+
+      const freeSlots = Math.max(0, tenantLimit - (tenantActiveCalls ?? 0));
+
+      if (freeSlots === 0) {
+        console.log(
+          `[worker] Tenant ${tenantId} sem slots livres (ativas=${tenantActiveCalls}, limite=${tenantLimit}) — todas as filas aguardam`
+        );
+        for (const q of tenantQueues) queueSlotBudgets.set(q.id, 0);
+        return;
+      }
+
+      // Distribuir slots livres proporcionalmente entre as filas ativas
+      // Base: floor(freeSlots / numQueues); o resto vai às primeiras filas (1 a mais cada)
+      const numQueues = tenantQueues.length;
+      const base      = Math.floor(freeSlots / numQueues);
+      const remainder = freeSlots % numQueues;
+
+      tenantQueues.forEach((q, i) => {
+        const budget = Math.min(base + (i < remainder ? 1 : 0), q.concurrency);
+        queueSlotBudgets.set(q.id, budget);
+      });
+
+      if (numQueues > 1) {
+        console.log(
+          `[worker] Tenant ${tenantId} | limite=${tenantLimit} | ativas=${tenantActiveCalls ?? 0} | ` +
+          `livres=${freeSlots} | distribuídos entre ${numQueues} filas: ` +
+          tenantQueues.map((q, i) => `"${q.name}"=${queueSlotBudgets.get(q.id)}`).join(", ")
+        );
+      }
+    })
+  );
+
   // Processar todas as filas em paralelo — múltiplas campanhas rodam simultaneamente
   await Promise.all(
-    (queues as DialQueue[]).map((queue) =>
-      processQueue(supabase, queue).catch((err) =>
+    allQueues.map((queue) =>
+      processQueue(supabase, queue, queueSlotBudgets.get(queue.id)).catch((err) =>
         console.error(`[worker] Erro inesperado na fila ${queue.id}:`, err)
       )
     )

@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import {
   Key, Lock, Eye, EyeOff, Copy, Check, AlertTriangle, CheckCircle2,
   Loader2, Link, Info, Bot, ChevronDown, ChevronUp, Save, RotateCcw,
-  Sparkles,
+  Sparkles, Zap,
 } from "lucide-react";
 
 interface Connection {
@@ -15,6 +15,7 @@ interface Connection {
   assistant_id: string | null;
   success_field: string | null;
   success_value: string | null;
+  concurrency_limit: number | null;
 }
 
 interface Assistant { id: string; name: string }
@@ -54,6 +55,10 @@ export default function VapiConnectionClient() {
   const [keyError, setKeyError] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // ── Section 1.5: Concurrency limit ──
+  const [concurrencyLimit, setConcurrencyLimit] = useState<number>(10);
+  const [savingConcurrency, setSavingConcurrency] = useState(false);
+
   // ── Section 2: Assistant Config ──
   const [assistants, setAssistants] = useState<Assistant[]>([]);
   const [selectedAssistantId, setSelectedAssistantId] = useState<string>("");
@@ -86,6 +91,7 @@ export default function VapiConnectionClient() {
     if (conn?.assistant_id) setSelectedAssistantId(conn.assistant_id);
     if (conn?.success_field) setSuccessField(conn.success_field);
     if (conn?.success_value) setSuccessValue(conn.success_value ?? "sim");
+    if (conn?.concurrency_limit != null) setConcurrencyLimit(conn.concurrency_limit);
     setFetchingConn(false);
 
     if (conn) {
@@ -146,6 +152,22 @@ export default function VapiConnectionClient() {
       loadConnection();
     }
     setSavingKey(false);
+  }
+
+  async function handleSaveConcurrency() {
+    setSavingConcurrency(true);
+    const res = await fetch(`/api/tenants/${tenantId}/vapi-connection`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ concurrencyLimit }),
+    });
+    if (res.ok) {
+      showToast("Limite de concorrência salvo!");
+    } else {
+      const d = await res.json();
+      showToast(d.error ?? "Erro ao salvar", "error");
+    }
+    setSavingConcurrency(false);
   }
 
   async function handleSaveConfig() {
@@ -298,6 +320,52 @@ export default function VapiConnectionClient() {
           </div>
         </form>
       </div>
+
+      {/* Section 1.5: Limite de Concorrência da Org Vapi */}
+      {connection && (
+        <div className="card mb-5">
+          <div className="card-header">
+            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-indigo-500" />
+              Limite de chamadas simultâneas (org Vapi)
+            </h2>
+          </div>
+          <div className="card-body space-y-4">
+            <div className="alert-info text-sm">
+              <Info className="w-4 h-4 shrink-0 mt-0.5 text-indigo-600" />
+              <span>
+                Cada conta Vapi tem um número máximo de chamadas simultâneas (slots de concorrência da org).
+                O worker distribui esses slots proporcionalmente entre todas as campanhas ativas deste tenant.
+                Verifique seu limite em: <span className="font-medium">Vapi Dashboard → Billing / Plan</span>.
+              </span>
+            </div>
+            <div className="flex items-end gap-4">
+              <div className="flex-1">
+                <label className="form-label">Slots simultâneos da org Vapi</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  min={1}
+                  max={100}
+                  value={concurrencyLimit}
+                  onChange={(e) => setConcurrencyLimit(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
+                />
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Dividido igualmente entre campanhas ativas. Ex: 10 slots ÷ 3 campanhas = 3 + 3 + 4.
+                </p>
+              </div>
+              <button
+                onClick={handleSaveConcurrency}
+                disabled={savingConcurrency}
+                className="btn-primary shrink-0"
+              >
+                {savingConcurrency ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Section 2: Assistente + Campo de Sucesso (only when connected) */}
       {connection && (
