@@ -155,7 +155,7 @@ export default function AppShell({
     ? [
         {
           label: "Relatórios",
-          href: `/app/tenants/${activeTenantId}/calls`,
+          href: `/app/tenants/${activeTenantId}/analytics`,
           icon: BarChart2,
         },
         {
@@ -167,6 +167,11 @@ export default function AppShell({
           label: "Campanhas",
           href: `/app/tenants/${activeTenantId}/queues`,
           icon: ListOrdered,
+        },
+        {
+          label: "Chamadas",
+          href: `/app/tenants/${activeTenantId}/calls`,
+          icon: PhoneCall,
         },
         {
           label: "Membros",
