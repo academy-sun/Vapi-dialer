@@ -123,10 +123,14 @@ export async function POST(req: NextRequest, { params }: Params) {
         const val = cols[idx];
         if (!val) return;
 
-        if (dest === "__custom__") {
-          dataJson[toSnakeCase(origHeader)] = val;
-        } else {
-          // campo conhecido: name, last_name, company, email, etc.
+        // Sempre salvar com o nome original da coluna (snake_case) para que
+        // o prompt Vapi possa usar {{nome_da_coluna}} como variável diretamente.
+        const snakeOrig = toSnakeCase(origHeader);
+        dataJson[snakeOrig] = val;
+
+        // Se o destino canônico for diferente do original, salvar também
+        // (ex: "nome" → "name") para compatibilidade com filtros de exibição.
+        if (dest !== "__custom__" && dest !== snakeOrig) {
           dataJson[dest] = val;
         }
       });
