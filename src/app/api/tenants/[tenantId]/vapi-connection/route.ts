@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const service = createServiceClient();
   const { data, error } = await service
     .from("vapi_connections")
-    .select("id, label, is_active, created_at, updated_at")
+    .select("id, label, is_active, created_at, updated_at, assistant_id, success_field, success_value")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .single();
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (response) return response;
 
   const body = await req.json();
-  const { apiKey, label = "default" } = body;
+  const { apiKey, label = "default", assistantId, successField, successValue } = body;
   if (!apiKey) return NextResponse.json({ error: "apiKey é obrigatório" }, { status: 400 });
 
   const encryptedKey = encrypt(apiKey);
@@ -53,13 +53,41 @@ export async function POST(req: NextRequest, { params }: Params) {
       label,
       encrypted_private_key: encryptedKey,
       is_active: true,
+      assistant_id: assistantId ?? null,
+      success_field: successField ?? null,
+      success_value: successValue ?? null,
     })
-    .select("id, label, is_active, created_at")
+    .select("id, label, is_active, created_at, assistant_id, success_field, success_value")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ connection: data }, { status: 201 });
+}
+
+// PATCH — atualiza assistant_id, success_field, success_value sem alterar a API key
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const { tenantId } = await params;
+  const { response } = await requireTenantAccess(tenantId);
+  if (response) return response;
+
+  const body = await req.json();
+  const { assistantId, successField, successValue } = body;
+
+  const service = createServiceClient();
+  const { error } = await service
+    .from("vapi_connections")
+    .update({
+      assistant_id: assistantId ?? null,
+      success_field: successField ?? null,
+      success_value: successValue ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }
 
 // Utilitário exportado para uso interno (worker/webhook)
