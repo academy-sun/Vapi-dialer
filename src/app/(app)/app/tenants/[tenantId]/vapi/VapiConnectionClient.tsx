@@ -529,10 +529,7 @@ export default function VapiConnectionClient() {
             )}
 
             {/* Button — right-aligned */}
-            <div className="flex items-center justify-between pt-1">
-              <p className="text-[11px] text-gray-400">
-                Eventos: <span className="font-mono">end-of-call-report · status-update · tool-calls · transcript</span>
-              </p>
+            <div className="flex justify-end pt-1">
               <button
                 onClick={handleUpdateWebhook}
                 disabled={updatingWebhook || !webhookAssistantId}
