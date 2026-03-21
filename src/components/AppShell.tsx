@@ -107,7 +107,8 @@ export default function AppShell({
       // Usar snapshot passado ou tenantRoles atual — evita ler state stale
       const resolvedRoles = rolesSnapshot ?? tenantRoles;
       const role = resolvedRoles[id] ?? "member";
-      const destination = (role === "owner" || role === "admin")
+      // Admin global sempre vai para vapi; tenant members sem admin vão para queues
+      const destination = (isAdmin || role === "owner" || role === "admin")
         ? `/app/tenants/${id}/vapi`
         : `/app/tenants/${id}/queues`;
       router.push(destination);
@@ -148,8 +149,8 @@ export default function AppShell({
   const activeTenant = tenants.find((t) => t.id === activeTenantId);
 
   const activeRole = tenantRoles[activeTenantId] ?? "member";
-  // isAdminOrOwner só é verdadeiro após roles estarem carregados — evita flash de menu incorreto
-  const isAdminOrOwner = rolesLoaded && (activeRole === "owner" || activeRole === "admin");
+  // isAdmin (global) sempre tem acesso de owner; role por tenant como fallback
+  const isAdminOrOwner = rolesLoaded && (isAdmin || activeRole === "owner" || activeRole === "admin");
 
   // navItems só é populado após roles estarem prontos — evita renderizar menu incompleto
   const navItems = (activeTenantId && rolesLoaded)

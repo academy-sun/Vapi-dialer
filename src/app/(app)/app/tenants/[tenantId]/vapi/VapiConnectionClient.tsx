@@ -99,6 +99,12 @@ export default function VapiConnectionClient() {
   useEffect(() => { loadConnection(); }, [tenantId]);
 
   async function loadConnection() {
+    // Limpa estado do tenant anterior antes de carregar o novo
+    setConnection(null);
+    setAssistants([]);
+    setAssistantConfigs([]);
+    setWebhookStatus(null);
+    setExpandKeyForm(false);
     setFetchingConn(true);
     const res = await fetch(`/api/tenants/${tenantId}/vapi-connection`);
     const data = await res.json();
