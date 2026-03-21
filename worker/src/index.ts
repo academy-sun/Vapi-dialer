@@ -162,12 +162,89 @@ async function getVapiKey(supabase: SupabaseClient, tenantId: string): Promise<s
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Verificação de janela horária
+// Verificação de janela horária + agendamento com jitter
 // ─────────────────────────────────────────────────────────────────────────────
 
 const WEEKDAY_MAP: Record<string, number> = {
   Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7,
 };
+
+/**
+ * Verifica se um Date específico está dentro da janela (dia + horário).
+ * Diferente de isWithinTimeWindow que verifica "agora".
+ */
+function isWithinWindowAt(dt: Date, allowedDays: number[], tw: TimeWindow): boolean {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tw.timezone, weekday: "short",
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  const parts      = fmt.formatToParts(dt);
+  const weekdayStr = parts.find((p) => p.type === "weekday")?.value ?? "Mon";
+  const isoDay     = WEEKDAY_MAP[weekdayStr] ?? 1;
+  if (!allowedDays.includes(isoDay)) return false;
+
+  const [startH, startM] = tw.start.split(":").map(Number);
+  const [endH,   endM  ] = tw.end.split(":").map(Number);
+  const dtMin    = parseInt(parts.find((p) => p.type === "hour")!.value)   * 60
+                 + parseInt(parts.find((p) => p.type === "minute")!.value);
+  return dtMin >= startH * 60 + startM && dtMin < endH * 60 + endM;
+}
+
+/**
+ * Retorna um Date representando tw.start no próximo dia permitido após `from`.
+ * DST-safe: usa Intl para converter local → UTC.
+ */
+function nextWindowStart(from: Date, allowedDays: number[], tw: TimeWindow): Date {
+  const wdFmt   = new Intl.DateTimeFormat("en-US",  { timeZone: tw.timezone, weekday: "short" });
+  const dateFmt = new Intl.DateTimeFormat("sv-SE",  { timeZone: tw.timezone, dateStyle: "short" }); // "YYYY-MM-DD"
+  const hFmt    = new Intl.DateTimeFormat("en-US",  { timeZone: tw.timezone, hour: "2-digit", hour12: false });
+  const mFmt    = new Intl.DateTimeFormat("en-US",  { timeZone: tw.timezone, minute: "2-digit" });
+  const [startH, startM] = tw.start.split(":").map(Number);
+
+  for (let d = 1; d <= 14; d++) {
+    const candidate = new Date(from.getTime() + d * 86_400_000);
+    const isoDay    = WEEKDAY_MAP[wdFmt.format(candidate)] ?? 1;
+    if (!allowedDays.includes(isoDay)) continue;
+
+    // Aproximar: tratar start como UTC e corrigir pelo offset real do timezone
+    const approx = new Date(`${dateFmt.format(candidate)}T${tw.start}:00Z`);
+    const diffMs = ((startH * 60 + startM) - (parseInt(hFmt.format(approx)) * 60 + parseInt(mFmt.format(approx)))) * 60_000;
+    return new Date(approx.getTime() + diffMs);
+  }
+
+  return new Date(from.getTime() + 86_400_000); // fallback
+}
+
+/**
+ * Calcula next_attempt_at com jitter para evitar engargalamento no início da janela.
+ *
+ * Se baseTime + delayMin cair dentro da janela → retorna esse horário (sem jitter).
+ * Se cair fora → ajusta para time_start do próximo dia permitido +
+ *                offset aleatório em [0, jitterMin] minutos.
+ */
+function scheduleNextAttempt(
+  baseTime:    Date,
+  delayMin:    number,
+  allowedDays: number[] | null | undefined,
+  tw:          TimeWindow | null | undefined,
+  jitterMin  = 60,
+): string {
+  const naive = new Date(baseTime.getTime() + delayMin * 60_000);
+
+  // Sem janela configurada → sem ajuste
+  if (!allowedDays || allowedDays.length === 0 || !tw?.start || !tw?.end || !tw?.timezone) {
+    return naive.toISOString();
+  }
+
+  if (isWithinWindowAt(naive, allowedDays, tw)) {
+    return naive.toISOString(); // dentro da janela → sem jitter necessário
+  }
+
+  // Fora da janela → próximo início de janela + jitter aleatório
+  const nextStart = nextWindowStart(naive, allowedDays, tw);
+  const jitterMs  = Math.floor(Math.random() * (jitterMin + 1)) * 60_000;
+  return new Date(nextStart.getTime() + jitterMs).toISOString();
+}
 
 function isWithinTimeWindow(
   allowedDays: number[] | null | undefined,
@@ -429,9 +506,10 @@ async function processLead(
     }
 
     if (newAttemptCount < queue.max_attempts) {
-      // Ainda tem tentativas — reagendar com delay
-      const delayMin = isRateLimit ? queue.retry_delay_minutes * 2 : queue.retry_delay_minutes;
-      const nextAt   = new Date(Date.now() + delayMin * 60_000).toISOString();
+      // Ainda tem tentativas — reagendar com delay (com jitter se cair fora da janela)
+      const delayMin   = isRateLimit ? queue.retry_delay_minutes * 2 : queue.retry_delay_minutes;
+      const allowedDays = Array.isArray(queue.allowed_days) ? (queue.allowed_days as unknown as number[]) : [];
+      const nextAt      = scheduleNextAttempt(new Date(), delayMin, allowedDays, queue.allowed_time_window);
 
       await supabase
         .from("leads")

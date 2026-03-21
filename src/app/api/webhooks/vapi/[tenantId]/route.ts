@@ -2,6 +2,50 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { parseCallbackTime } from "@/lib/callback-parser";
 
+// ── Jitter helpers (evita engargalamento no início da janela de horário) ───────
+
+const _WD: Record<string, number> = { Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6, Sun:7 };
+
+type TW = { start: string; end: string; timezone: string };
+
+function _inWindow(dt: Date, days: number[], tw: TW): boolean {
+  const fmt  = new Intl.DateTimeFormat("en-US", { timeZone: tw.timezone, weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false });
+  const p    = fmt.formatToParts(dt);
+  const day  = _WD[p.find((x) => x.type === "weekday")!.value] ?? 1;
+  if (!days.includes(day)) return false;
+  const cur  = parseInt(p.find((x) => x.type === "hour")!.value)   * 60
+             + parseInt(p.find((x) => x.type === "minute")!.value);
+  const [sh, sm] = tw.start.split(":").map(Number);
+  const [eh, em] = tw.end.split(":").map(Number);
+  return cur >= sh * 60 + sm && cur < eh * 60 + em;
+}
+
+function _nextStart(from: Date, days: number[], tw: TW): Date {
+  const wdFmt   = new Intl.DateTimeFormat("en-US", { timeZone: tw.timezone, weekday: "short" });
+  const dateFmt = new Intl.DateTimeFormat("sv-SE", { timeZone: tw.timezone, dateStyle: "short" });
+  const hFmt    = new Intl.DateTimeFormat("en-US", { timeZone: tw.timezone, hour: "2-digit", hour12: false });
+  const mFmt    = new Intl.DateTimeFormat("en-US", { timeZone: tw.timezone, minute: "2-digit" });
+  const [sh, sm] = tw.start.split(":").map(Number);
+  for (let d = 1; d <= 14; d++) {
+    const c   = new Date(from.getTime() + d * 86_400_000);
+    const iso = _WD[wdFmt.format(c)] ?? 1;
+    if (!days.includes(iso)) continue;
+    const approx = new Date(`${dateFmt.format(c)}T${tw.start}:00Z`);
+    const diff   = ((sh * 60 + sm) - (parseInt(hFmt.format(approx)) * 60 + parseInt(mFmt.format(approx)))) * 60_000;
+    return new Date(approx.getTime() + diff);
+  }
+  return new Date(from.getTime() + 86_400_000);
+}
+
+function scheduleNextAttempt(base: Date, delayMin: number, days: number[] | null | undefined, tw: TW | null | undefined, jitterMin = 60): string {
+  const naive = new Date(base.getTime() + delayMin * 60_000);
+  if (!days || days.length === 0 || !tw?.start || !tw?.end || !tw?.timezone) return naive.toISOString();
+  if (_inWindow(naive, days, tw)) return naive.toISOString();
+  const next    = _nextStart(naive, days, tw);
+  const jitterMs = Math.floor(Math.random() * (jitterMin + 1)) * 60_000;
+  return new Date(next.getTime() + jitterMs).toISOString();
+}
+
 type Params = { params: Promise<{ tenantId: string }> };
 
 // POST /api/webhooks/vapi/:tenantId
@@ -360,14 +404,16 @@ async function updateLeadAfterCall(
 
     const { data: queueInfo } = await service
       .from("dial_queues")
-      .select("max_attempts, retry_delay_minutes")
+      .select("max_attempts, retry_delay_minutes, allowed_days, allowed_time_window")
       .eq("id", queueId)
       .eq("tenant_id", tenantId)
       .single();
 
-    const attempts    = lead?.attempt_count       ?? 0;
-    const maxAttempts = queueInfo?.max_attempts   ?? 3;
+    const attempts    = lead?.attempt_count            ?? 0;
+    const maxAttempts = queueInfo?.max_attempts        ?? 3;
     const retryDelay  = queueInfo?.retry_delay_minutes ?? 30;
+    const allowedDays = Array.isArray(queueInfo?.allowed_days) ? (queueInfo.allowed_days as number[]) : [];
+    const tw          = queueInfo?.allowed_time_window as TW | null ?? null;
 
     if (attempts >= maxAttempts) {
       await service
@@ -376,7 +422,7 @@ async function updateLeadAfterCall(
         .eq("id", leadId);
       await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
-      const nextAt = new Date(Date.now() + retryDelay * 60 * 1000).toISOString();
+      const nextAt = scheduleNextAttempt(new Date(), retryDelay, allowedDays, tw);
       await service
         .from("leads")
         .update({
