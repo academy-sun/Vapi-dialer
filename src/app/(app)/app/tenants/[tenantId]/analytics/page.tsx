@@ -4,6 +4,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   RefreshCw, Phone, PhoneOff, PhoneCall, DollarSign, Clock,
   Timer, Users, CheckCircle2, BarChart3, Loader2, Bot, Filter,
+  Flame, Activity, TrendingUp,
 } from "lucide-react";
 
 interface Campaign { id: string; name: string; assistantId: string }
@@ -19,15 +20,23 @@ interface AnalyticsData {
   notAnsweredCalls: number;
   totalCost: number;
   totalDurationSec: number;
+  totalDurationAnsweredSec: number;
   avgDurationSec: number;
+  avgDurationAllSec: number;
+  maxDurationSec: number;
+  durationBuckets: Record<string, number>;
   totalLeads: number;
   structuredSuccessCalls: number;
   structuredWithOutput: number;
   structuredOutputsConfigured: boolean;
   costPerConversion: number | null;
   byHour: Record<string, number>;
+  byHourAnswerRate: Record<string, number>;
   byWeekday: Record<string, number>;
+  byDayHour: Record<string, Record<string, number>>;
+  byDayHourAnswered: Record<string, Record<string, number>>;
   statusBreakdown: Record<string, number>;
+  endedReasonRaw: Record<string, number>;
   engagementRate: number;
 }
 
@@ -51,16 +60,18 @@ function pct(part: number, total: number): string {
   return `${Math.round((part / total) * 100)}%`;
 }
 
+const BAR_MAX_PX = 112; // altura máxima da barra em pixels
+
 function BarChart({ data, labels, maxVal, color = "bg-indigo-500" }: {
   data: number[]; labels: string[]; maxVal: number; color?: string;
 }) {
   return (
-    <div className="flex items-end gap-1 h-32">
+    <div className="flex items-end gap-0.5">
       {data.map((val, i) => (
         <div key={i} className="flex-1 flex flex-col items-center gap-1">
           <div
-            className={`w-full rounded-t-sm ${color} transition-all`}
-            style={{ height: maxVal > 0 ? `${(val / maxVal) * 100}%` : "0%" }}
+            className={`w-full rounded-t-sm ${color} transition-all duration-300 min-h-0`}
+            style={{ height: maxVal > 0 ? `${Math.max(1, Math.round((val / maxVal) * BAR_MAX_PX))}px` : "0px" }}
             title={`${labels[i]}: ${val}`}
           />
           <span className="text-gray-400 text-[9px] leading-none">{labels[i]}</span>
@@ -72,6 +83,297 @@ function BarChart({ data, labels, maxVal, color = "bg-indigo-500" }: {
 
 const WEEKDAY_LABELS = ["", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, "0")}h`);
+
+// ── Heatmap dia × hora ──────────────────────────────────────────────────────
+type HeatmapMode = "calls" | "answered" | "rate";
+
+function heatColor(val: number, max: number): string {
+  if (max === 0 || val === 0) return "bg-gray-100 text-gray-300";
+  const pct = val / max;
+  if (pct <= 0.15) return "bg-emerald-100 text-emerald-700";
+  if (pct <= 0.35) return "bg-emerald-200 text-emerald-800";
+  if (pct <= 0.55) return "bg-emerald-300 text-emerald-900";
+  if (pct <= 0.75) return "bg-emerald-400 text-white";
+  return "bg-emerald-600 text-white";
+}
+
+function HeatmapSection({ data }: { data: AnalyticsData }) {
+  const [mode, setMode] = useState<HeatmapMode>("calls");
+
+  // Calcula a matriz 7×24
+  const matrix: number[][] = Array.from({ length: 7 }, (_, di) => {
+    const day = String(di + 1);
+    return Array.from({ length: 24 }, (_, h) => {
+      const hStr = String(h);
+      const calls    = data.byDayHour?.[day]?.[hStr]    ?? 0;
+      const answered = data.byDayHourAnswered?.[day]?.[hStr] ?? 0;
+      if (mode === "calls")    return calls;
+      if (mode === "answered") return answered;
+      return calls > 0 ? Math.round((answered / calls) * 100) : 0;
+    });
+  });
+
+  const allValues = matrix.flat();
+  const maxVal    = Math.max(1, ...allValues);
+
+  // Cards de resumo
+  let totalAttempts = 0, totalAnswered = 0;
+  let peakHour = 0, peakHourVal = 0, peakDay = 1, peakDayVal = 0;
+
+  for (let d = 1; d <= 7; d++) {
+    let dayTotal = 0;
+    for (let h = 0; h < 24; h++) {
+      const v = data.byDayHour?.[String(d)]?.[String(h)] ?? 0;
+      const a = data.byDayHourAnswered?.[String(d)]?.[String(h)] ?? 0;
+      totalAttempts += v;
+      totalAnswered += a;
+      dayTotal += v;
+      const hourTotal = (data.byHour?.[String(h)] ?? 0);
+      if (hourTotal > peakHourVal) { peakHourVal = hourTotal; peakHour = h; }
+    }
+    if (dayTotal > peakDayVal) { peakDayVal = dayTotal; peakDay = d; }
+  }
+  const avgPerHour = totalAttempts > 0 ? (totalAttempts / 24).toFixed(1) : "0";
+
+  const modeLabels: Record<HeatmapMode, string> = {
+    calls:    "Tentativas",
+    answered: "Atendidas",
+    rate:     "Connect Rate (%)",
+  };
+
+  return (
+    <div className="card p-5 space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <Flame className="w-4 h-4 text-orange-500" />
+          <h3 className="text-sm font-semibold text-gray-700">Heatmap — Dia × Hora</h3>
+          <span className="text-xs text-gray-400">(UTC)</span>
+        </div>
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+          {(["calls", "answered", "rate"] as HeatmapMode[]).map((m) => (
+            <button key={m}
+              onClick={() => setMode(m)}
+              className={`px-3 py-1.5 font-medium transition-colors ${
+                mode === m ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-50"
+              }`}>
+              {modeLabels[m]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div className="overflow-x-auto">
+        <table className="text-[10px] border-separate border-spacing-0.5 mx-auto">
+          <thead>
+            <tr>
+              <th className="w-8" />
+              {Array.from({ length: 24 }, (_, h) => (
+                <th key={h} className="w-7 text-center text-gray-400 font-normal pb-1">
+                  {h % 3 === 0 ? `${String(h).padStart(2, "0")}h` : ""}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {matrix.map((row, di) => (
+              <tr key={di}>
+                <td className="pr-1.5 text-right text-gray-500 font-medium whitespace-nowrap">
+                  {WEEKDAY_LABELS[di + 1]}
+                </td>
+                {row.map((val, h) => (
+                  <td key={h}
+                    title={`${WEEKDAY_LABELS[di + 1]} ${String(h).padStart(2, "0")}h → ${val}${mode === "rate" ? "%" : ""}`}
+                    className={`w-7 h-6 rounded text-center leading-6 cursor-default transition-colors ${heatColor(val, maxVal)}`}>
+                    {val > 0 ? val : ""}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+        <span>Menos</span>
+        {["bg-gray-100", "bg-emerald-100", "bg-emerald-200", "bg-emerald-300", "bg-emerald-400", "bg-emerald-600"].map((c) => (
+          <div key={c} className={`w-4 h-4 rounded ${c}`} />
+        ))}
+        <span>Mais</span>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 border-t border-gray-100">
+        <div className="rounded-lg bg-gray-50 px-3 py-2">
+          <p className="text-xs text-gray-400">Total tentativas</p>
+          <p className="text-lg font-bold text-gray-900">{totalAttempts.toLocaleString("pt-BR")}</p>
+        </div>
+        <div className="rounded-lg bg-gray-50 px-3 py-2">
+          <p className="text-xs text-gray-400">Média por hora</p>
+          <p className="text-lg font-bold text-gray-900">{avgPerHour}</p>
+        </div>
+        <div className="rounded-lg bg-gray-50 px-3 py-2">
+          <p className="text-xs text-gray-400">Hora mais movimentada</p>
+          <p className="text-lg font-bold text-gray-900">{String(peakHour).padStart(2, "0")}h</p>
+          <p className="text-xs text-gray-400">{peakHourVal} chamadas</p>
+        </div>
+        <div className="rounded-lg bg-gray-50 px-3 py-2">
+          <p className="text-xs text-gray-400">Dia mais movimentado</p>
+          <p className="text-lg font-bold text-gray-900">{WEEKDAY_LABELS[peakDay]}</p>
+          <p className="text-xs text-gray-400">{peakDayVal} chamadas</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Talk Time Breakdown ──────────────────────────────────────────────────────
+function TalkTimeSection({ data }: { data: AnalyticsData }) {
+  const buckets = [
+    { key: "0-10s",  label: "< 10s",   desc: "Chamadas instantâneas" },
+    { key: "10-60s", label: "10s–1min", desc: "Curtas" },
+    { key: "1-3min", label: "1–3 min",  desc: "Médias" },
+    { key: "3-5min", label: "3–5 min",  desc: "Longas" },
+    { key: "5min+",  label: "> 5 min",  desc: "Muito longas" },
+  ];
+  const bucketValues = buckets.map((b) => data.durationBuckets?.[b.key] ?? 0);
+  const bucketMax = Math.max(1, ...bucketValues);
+  const BAR = 80;
+
+  const costPerMin = data.totalDurationSec > 0
+    ? (data.totalCost / (data.totalDurationSec / 60))
+    : null;
+
+  return (
+    <div className="card p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Activity className="w-4 h-4 text-cyan-500" />
+        <h3 className="text-sm font-semibold text-gray-700">Talk Time Breakdown</h3>
+      </div>
+
+      {/* 4 mini stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-lg bg-gray-50 px-3 py-2">
+          <p className="text-xs text-gray-400">Total em ligação</p>
+          <p className="text-lg font-bold text-gray-900">{formatDurationLong(data.totalDurationSec)}</p>
+        </div>
+        <div className="rounded-lg bg-cyan-50 px-3 py-2">
+          <p className="text-xs text-gray-400">Atendidas</p>
+          <p className="text-lg font-bold text-cyan-700">{formatDurationLong(data.totalDurationAnsweredSec ?? 0)}</p>
+        </div>
+        <div className="rounded-lg bg-gray-50 px-3 py-2">
+          <p className="text-xs text-gray-400">Média (atendidas)</p>
+          <p className="text-lg font-bold text-gray-900">{formatDurationShort(data.avgDurationSec)}</p>
+        </div>
+        <div className="rounded-lg bg-gray-50 px-3 py-2">
+          <p className="text-xs text-gray-400">Máximo</p>
+          <p className="text-lg font-bold text-gray-900">{formatDurationShort(data.maxDurationSec ?? 0)}</p>
+          {costPerMin != null && (
+            <p className="text-[10px] text-gray-400">
+              ${costPerMin.toFixed(4)}/min
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Duration distribution bar chart */}
+      {data.answeredCalls > 0 && (
+        <div>
+          <p className="text-xs text-gray-400 mb-3">Distribuição de duração (chamadas atendidas)</p>
+          <div className="flex items-end gap-2">
+            {buckets.map((b, i) => {
+              const val = bucketValues[i];
+              const heightPx = bucketMax > 0 ? Math.max(2, Math.round((val / bucketMax) * BAR)) : 0;
+              const pctShare = data.answeredCalls > 0
+                ? Math.round((val / data.answeredCalls) * 100) : 0;
+              return (
+                <div key={b.key} className="flex-1 flex flex-col items-center gap-1">
+                  <span className="text-[10px] text-gray-500 font-medium">{val > 0 ? pctShare + "%" : ""}</span>
+                  <div
+                    className="w-full rounded-t-sm bg-cyan-400 transition-all"
+                    style={{ height: `${heightPx}px` }}
+                    title={`${b.desc}: ${val} chamadas (${pctShare}%)`}
+                  />
+                  <span className="text-[9px] text-gray-400 text-center leading-tight">{b.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Call End Reasons ─────────────────────────────────────────────────────────
+const END_REASON_PT: Record<string, string> = {
+  "customer-ended-call":   "Cliente encerrou",
+  "assistant-ended-call":  "Assistente encerrou",
+  "no-answer":             "Sem resposta",
+  "customer-did-not-answer": "Sem resposta (v2)",
+  "busy":                  "Ocupado",
+  "customer-busy":         "Ocupado (v2)",
+  "voicemail":             "Caixa postal",
+  "machine_end_silence":   "Caixa postal (silêncio)",
+  "silence-timed-out":     "Silêncio expirou",
+  "failed":                "Falha",
+  "pipeline-error":        "Erro de pipeline",
+};
+
+const END_REASON_COLOR: Record<string, string> = {
+  "customer-ended-call":   "bg-emerald-400",
+  "assistant-ended-call":  "bg-blue-400",
+  "no-answer":             "bg-gray-300",
+  "customer-did-not-answer": "bg-gray-300",
+  "busy":                  "bg-yellow-400",
+  "customer-busy":         "bg-yellow-400",
+  "voicemail":             "bg-purple-400",
+  "machine_end_silence":   "bg-purple-300",
+  "silence-timed-out":     "bg-purple-300",
+  "failed":                "bg-red-400",
+  "pipeline-error":        "bg-red-300",
+};
+
+function EndReasonsSection({ data }: { data: AnalyticsData }) {
+  const reasons = Object.entries(data.endedReasonRaw ?? {})
+    .filter(([k]) => k !== "null")
+    .sort(([, a], [, b]) => b - a);
+
+  if (reasons.length === 0) return null;
+
+  const total = reasons.reduce((s, [, v]) => s + v, 0);
+  const maxVal = Math.max(1, ...reasons.map(([, v]) => v));
+
+  return (
+    <div className="card p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-indigo-500" />
+        <h3 className="text-sm font-semibold text-gray-700">Motivos de Encerramento</h3>
+        <span className="text-xs text-gray-400 ml-auto">{total} chamadas</span>
+      </div>
+      <div className="space-y-2">
+        {reasons.map(([key, count]) => {
+          const label = END_REASON_PT[key] ?? key;
+          const barColor = END_REASON_COLOR[key] ?? "bg-gray-300";
+          const w = Math.round((count / maxVal) * 100);
+          return (
+            <div key={key}>
+              <div className="flex justify-between text-xs text-gray-600 mb-1">
+                <span className="font-medium truncate max-w-[200px]" title={key}>{label}</span>
+                <span className="font-semibold shrink-0 ml-2">{count} ({pct(count, total)})</span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${w}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function StatCard({ title, value, sub, icon: Icon, color = "text-indigo-600", bg = "bg-indigo-50" }: {
   title: string; value: string; sub?: string; icon: React.ElementType; color?: string; bg?: string;
@@ -267,7 +569,7 @@ export default function AnalyticsPage() {
               sub={
                 data.structuredOutputsConfigured
                   ? `${data.structuredSuccessCalls}/${data.structuredWithOutput} avaliados`
-                  : "Configure o campo de sucesso em Configuração Vapi"
+                  : "Configure o campo de sucesso em Configurações"
               }
               icon={CheckCircle2}
               color="text-emerald-600"
@@ -324,22 +626,37 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="card p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">Resumo de Custos</h3>
+              <div className="flex items-center gap-2 mb-4">
+                <DollarSign className="w-4 h-4 text-amber-500" />
+                <h3 className="text-sm font-semibold text-gray-700">Análise de Custos</h3>
+              </div>
               <div className="space-y-3">
                 <div className="flex justify-between items-center py-2 border-b border-gray-50">
                   <span className="text-sm text-gray-600">Custo total</span>
                   <span className="font-mono font-semibold text-gray-900">${data.totalCost.toFixed(4)}</span>
                 </div>
+                {data.totalCalls > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-sm text-gray-600">Custo por chamada</span>
+                    <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.totalCalls).toFixed(4)}</span>
+                  </div>
+                )}
                 {data.answeredCalls > 0 && (
                   <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                    <span className="text-sm text-gray-600">Custo médio por chamada atendida</span>
+                    <span className="text-sm text-gray-600">Custo por chamada atendida</span>
                     <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.answeredCalls).toFixed(4)}</span>
                   </div>
                 )}
-                {data.totalCalls > 0 && (
+                {data.totalDurationSec > 0 && (
                   <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                    <span className="text-sm text-gray-600">Custo médio por chamada</span>
-                    <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.totalCalls).toFixed(4)}</span>
+                    <span className="text-sm text-gray-600">Custo por minuto</span>
+                    <span className="font-mono font-semibold text-gray-900">${(data.totalCost / (data.totalDurationSec / 60)).toFixed(4)}</span>
+                  </div>
+                )}
+                {data.totalLeads > 0 && (
+                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                    <span className="text-sm text-gray-600">Custo por lead</span>
+                    <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.totalLeads).toFixed(4)}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center py-2">
@@ -376,6 +693,15 @@ export default function AnalyticsPage() {
               <p className="text-xs text-gray-400 mt-2">* Horários em UTC</p>
             </div>
           </div>
+
+          {/* Heatmap */}
+          <HeatmapSection data={data} />
+
+          {/* Talk Time Breakdown */}
+          <TalkTimeSection data={data} />
+
+          {/* Call End Reasons */}
+          <EndReasonsSection data={data} />
         </div>
       )}
     </div>

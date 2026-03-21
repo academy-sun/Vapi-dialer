@@ -289,9 +289,11 @@ export default function CallsPage() {
   const [maxDuration, setMaxDuration] = useState("30");
   const [showTranscript, setShowTranscript] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"created_at" | "cost" | "duration">("created_at");
+  const [sortBy, setSortBy] = useState<"created_at" | "cost" | "duration" | "score">("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [userRole, setUserRole] = useState<string>("member");
+  const [pageSize, setPageSize] = useState(15);
+  const [currentPage, setCurrentPage] = useState(1);
   const { toasts, show: showToast } = useToast();
 
   const isAdminOrOwner = userRole === "owner" || userRole === "admin";
@@ -370,9 +372,22 @@ export default function CallsPage() {
     } else if (sortBy === "duration") {
       va = a.duration_seconds ?? 0;
       vb = b.duration_seconds ?? 0;
+    } else if (sortBy === "score") {
+      const getScore = (c: Call) => {
+        if (!c.structured_outputs) return -1;
+        const r = extractResult(c.structured_outputs);
+        const s = r?.["Performance Global Score"];
+        return s != null ? parseFloat(String(s)) : -1;
+      };
+      va = getScore(a);
+      vb = getScore(b);
     }
     return sortDir === "desc" ? vb - va : va - vb;
   });
+
+  const totalPages   = Math.max(1, Math.ceil(sortedCalls.length / pageSize));
+  const safePage     = Math.min(currentPage, totalPages);
+  const pagedCalls   = sortedCalls.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   const totalCost   = calls.reduce((sum, c) => sum + (c.cost ?? 0), 0);
   const totalDurSec = calls.reduce((sum, c) => sum + (c.duration_seconds ?? 0), 0);
@@ -452,7 +467,7 @@ export default function CallsPage() {
             <input
               type="text"
               className="form-input pl-9 max-w-xs text-sm font-mono"
-              placeholder="Buscar por Vapi Call ID..."
+              placeholder="Buscar por ID da chamada"
               value={searchCallId}
               onChange={(e) => setSearchCallId(e.target.value)}
             />
@@ -517,8 +532,8 @@ export default function CallsPage() {
       {!loading && sortedCalls.length > 0 && (
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           <span className="text-xs text-gray-400 font-medium">Ordenar por:</span>
-          {(["created_at", "duration", ...(isAdminOrOwner ? ["cost"] : [])] as ("created_at" | "duration" | "cost")[]).map((col) => {
-            const labels: Record<string, string> = { created_at: "Data", duration: "Duração", cost: "Custo" };
+          {(["created_at", "duration", "score", ...(isAdminOrOwner ? ["cost"] : [])] as ("created_at" | "duration" | "score" | "cost")[]).map((col) => {
+            const labels: Record<string, string> = { created_at: "Data", duration: "Duração", score: "Score", cost: "Custo" };
             const active = sortBy === col;
             return (
               <button
@@ -591,7 +606,7 @@ export default function CallsPage() {
               </tr>
             </thead>
             <tbody>
-              {sortedCalls.map((call) => {
+              {pagedCalls.map((call) => {
                 const reason = REASON_CONFIG[call.ended_reason ?? ""] ?? { label: call.ended_reason ?? "Em andamento", badge: "badge-gray" };
                 const { relative, full } = formatRelativeTime(call.created_at);
                 const isSelected = selected?.id === call.id;
@@ -634,14 +649,43 @@ export default function CallsPage() {
             </tbody>
           </table>
 
-          <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-            <p className="text-xs text-gray-400">
-              {sortedCalls.length} de {calls.length} chamadas
+          <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Linhas:</span>
+              {[15, 50, 100].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => { setPageSize(n); setCurrentPage(1); }}
+                  className="text-xs px-2 py-1 rounded-md border transition-all"
+                  style={{
+                    background: pageSize === n ? "#FF1A1A" : "white",
+                    color: pageSize === n ? "white" : "#6b7280",
+                    borderColor: pageSize === n ? "#FF1A1A" : "#e5e7eb",
+                  }}
+                >{n}</button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 flex-1 text-center">
+              {pagedCalls.length > 0
+                ? `${(safePage - 1) * pageSize + 1}–${(safePage - 1) * pageSize + pagedCalls.length} de ${sortedCalls.length}`
+                : "0 chamadas"}
               {filterQueue !== "all" && queues.length > 0 && (
                 <> · Fila: <strong>{queues.find(q => q.id === filterQueue)?.name}</strong></>
               )}
             </p>
-            <p className="text-xs text-gray-500">Clique em uma linha para ver detalhes</p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={safePage <= 1}
+                className="text-xs px-2.5 py-1 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >← Anterior</button>
+              <span className="text-xs text-gray-500 px-2">{safePage} / {totalPages}</span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={safePage >= totalPages}
+                className="text-xs px-2.5 py-1 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >Próximo →</button>
+            </div>
           </div>
         </div>
       )}

@@ -252,8 +252,11 @@ export async function GET(req: NextRequest, { params }: Params) {
         totalLeads: 0,
         totalCost: 0,
         totalDurationSec: 0,
+        totalDurationAnsweredSec: 0,
         avgDurationSec: 0,
         avgDurationAllSec: 0,
+        maxDurationSec: 0,
+        durationBuckets: { "0-10s": 0, "10-60s": 0, "1-3min": 0, "3-5min": 0, "5min+": 0 },
         answeredCalls: 0,
         notAnsweredCalls: 0,
         statusBreakdown: { answered: 0, voicemail: 0, busy: 0, "no-answer": 0, failed: 0, other: 0 },
@@ -269,6 +272,8 @@ export async function GET(req: NextRequest, { params }: Params) {
         byHour: {},
         byHourAnswerRate: {},
         byWeekday: {},
+        byDayHour: {},
+        byDayHourAnswered: {},
         leadsHealth: { remaining: 0, failed: 0, neverAnswered: 0 },
       });
     }
@@ -356,11 +361,10 @@ export async function GET(req: NextRequest, { params }: Params) {
   const answeredWithDuration = calls.filter(
     (c) => classifyReason(c.ended_reason) === "answered" && c.duration_seconds != null
   );
+  const totalDurationAnsweredSec =
+    answeredWithDuration.reduce((s, c) => s + (c.duration_seconds ?? 0), 0);
   const avgDurationSec =
-    answeredWithDuration.length > 0
-      ? answeredWithDuration.reduce((s, c) => s + (c.duration_seconds ?? 0), 0) /
-        answeredWithDuration.length
-      : 0;
+    answeredWithDuration.length > 0 ? totalDurationAnsweredSec / answeredWithDuration.length : 0;
 
   // Duração média geral (compatibilidade)
   const callsWithDuration = calls.filter((c) => c.duration_seconds != null);
@@ -369,6 +373,21 @@ export async function GET(req: NextRequest, { params }: Params) {
       ? callsWithDuration.reduce((s, c) => s + (c.duration_seconds ?? 0), 0) /
         callsWithDuration.length
       : 0;
+
+  // Duração máxima e buckets de duração (chamadas atendidas)
+  const maxDurationSec = calls.reduce((mx, c) => Math.max(mx, c.duration_seconds ?? 0), 0);
+  const durationBuckets: Record<string, number> = {
+    "0-10s": 0, "10-60s": 0, "1-3min": 0, "3-5min": 0, "5min+": 0,
+  };
+  for (const c of calls) {
+    if (classifyReason(c.ended_reason) !== "answered") continue;
+    const dur = c.duration_seconds ?? 0;
+    if (dur < 10)       durationBuckets["0-10s"]++;
+    else if (dur < 60)  durationBuckets["10-60s"]++;
+    else if (dur < 180) durationBuckets["1-3min"]++;
+    else if (dur < 300) durationBuckets["3-5min"]++;
+    else                durationBuckets["5min+"]++;
+  }
 
   // Engajamento — só chamadas atendidas, classificadas por duração
   const engagement = { under10s: 0, tenTo60s: 0, over60s: 0 };
@@ -390,6 +409,15 @@ export async function GET(req: NextRequest, { params }: Params) {
   const byWeekday: Record<number, number> = {};
   for (let d = 1; d <= 7; d++) byWeekday[d] = 0;
 
+  // Heatmap dia × hora
+  const byDayHour:         Record<number, Record<number, number>> = {};
+  const byDayHourAnswered: Record<number, Record<number, number>> = {};
+  for (let d = 1; d <= 7; d++) {
+    byDayHour[d] = {};
+    byDayHourAnswered[d] = {};
+    for (let h = 0; h < 24; h++) { byDayHour[d][h] = 0; byDayHourAnswered[d][h] = 0; }
+  }
+
   for (const c of calls) {
     const dt     = new Date(c.created_at);
     const h      = dt.getUTCHours();
@@ -398,6 +426,8 @@ export async function GET(req: NextRequest, { params }: Params) {
 
     const isoDay = dt.getUTCDay() === 0 ? 7 : dt.getUTCDay();
     byWeekday[isoDay]++;
+    byDayHour[isoDay][h]++;
+    if (classifyReason(c.ended_reason) === "answered") byDayHourAnswered[isoDay][h]++;
   }
 
   const byHourAnswerRate: Record<number, number> = {};
@@ -423,8 +453,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     totalLeads:      totalLeads ?? 0,
     totalCost,
     totalDurationSec,
+    totalDurationAnsweredSec,
     avgDurationSec,
     avgDurationAllSec,
+    maxDurationSec,
+    durationBuckets,
 
     answeredCalls,
     notAnsweredCalls,
@@ -445,6 +478,8 @@ export async function GET(req: NextRequest, { params }: Params) {
     byHour,
     byHourAnswerRate,
     byWeekday,
+    byDayHour,
+    byDayHourAnswered,
 
     leadsHealth: {
       remaining:     leadsRemaining,
