@@ -71,6 +71,20 @@ export default function AppShell({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Sync activeTenantId com o tenantId presente na URL — cobre bug #1 e #3:
+  // quando o layout persiste e o pathname muda (back/forward, link direto),
+  // o dropdown e a navbar atualizam para o tenant correto.
+  useEffect(() => {
+    if (!rolesLoaded || tenants.length === 0) return;
+    const match = pathname.match(/\/app\/tenants\/([^/]+)/);
+    if (!match) return;
+    const urlTenantId = match[1];
+    if (urlTenantId !== activeTenantId && tenants.find((t) => t.id === urlTenantId)) {
+      setActiveTenantId(urlTenantId);
+      localStorage.setItem("activeTenantId", urlTenantId);
+    }
+  }, [pathname, rolesLoaded, tenants]);
+
   async function loadTenants() {
     const res = await fetch("/api/tenants");
     const data = await res.json();
@@ -107,10 +121,24 @@ export default function AppShell({
       // Usar snapshot passado ou tenantRoles atual — evita ler state stale
       const resolvedRoles = rolesSnapshot ?? tenantRoles;
       const role = resolvedRoles[id] ?? "member";
-      // Admin global sempre vai para vapi; tenant members sem admin vão para queues
-      const destination = (isAdmin || role === "owner" || role === "admin")
-        ? `/app/tenants/${id}/vapi`
-        : `/app/tenants/${id}/queues`;
+      const canAccessAll = isAdmin || role === "owner" || role === "admin";
+
+      // Preservar a seção atual (ex: /queues, /leads, /calls…) ao trocar de tenant
+      const knownSections = ["queues", "leads", "calls", "assistants", "analytics", "members", "vapi"];
+      const sectionMatch = pathname.match(/\/app\/tenants\/[^/]+\/([^/]+)/);
+      const currentSection = sectionMatch?.[1] ?? null;
+      const keepSection = currentSection && knownSections.includes(currentSection)
+        // Garante que member não caia em seção restrita ao trocar de tenant
+        && (canAccessAll || !["vapi", "assistants", "analytics", "members"].includes(currentSection))
+        ? currentSection
+        : null;
+
+      const destination = keepSection
+        ? `/app/tenants/${id}/${keepSection}`
+        : canAccessAll
+          ? `/app/tenants/${id}/vapi`
+          : `/app/tenants/${id}/queues`;
+
       router.push(destination);
     }
   }
