@@ -478,72 +478,70 @@ export default function VapiConnectionClient() {
               Webhook do Assistente
             </h2>
           </div>
-          <div className="card-body">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left: URL + explanation */}
-              <div className="space-y-3">
-                <p className="text-xs text-gray-500">
-                  Sincroniza o assistente Vapi para receber eventos de fim de chamada em tempo real.
-                  Cole a URL abaixo em <span className="font-medium text-gray-700">Vapi Dashboard → Assistants → Server URL</span>,
-                  ou clique em "Atualizar no Assistente" para enviar automaticamente via API.
-                </p>
-                <div>
-                  <label className="form-label">URL do Webhook</label>
-                  <div className="copy-field text-xs font-mono text-gray-600">
-                    <span className="flex-1 break-all select-all">{webhookUrl}</span>
-                    <button
-                      onClick={handleCopy}
-                      className="shrink-0 p-1.5 rounded-md hover:bg-gray-200 transition-colors ml-1"
-                      title="Copiar URL"
-                    >
-                      {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-gray-500" />}
-                    </button>
-                  </div>
-                </div>
-                <p className="text-[11px] text-gray-400">
-                  Eventos enviados: <span className="font-mono">end-of-call-report, status-update, tool-calls, transcript</span>
-                </p>
+          <div className="card-body space-y-4">
+            <p className="text-xs text-gray-500">
+              Sincroniza o assistente Vapi para receber eventos de fim de chamada em tempo real.
+              Cole a URL abaixo manualmente em <span className="font-medium text-gray-700">Vapi Dashboard → Assistants → Server URL</span>,
+              ou use o botão para enviar automaticamente via API.
+            </p>
+
+            {/* URL — full width */}
+            <div>
+              <label className="form-label">URL do Webhook</label>
+              <div className="copy-field text-xs font-mono text-gray-600">
+                <span className="flex-1 break-all select-all">{webhookUrl}</span>
+                <button
+                  onClick={handleCopy}
+                  className="shrink-0 p-1.5 rounded-md hover:bg-gray-200 transition-colors ml-1"
+                  title="Copiar URL"
+                >
+                  {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-gray-500" />}
+                </button>
               </div>
-              {/* Right: dropdown + action */}
-              <div className="space-y-4">
-                <div>
-                  <label className="form-label">Assistente a atualizar via API</label>
-                  <select
-                    className="form-input"
-                    value={webhookAssistantId}
-                    onChange={(e) => { setWebhookAssistantId(e.target.value); setWebhookStatus(null); }}
-                  >
-                    <option value="">Selecione um assistente…</option>
-                    {assistants.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.id.slice(0, 8)}…)</option>
-                    ))}
-                  </select>
-                  {webhookAssistantId && (
-                    <p className="text-[11px] text-gray-400 mt-1 font-mono">
-                      ID: {webhookAssistantId}
-                    </p>
-                  )}
-                </div>
-                {webhookStatus && (
-                  <div className={webhookStatus.ok ? "alert-success" : "alert-error"}>
-                    {webhookStatus.ok
-                      ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                      : <AlertTriangle className="w-4 h-4 shrink-0" />}
-                    <span className="text-sm">{webhookStatus.msg}</span>
-                  </div>
-                )}
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleUpdateWebhook}
-                    disabled={updatingWebhook || !webhookAssistantId}
-                    className="btn-primary"
-                  >
-                    {updatingWebhook
-                      ? <><Loader2 className="w-4 h-4 animate-spin" />Atualizando…</>
-                      : <><Webhook className="w-4 h-4" />Atualizar no Assistente</>}
-                  </button>
-                </div>
+            </div>
+
+            {/* Dropdown — full width */}
+            <div>
+              <label className="form-label">Selecionar assistente</label>
+              <select
+                className="form-input"
+                value={webhookAssistantId}
+                onChange={(e) => { setWebhookAssistantId(e.target.value); setWebhookStatus(null); }}
+              >
+                <option value="">Selecione um assistente…</option>
+                {assistants.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name} ({a.id.slice(0, 8)}…)</option>
+                ))}
+              </select>
+              {webhookAssistantId && (
+                <p className="text-[11px] text-gray-400 mt-1 font-mono">ID: {webhookAssistantId}</p>
+              )}
+            </div>
+
+            {/* Feedback */}
+            {webhookStatus && (
+              <div className={webhookStatus.ok ? "alert-success" : "alert-error"}>
+                {webhookStatus.ok
+                  ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                <span className="text-sm">{webhookStatus.msg}</span>
               </div>
+            )}
+
+            {/* Button — right-aligned */}
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-[11px] text-gray-400">
+                Eventos: <span className="font-mono">end-of-call-report · status-update · tool-calls · transcript</span>
+              </p>
+              <button
+                onClick={handleUpdateWebhook}
+                disabled={updatingWebhook || !webhookAssistantId}
+                className="btn-primary shrink-0 ml-4"
+              >
+                {updatingWebhook
+                  ? <><Loader2 className="w-4 h-4 animate-spin" />Atualizando…</>
+                  : <><Webhook className="w-4 h-4" />Atualizar no Assistente</>}
+              </button>
             </div>
           </div>
         </div>
