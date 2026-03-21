@@ -123,9 +123,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     console.log(`[update-webhook] tenant=${tenantId} assistantId=${assistantId} serverUrl=${serverUrl}`);
 
+    // Vapi API usa objeto "server" aninhado — NÃO aceita serverUrl/serverMessages flat
     const patchBody = {
-      serverUrl,
-      serverMessages: ["end-of-call-report", "status-update", "tool-calls", "transcript"],
+      server: {
+        url: serverUrl,
+        messages: ["end-of-call-report", "status-update", "tool-calls", "transcript"],
+      },
     };
     console.log(`[update-webhook] PATCH payload:`, JSON.stringify(patchBody));
 
@@ -149,9 +152,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
     let updated: Record<string, unknown> = {};
     try { updated = JSON.parse(rawBody); } catch { /* ignore */ }
-    console.log(`[update-webhook] ✓ OK — assistantId=${updated.id ?? assistantId} serverUrl=${updated.serverUrl ?? serverUrl}`);
+    const confirmedUrl = (updated.server as Record<string, unknown>)?.url ?? serverUrl;
+    console.log(`[update-webhook] ✓ OK — assistantId=${updated.id ?? assistantId} server.url=${confirmedUrl}`);
 
-    return NextResponse.json({ ok: true, assistantId: updated.id ?? assistantId, serverUrl: updated.serverUrl ?? serverUrl });
+    return NextResponse.json({ ok: true, assistantId: updated.id ?? assistantId, serverUrl: confirmedUrl });
   }
 
   // Fetch current state for snapshot — read body ONCE into a variable
