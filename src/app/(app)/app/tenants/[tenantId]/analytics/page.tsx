@@ -100,9 +100,25 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [assistantNames, setAssistantNames] = useState<Record<string, string>>({});
 
   const selectedAssistant = searchParams.get("assistantId") ?? "";
   const selectedQueue = searchParams.get("queueId") ?? "";
+
+  // Buscar nomes reais dos assistentes via vapi-resources (uma vez por tenant)
+  useEffect(() => {
+    fetch(`/api/tenants/${tenantId}/vapi-resources`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (!d?.assistants) return;
+        const names: Record<string, string> = {};
+        for (const a of d.assistants as Array<{ id: string; name?: string }>) {
+          if (a.id && a.name) names[a.id] = a.name;
+        }
+        setAssistantNames(names);
+      })
+      .catch(() => {});
+  }, [tenantId]);
 
   const load = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -186,7 +202,9 @@ export default function AnalyticsPage() {
             >
               <option value="">Todos os assistentes</option>
               {(data?.assistants ?? []).map((a) => (
-                <option key={a.id} value={a.id}>{a.name !== a.id ? a.name : `Assistente ${a.id.slice(0, 8)}\u2026`}</option>
+                <option key={a.id} value={a.id}>
+                  {assistantNames[a.id] ?? a.name ?? `Assistente ${a.id.slice(0, 8)}…`}
+                </option>
               ))}
             </select>
           </div>
