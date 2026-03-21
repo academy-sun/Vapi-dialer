@@ -25,6 +25,7 @@ export async function GET() {
   const { data, error: dbError } = await supabase
     .from("memberships")
     .select("role, tenants(id, name, timezone, created_at)")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: true });
 
   if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });

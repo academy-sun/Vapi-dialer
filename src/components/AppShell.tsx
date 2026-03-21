@@ -155,7 +155,7 @@ export default function AppShell({
     ? [
         {
           label: "Relatórios",
-          href: `/app/tenants/${activeTenantId}/calls`,
+          href: `/app/tenants/${activeTenantId}/analytics`,
           icon: BarChart2,
         },
         {
