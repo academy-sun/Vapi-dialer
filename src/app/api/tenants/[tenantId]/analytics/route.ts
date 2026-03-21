@@ -161,6 +161,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const { searchParams } = new URL(req.url);
   const queueId = searchParams.get("queueId") ?? null;
+  const assistantId = searchParams.get("assistantId") ?? null;
 
   const service = createServiceClient();
 
@@ -178,11 +179,25 @@ export async function GET(req: NextRequest, { params }: Params) {
   // ── 1. Campanhas disponíveis (dropdown de filtro) ──
   const { data: campaignsRaw } = await service
     .from("dial_queues")
-    .select("id, name, lead_list_id")
+    .select("id, name, lead_list_id, assistant_id")
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false });
 
-  const campaigns = (campaignsRaw ?? []).map((q) => ({ id: q.id, name: q.name }));
+  // Build assistants list from distinct assistant_ids in queues
+  const assistantsMap = new Map<string, string>();
+  for (const q of (campaignsRaw ?? [])) {
+    if (q.assistant_id && !assistantsMap.has(q.assistant_id)) {
+      assistantsMap.set(q.assistant_id, q.assistant_id);
+    }
+  }
+  const assistantsList = Array.from(assistantsMap.entries()).map(([id]) => ({ id, name: id }));
+
+  const campaigns = (campaignsRaw ?? []).map((q) => ({ id: q.id, name: q.name, assistantId: q.assistant_id }));
+
+  // Get queue IDs filtered by assistantId (if provided)
+  const filteredQueueIds: string[] | null = assistantId
+    ? (campaignsRaw ?? []).filter((q) => q.assistant_id === assistantId).map((q) => q.id)
+    : null;
 
   // ── 2. Call records ──
   let callQuery = service
@@ -191,7 +206,42 @@ export async function GET(req: NextRequest, { params }: Params) {
     .eq("tenant_id", tenantId)
     .limit(10000);
 
-  if (queueId) callQuery = callQuery.eq("dial_queue_id", queueId);
+  if (queueId) {
+    callQuery = callQuery.eq("dial_queue_id", queueId);
+  } else if (filteredQueueIds) {
+    if (filteredQueueIds.length === 0) {
+      // No queues match this assistant — short-circuit with zero data
+      return NextResponse.json({
+        campaigns,
+        assistants: assistantsList,
+        selectedQueueId: queueId,
+        selectedAssistantId: assistantId,
+        totalCalls: 0,
+        totalLeads: 0,
+        totalCost: 0,
+        totalDurationSec: 0,
+        avgDurationSec: 0,
+        avgDurationAllSec: 0,
+        answeredCalls: 0,
+        notAnsweredCalls: 0,
+        statusBreakdown: { answered: 0, voicemail: 0, busy: 0, "no-answer": 0, failed: 0, other: 0 },
+        endedReasonRaw: {},
+        structuredWithOutput: 0,
+        structuredSuccessCalls: 0,
+        structuredOutputsConfigured: false,
+        costPerConversion: null,
+        successField: configuredSuccessField,
+        successValue: configuredSuccessValue,
+        engagement: { under10s: 0, tenTo60s: 0, over60s: 0 },
+        engagementRate: 0,
+        byHour: {},
+        byHourAnswerRate: {},
+        byWeekday: {},
+        leadsHealth: { remaining: 0, failed: 0, neverAnswered: 0 },
+      });
+    }
+    callQuery = callQuery.in("dial_queue_id", filteredQueueIds);
+  }
 
   const { data: callData, error: callError } = await callQuery;
   if (callError) return NextResponse.json({ error: callError.message }, { status: 500 });
@@ -321,7 +371,9 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   return NextResponse.json({
     campaigns,
+    assistants: assistantsList,
     selectedQueueId: queueId,
+    selectedAssistantId: assistantId,
 
     totalCalls,
     totalLeads:      totalLeads ?? 0,

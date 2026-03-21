@@ -20,6 +20,7 @@ import {
   FlaskConical,
   LayoutDashboard,
   BarChart2,
+  Bot,
 } from "lucide-react";
 
 interface Tenant {
@@ -135,7 +136,7 @@ export default function AppShell({
       selectTenant(data.tenant.id, false, newRoles);
       setNewTenantName("");
       setShowCreateTenant(false);
-      showToast(`Tenant "${data.tenant.name}" criado com sucesso!`);
+      showToast(`Organização "${data.tenant.name}" criada com sucesso!`);
     }
   }
 
@@ -172,6 +173,11 @@ export default function AppShell({
           label: "Chamadas",
           href: `/app/tenants/${activeTenantId}/calls`,
           icon: PhoneCall,
+        },
+        {
+          label: "Assistentes",
+          href: `/app/tenants/${activeTenantId}/assistants`,
+          icon: Bot,
         },
         {
           label: "Membros",
@@ -232,7 +238,7 @@ export default function AppShell({
 
         {/* Tenant Selector */}
         <div className="px-4 py-4" style={{ borderBottom: "1px solid #222222" }}>
-          <p className="sidebar-section-label">Tenant Ativo</p>
+          <p className="sidebar-section-label">Organização</p>
 
           {/* Dropdown */}
           <div className="relative" ref={dropdownRef}>
@@ -308,13 +314,13 @@ export default function AppShell({
                       }}
                     >
                       <Plus className="w-3.5 h-3.5" />
-                      Criar novo tenant
+                      Criar nova organização
                     </button>
                   ) : (
                     <div className="p-2 space-y-2">
                       <input
                         type="text"
-                        placeholder="Nome do tenant"
+                        placeholder="Nome da organização"
                         value={newTenantName}
                         onChange={(e) => setNewTenantName(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && createTenant()}
