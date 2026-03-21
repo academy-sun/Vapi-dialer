@@ -5,42 +5,177 @@ import { createServiceClient } from "@/lib/supabase/service";
 type Params = { params: Promise<{ tenantId: string }> };
 
 // ─── Classificação de ended_reason ───────────────────────────────────────────
-const ANSWERED_REASONS  = new Set(["customer-ended-call", "assistant-ended-call"]);
-const VOICEMAIL_REASONS = new Set(["voicemail", "machine_end_silence", "machine_end_other"]);
-const BUSY_REASONS      = new Set(["busy"]);
-const NO_ANSWER_REASONS = new Set(["no-answer"]);
-const FAILED_REASONS    = new Set(["failed", "pipeline-error", "error"]);
+// Vapi v1 usava: "no-answer", "busy", "voicemail", "failed"
+// Vapi v2 usa:   "customer-did-not-answer", "customer-busy", "silence-timed-out"
+//                "call.in-progress.error-*" para erros SIP
 
-function classifyReason(reason: string | null): "answered" | "voicemail" | "busy" | "no-answer" | "failed" | "other" {
-  if (!reason)                      return "other";
-  if (ANSWERED_REASONS.has(reason)) return "answered";
-  if (VOICEMAIL_REASONS.has(reason)) return "voicemail";
-  if (BUSY_REASONS.has(reason))     return "busy";
-  if (NO_ANSWER_REASONS.has(reason)) return "no-answer";
-  if (FAILED_REASONS.has(reason))   return "failed";
+const ANSWERED_REASONS = new Set([
+  "customer-ended-call",
+  "assistant-ended-call",
+]);
+
+const VOICEMAIL_REASONS = new Set([
+  "voicemail",
+  "machine_end_silence",
+  "machine_end_other",
+  "silence-timed-out", // Vapi v2: silêncio → caixa postal ou ninguém atendeu
+]);
+
+const BUSY_REASONS = new Set([
+  "busy",
+  "customer-busy", // Vapi v2
+]);
+
+const NO_ANSWER_REASONS = new Set([
+  "no-answer",
+  "customer-did-not-answer", // Vapi v2
+]);
+
+const FAILED_REASONS = new Set([
+  "failed",
+  "pipeline-error",
+  "error",
+]);
+
+// Erros SIP chegam como strings longas "call.in-progress.error-*"
+function isSipError(reason: string): boolean {
+  return reason.startsWith("call.in-progress.error");
+}
+
+function classifyReason(
+  reason: string | null
+): "answered" | "voicemail" | "busy" | "no-answer" | "failed" | "other" {
+  if (!reason)                        return "other";
+  if (ANSWERED_REASONS.has(reason))   return "answered";
+  if (VOICEMAIL_REASONS.has(reason))  return "voicemail";
+  if (BUSY_REASONS.has(reason))       return "busy";
+  if (NO_ANSWER_REASONS.has(reason))  return "no-answer";
+  if (FAILED_REASONS.has(reason))     return "failed";
+  if (isSipError(reason))             return "failed";
   return "other";
 }
 
-// ─── Verifica se structured_output indica conversão ──────────────────────────
-function isConversion(structured_outputs: unknown): boolean {
-  const out = structured_outputs as Record<string, unknown> | null;
-  if (!out || typeof out !== "object") return false;
-  const v = out.success ?? out.sucesso ?? out.interested ?? out.interesse ?? out.converted ?? out.convertido;
-  return v === true || v === "true" || v === "Sucesso" || v === "sim" || v === "yes";
+// ─── Detecção de conversão em structured_outputs ─────────────────────────────
+// Suporta duas estruturas:
+//   1. Flat (legado):   { success: true, sucesso: "sim", interesse: "Sucesso" }
+//   2. Nested (Vapi v2): { assistantId: { name, result: { interesse, QuerReuniaoComVendedor, ... } } }
+
+const NEGATIVE_VALUES = new Set([
+  "fracasso", "falha", "não", "nao", "no", "false", "0",
+]);
+
+function isPositiveValue(v: unknown): boolean {
+  if (v === true || v === 1) return true;
+  if (typeof v === "string") {
+    const norm = v.toLowerCase().trim();
+    if (NEGATIVE_VALUES.has(norm)) return false;
+    // Valores positivos comuns
+    if (["sim", "yes", "sucesso", "true", "convertido", "interessado", "agendado"].includes(norm)) return true;
+  }
+  return false;
 }
 
+// Campos que indicam sucesso quando positivos
+const SUCCESS_FIELDS = new Set([
+  "success", "sucesso", "interested", "interesse",
+  "converted", "convertido", "agendado", "scheduled",
+  "QuerReuniaoComVendedor", "querreuniaocumvendedor",
+  "momentoDeCompra", "momentodecompra",
+]);
+
+function isConversion(structured_outputs: unknown): boolean {
+  if (!structured_outputs || typeof structured_outputs !== "object") return false;
+  const out = structured_outputs as Record<string, unknown>;
+
+  // 1. Estrutura flat (legado): chaves diretas no objeto raiz
+  for (const field of SUCCESS_FIELDS) {
+    if (field in out && isPositiveValue(out[field])) return true;
+  }
+
+  // 2. Estrutura nested (Vapi v2): { assistantId: { result: { ... } } }
+  for (const key of Object.keys(out)) {
+    const entry = out[key];
+    if (!entry || typeof entry !== "object") continue;
+    const entryObj = entry as Record<string, unknown>;
+
+    // Verificar no resultado aninhado
+    const result = entryObj.result;
+    if (result && typeof result === "object") {
+      const resultObj = result as Record<string, unknown>;
+      for (const field of SUCCESS_FIELDS) {
+        // Case-insensitive lookup
+        const val = resultObj[field] ??
+          resultObj[field.toLowerCase()] ??
+          resultObj[field.charAt(0).toUpperCase() + field.slice(1)];
+        if (val !== undefined && isPositiveValue(val)) return true;
+      }
+    }
+
+    // Verificar diretamente no entry (sem result aninhado)
+    for (const field of SUCCESS_FIELDS) {
+      if (field in entryObj && isPositiveValue(entryObj[field])) return true;
+    }
+  }
+
+  return false;
+}
+
+// ─── Detecção de conversão configurada pelo tenant ────────────────────────────
+function isConversionConfigured(
+  structured_outputs: unknown,
+  successField: string,
+  successValue: string
+): boolean {
+  if (!structured_outputs || typeof structured_outputs !== "object") return false;
+  const out = structured_outputs as Record<string, unknown>;
+
+  function matchesValue(v: unknown): boolean {
+    if (v === null || v === undefined) return false;
+    const norm = String(v).toLowerCase().trim();
+    return norm === successValue.toLowerCase().trim();
+  }
+
+  // Flat structure
+  if (successField in out) return matchesValue(out[successField]);
+
+  // Nested: { assistantId: { result: { ... } } }
+  for (const key of Object.keys(out)) {
+    const entry = out[key];
+    if (!entry || typeof entry !== "object") continue;
+    const entryObj = entry as Record<string, unknown>;
+    const result = entryObj.result;
+    if (result && typeof result === "object") {
+      const resultObj = result as Record<string, unknown>;
+      if (successField in resultObj) return matchesValue(resultObj[successField]);
+    }
+    if (successField in entryObj) return matchesValue(entryObj[successField]);
+  }
+  return false;
+}
+
+// ─── Handler principal ────────────────────────────────────────────────────────
 export async function GET(req: NextRequest, { params }: Params) {
   const { tenantId } = await params;
   const { response } = await requireTenantAccess(tenantId);
   if (response) return response;
 
-  // Filtro opcional por campanha
   const { searchParams } = new URL(req.url);
   const queueId = searchParams.get("queueId") ?? null;
 
   const service = createServiceClient();
 
-  // ── 1. Buscar campanhas disponíveis (para o dropdown de filtro) ──
+  // Fetch tenant vapi_connection config for success field/value
+  const { data: vapiConn } = await service
+    .from("vapi_connections")
+    .select("success_field, success_value")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .single();
+
+  const configuredSuccessField = vapiConn?.success_field ?? null;
+  const configuredSuccessValue = vapiConn?.success_value ?? null;
+
+  // ── 1. Campanhas disponíveis (dropdown de filtro) ──
   const { data: campaignsRaw } = await service
     .from("dial_queues")
     .select("id, name, lead_list_id")
@@ -49,7 +184,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const campaigns = (campaignsRaw ?? []).map((q) => ({ id: q.id, name: q.name }));
 
-  // ── 2. Buscar call_records (com filtro de campanha se aplicável) ──
+  // ── 2. Call records ──
   let callQuery = service
     .from("call_records")
     .select("cost, duration_seconds, ended_reason, created_at, structured_outputs, dial_queue_id")
@@ -61,9 +196,11 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { data: callData, error: callError } = await callQuery;
   if (callError) return NextResponse.json({ error: callError.message }, { status: 500 });
 
-  // ── 3. Buscar leads (com filtro de lead_list se campanha selecionada) ──
-  const selectedQueue = queueId ? (campaignsRaw ?? []).find((q) => q.id === queueId) : null;
-  const leadListId    = selectedQueue?.lead_list_id ?? null;
+  // ── 3. Leads (filtrado por lead_list se campanha selecionada) ──
+  const selectedQueue = queueId
+    ? (campaignsRaw ?? []).find((q) => q.id === queueId)
+    : null;
+  const leadListId = selectedQueue?.lead_list_id ?? null;
 
   let leadsQuery = service
     .from("leads")
@@ -74,54 +211,72 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { data: leadsRaw, count: totalLeads } = await leadsQuery;
   const leads = leadsRaw ?? [];
 
-  // ────────────────────────────────────────────────────────────────────────────
-  // AGREGAÇÕES
-  // ────────────────────────────────────────────────────────────────────────────
+  // ── Agregações ────────────────────────────────────────────────────────────
   const calls = callData ?? [];
 
-  // ── Métricas base ──
+  // Métricas base
   const totalCalls       = calls.length;
   const totalCost        = calls.reduce((s, c) => s + (c.cost ?? 0), 0);
   const totalDurationSec = calls.reduce((s, c) => s + (c.duration_seconds ?? 0), 0);
 
-  // ── Breakdown por status ──
-  const statusBreakdown = { answered: 0, voicemail: 0, busy: 0, "no-answer": 0, failed: 0, other: 0 };
+  // Breakdown por status com ended_reason raw para diagnóstico
+  const statusBreakdown = {
+    answered:    0,
+    voicemail:   0,
+    busy:        0,
+    "no-answer": 0,
+    failed:      0,
+    other:       0,
+  };
+  const endedReasonRaw: Record<string, number> = {}; // diagnóstico: valores reais do banco
+
   for (const c of calls) {
-    statusBreakdown[classifyReason(c.ended_reason)]++;
+    const cat = classifyReason(c.ended_reason);
+    statusBreakdown[cat]++;
+
+    const raw = c.ended_reason ?? "null";
+    endedReasonRaw[raw] = (endedReasonRaw[raw] ?? 0) + 1;
   }
 
   const answeredCalls    = statusBreakdown.answered;
   const notAnsweredCalls = statusBreakdown["no-answer"];
 
-  // ── Structured outputs ──
-  const structuredWithOutput   = calls.filter((c) => c.structured_outputs != null).length;
-  const structuredSuccessCalls = calls.filter((c) => isConversion(c.structured_outputs)).length;
-  const structuredOutputsConfigured = structuredWithOutput > 0; // false = agente não configurado
+  // Structured outputs
+  const structuredWithOutput = calls.filter((c) => c.structured_outputs != null).length;
 
-  // ── ROI: custo por conversão ──
-  // null = structured outputs não configurados (não mostrar valor quebrado)
-  // Infinity guard: se 0 conversões mas structured está configurado → "sem conversões"
-  const costPerConversion: number | null = !structuredOutputsConfigured
-    ? null
-    : structuredSuccessCalls > 0
+  const structuredSuccessCalls = configuredSuccessField
+    ? calls.filter((c) =>
+        isConversionConfigured(c.structured_outputs, configuredSuccessField, configuredSuccessValue ?? "true")
+      ).length
+    : calls.filter((c) => isConversion(c.structured_outputs)).length;
+
+  const structuredOutputsConfigured = structuredWithOutput > 0 && configuredSuccessField != null;
+
+  // ROI: null se não configurado OU 0 conversões (evita mostrar valor quebrado)
+  const costPerConversion: number | null =
+    structuredOutputsConfigured && structuredSuccessCalls > 0
       ? totalCost / structuredSuccessCalls
-      : null; // configurado mas 0 conversões → null com flag separada
+      : null;
 
-  // ── Duração média só de chamadas atendidas ──
+  // Duração média só de chamadas atendidas
   const answeredWithDuration = calls.filter(
     (c) => classifyReason(c.ended_reason) === "answered" && c.duration_seconds != null
   );
-  const avgDurationSec = answeredWithDuration.length > 0
-    ? answeredWithDuration.reduce((s, c) => s + (c.duration_seconds ?? 0), 0) / answeredWithDuration.length
-    : 0;
+  const avgDurationSec =
+    answeredWithDuration.length > 0
+      ? answeredWithDuration.reduce((s, c) => s + (c.duration_seconds ?? 0), 0) /
+        answeredWithDuration.length
+      : 0;
 
-  // ── Duração média geral (chamadas com duração, mantido para compatibilidade) ──
+  // Duração média geral (compatibilidade)
   const callsWithDuration = calls.filter((c) => c.duration_seconds != null);
-  const avgDurationAllSec = callsWithDuration.length > 0
-    ? callsWithDuration.reduce((s, c) => s + (c.duration_seconds ?? 0), 0) / callsWithDuration.length
-    : 0;
+  const avgDurationAllSec =
+    callsWithDuration.length > 0
+      ? callsWithDuration.reduce((s, c) => s + (c.duration_seconds ?? 0), 0) /
+        callsWithDuration.length
+      : 0;
 
-  // ── Engajamento: só chamadas atendidas classificadas por duração ──
+  // Engajamento — só chamadas atendidas, classificadas por duração
   const engagement = { under10s: 0, tenTo60s: 0, over60s: 0 };
   for (const c of calls) {
     if (classifyReason(c.ended_reason) !== "answered") continue;
@@ -130,80 +285,71 @@ export async function GET(req: NextRequest, { params }: Params) {
     else if (dur <= 60) engagement.tenTo60s++;
     else                engagement.over60s++;
   }
-  const engagementRate = answeredCalls > 0
-    ? Math.round((engagement.over60s / answeredCalls) * 100)
-    : 0;
+  const engagementRate =
+    answeredCalls > 0 ? Math.round((engagement.over60s / answeredCalls) * 100) : 0;
 
-  // ── Distribuição por hora: VOLUME + TAXA DE ATENDIMENTO por hora ──
-  const byHour:           Record<number, number> = {};
-  const byHourAnswered:   Record<number, number> = {};
+  // Distribuição por hora: volume + taxa de atendimento
+  const byHour:         Record<number, number> = {};
+  const byHourAnswered: Record<number, number> = {};
   for (let h = 0; h < 24; h++) { byHour[h] = 0; byHourAnswered[h] = 0; }
 
-  // ── Distribuição por dia da semana ──
   const byWeekday: Record<number, number> = {};
   for (let d = 1; d <= 7; d++) byWeekday[d] = 0;
 
   for (const c of calls) {
-    const dt  = new Date(c.created_at);
-    const h   = dt.getUTCHours();
+    const dt     = new Date(c.created_at);
+    const h      = dt.getUTCHours();
     byHour[h]++;
     if (classifyReason(c.ended_reason) === "answered") byHourAnswered[h]++;
 
-    const jsDay = dt.getUTCDay();
-    const isoDay = jsDay === 0 ? 7 : jsDay;
+    const isoDay = dt.getUTCDay() === 0 ? 7 : dt.getUTCDay();
     byWeekday[isoDay]++;
   }
 
-  // Taxa de atendimento por hora (0-100), só horas com pelo menos 1 chamada
   const byHourAnswerRate: Record<number, number> = {};
   for (let h = 0; h < 24; h++) {
-    byHourAnswerRate[h] = byHour[h] > 0
-      ? Math.round((byHourAnswered[h] / byHour[h]) * 100)
-      : 0;
+    byHourAnswerRate[h] =
+      byHour[h] > 0 ? Math.round((byHourAnswered[h] / byHour[h]) * 100) : 0;
   }
 
-  // ── Saúde da lista de leads ──
+  // Saúde da lista
   const leadsRemaining     = leads.filter((l) => ["queued", "callbackScheduled"].includes(l.status)).length;
   const leadsFailed        = leads.filter((l) => l.status === "failed").length;
-  // Leads que tentaram 3+ vezes e nunca foram atendidos (status failed, sem chamada bem-sucedida)
   const leadsNeverAnswered = leads.filter(
     (l) => l.status === "failed" && (l.attempt_count ?? 0) >= 3
   ).length;
 
   return NextResponse.json({
-    // ── Filtro ──
     campaigns,
     selectedQueueId: queueId,
 
-    // ── Métricas base ──
     totalCalls,
-    totalLeads:    totalLeads ?? 0,
+    totalLeads:      totalLeads ?? 0,
     totalCost,
     totalDurationSec,
-    avgDurationSec,      // só atendidas (nova definição)
-    avgDurationAllSec,   // todas com duração (compatibilidade)
+    avgDurationSec,
+    avgDurationAllSec,
 
-    // ── Atendimento ──
     answeredCalls,
     notAnsweredCalls,
     statusBreakdown,
+    endedReasonRaw, // diagnóstico — remover depois se quiser
 
-    // ── Structured outputs / ROI ──
     structuredWithOutput,
     structuredSuccessCalls,
     structuredOutputsConfigured,
     costPerConversion,
 
-    // ── Engajamento ──
+    successField: configuredSuccessField,
+    successValue: configuredSuccessValue,
+
     engagement,
     engagementRate,
 
-    // ── Distribuição temporal ──
     byHour,
     byHourAnswerRate,
     byWeekday,
 
-    // ── Saúde da lista ──
     leadsHealth: {
       remaining:     leadsRemaining,
       failed:        leadsFailed,
