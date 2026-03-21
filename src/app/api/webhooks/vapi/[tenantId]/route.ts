@@ -8,6 +8,7 @@ type Params = { params: Promise<{ tenantId: string }> };
 // Não usa sessão — usa service role com tenantId explícito
 export async function POST(req: NextRequest, { params }: Params) {
   const { tenantId } = await params;
+
   const body = await req.json();
   const { message } = body;
 
@@ -149,12 +150,20 @@ async function handleEndOfCallReport(
 ) {
   const call       = message.call as Record<string, unknown> | undefined;
   const vapiCallId = call?.id as string | undefined;
-  if (!vapiCallId) return;
+  if (!vapiCallId) {
+    console.warn("[webhook] end-of-call-report sem vapiCallId — ignorado");
+    return NextResponse.json({ ok: false, reason: "no-call-id" });
+  }
 
-  const endedReason = (message.endedReason as string) ?? null;
-  const cost        = (message.cost        as number) ?? null;
-  const transcript  = (message.transcript  as string) ?? null;
-  const summary     = (message.analysis    as Record<string, unknown>)?.summary as string ?? null;
+  const endedReason         = (message.endedReason as string) ?? null;
+  const cost                = (message.cost        as number) ?? null;
+  const transcript          = (message.transcript  as string) ?? null;
+  const summary             = (message.analysis    as Record<string, unknown>)?.summary as string ?? null;
+  const durationSeconds     = (message.durationSeconds as number) ?? null;
+  const artifact            = (message.artifact as Record<string, unknown>) ?? {};
+  const structuredOutputs   = (artifact.structuredOutputs ?? null) as Record<string, unknown> | null;
+  const recordingUrl        = (artifact.recordingUrl       ?? message.recordingUrl       ?? null) as string | null;
+  const stereoRecordingUrl  = (artifact.stereoRecordingUrl ?? message.stereoRecordingUrl ?? null) as string | null;
 
   // Dados completos para repassar ao webhook de saída
   const callData = {
@@ -162,6 +171,8 @@ async function handleEndOfCallReport(
     transcript,
     summary,
     cost,
+    durationSeconds,
+    structuredOutputs,
     vapiMessage: message, // payload completo do Vapi
   };
 
@@ -178,7 +189,16 @@ async function handleEndOfCallReport(
     // ── Caso normal: worker criou o call_record, webhook finaliza ──
     await service
       .from("call_records")
-      .update({ ended_reason: endedReason, cost, transcript, summary })
+      .update({
+        ended_reason:        endedReason,
+        cost,
+        transcript,
+        summary,
+        duration_seconds:    durationSeconds,
+        structured_outputs:  structuredOutputs,
+        recording_url:       recordingUrl,
+        stereo_recording_url: stereoRecordingUrl,
+      })
       .eq("vapi_call_id", vapiCallId);
 
     await updateLeadAfterCall(
@@ -194,7 +214,10 @@ async function handleEndOfCallReport(
 
   // ── Fallback: call_record não encontrado (race condition ou teste manual) ──
   const customerNumber = (call?.customer as Record<string, unknown>)?.number as string | undefined;
-  if (!customerNumber) return;
+  if (!customerNumber) {
+    console.warn(`[webhook] call ${vapiCallId} sem customerNumber — ignorado`);
+    return NextResponse.json({ ok: false, reason: "no-customer-number" });
+  }
 
   const { data: lead } = await service
     .from("leads")
@@ -205,7 +228,10 @@ async function handleEndOfCallReport(
     .limit(1)
     .single();
 
-  if (!lead) return;
+  if (!lead) {
+    console.warn(`[webhook] lead não encontrado para ${customerNumber} (tenant ${tenantId})`);
+    return NextResponse.json({ ok: false, reason: "lead-not-found" });
+  }
 
   const { data: queue } = await service
     .from("dial_queues")
@@ -217,29 +243,38 @@ async function handleEndOfCallReport(
     .limit(1)
     .single();
 
-  if (!queue) return;
+  if (!queue) {
+    console.warn(`[webhook] fila não encontrada para lead ${lead.id} (tenant ${tenantId})`);
+    return NextResponse.json({ ok: false, reason: "queue-not-found" });
+  }
 
   await service.from("call_records").insert({
-    tenant_id:     tenantId,
-    dial_queue_id: queue.id,
-    lead_id:       lead.id,
-    vapi_call_id:  vapiCallId,
-    status:        "completed",
-    ended_reason:  endedReason,
+    tenant_id:            tenantId,
+    dial_queue_id:        queue.id,
+    lead_id:              lead.id,
+    vapi_call_id:         vapiCallId,
+    status:               "completed",
+    ended_reason:         endedReason,
     cost,
     transcript,
     summary,
+    duration_seconds:     durationSeconds,
+    structured_outputs:   structuredOutputs,
+    recording_url:        recordingUrl,
+    stereo_recording_url: stereoRecordingUrl,
   });
 
   await updateLeadAfterCall(lead.id, queue.id, tenantId, endedReason, service, callData);
 }
 
 interface CallData {
-  vapiCallId?:  string;
-  transcript?:  string | null;
-  summary?:     string | null;
-  cost?:        number | null;
-  vapiMessage?: Record<string, unknown>; // payload completo do end-of-call-report
+  vapiCallId?:        string;
+  transcript?:        string | null;
+  summary?:           string | null;
+  cost?:              number | null;
+  durationSeconds?:   number | null;
+  structuredOutputs?: Record<string, unknown> | null;
+  vapiMessage?:       Record<string, unknown>; // payload completo do end-of-call-report
 }
 
 async function updateLeadAfterCall(
@@ -268,6 +303,38 @@ async function updateLeadAfterCall(
       .update({ status: "callbackScheduled", last_outcome: endedReason })
       .eq("id", leadId);
     await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "callbackScheduled", service, callData);
+    return;
+  }
+
+  // Erros do provedor SIP (503, 408, etc.) — re-queuar sem contar como tentativa
+  const isProviderFault = endedReason
+    ? endedReason.includes("error-providerfault") ||
+      endedReason.includes("sip-503") ||
+      endedReason.includes("sip-408") ||
+      endedReason.includes("sip-500") ||
+      endedReason.includes("sip-502") ||
+      endedReason.includes("sip-504")
+    : false;
+
+  if (isProviderFault) {
+    console.log(`[webhook] Provider fault detectado (${endedReason}) — re-queue sem contar tentativa`);
+    const { data: currentLead } = await service
+      .from("leads")
+      .select("attempt_count")
+      .eq("id", leadId)
+      .single();
+    const prevAttempts = Math.max(0, (currentLead?.attempt_count ?? 1) - 1);
+    const retryAt = new Date(Date.now() + 3 * 60 * 1000).toISOString(); // retry em 3 min
+    await service
+      .from("leads")
+      .update({
+        status:          "queued",
+        last_outcome:    endedReason,
+        next_attempt_at: retryAt,
+        attempt_count:   prevAttempts, // desfaz o incremento do worker
+      })
+      .eq("id", leadId);
+    // Não disparar webhook externo para provider faults — é ruído
     return;
   }
 
@@ -337,7 +404,12 @@ async function fireOutboundWebhook(
     .eq("tenant_id", tenantId)
     .single();
 
-  if (!queueInfo?.webhook_url) return; // Sem webhook configurado
+  if (!queueInfo?.webhook_url) {
+    console.log(`[outbound-webhook] Fila ${queueId} sem webhook_url configurada — ignorando`);
+    return;
+  }
+
+  console.log(`[outbound-webhook] Disparando para ${queueInfo.webhook_url} | lead=${leadId} | status=${leadStatus}`);
 
   // Buscar dados do lead
   const { data: lead } = await service
@@ -450,13 +522,24 @@ async function fireOutboundWebhook(
   };
 
   try {
-    await fetch(queueInfo.webhook_url, {
+    const res = await fetch(queueInfo.webhook_url, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify(payload),
-      signal:  AbortSignal.timeout(8000), // 8s — payload maior, mais tempo
+      signal:  AbortSignal.timeout(12_000), // 12s
     });
-  } catch {
-    console.error("[outbound-webhook] Erro ao enviar para", queueInfo.webhook_url);
+
+    if (res.ok) {
+      console.log(`[outbound-webhook] ✓ Entregue | HTTP ${res.status} | url=${queueInfo.webhook_url}`);
+    } else {
+      const body = await res.text().catch(() => "");
+      console.error(
+        `[outbound-webhook] ✗ Destino retornou HTTP ${res.status} | url=${queueInfo.webhook_url} | body=${body.slice(0, 200)}`
+      );
+    }
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[outbound-webhook] ✗ Falha de rede | url=${queueInfo.webhook_url} | erro=${msg}`);
   }
 }

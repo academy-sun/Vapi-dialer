@@ -1,19 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin-helper";
 
-// GET /api/tenants — lista tenants do usuário
+// GET /api/tenants — lista tenants do usuário (admins veem todos)
 export async function GET() {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
 
+  if (isAdminEmail(user.email)) {
+    // Admin vê todos os tenants — role implícita é "owner" para sistema admin
+    const { createServiceClient } = await import("@/lib/supabase/service");
+    const service = createServiceClient();
+    const { data, error: dbError } = await service
+      .from("tenants")
+      .select("id, name, timezone, created_at")
+      .order("created_at", { ascending: true });
+    if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
+    // Admins têm acesso total — role "owner" em todos
+    return NextResponse.json({ tenants: (data ?? []).map((t) => ({ ...t, role: "owner" })) });
+  }
+
+  // Usuário normal: busca via memberships para incluir role no mesmo request
   const { data, error: dbError } = await supabase
-    .from("tenants")
-    .select("id, name, timezone, created_at")
+    .from("memberships")
+    .select("role, tenants(id, name, timezone, created_at)")
     .order("created_at", { ascending: true });
 
   if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
-  return NextResponse.json({ tenants: data });
+
+  // Aplanar: { role, tenants: {...} } → { ...tenant, role }
+  const tenants = (data ?? [])
+    .filter((m) => m.tenants)
+    .map((m) => ({ ...(m.tenants as unknown as Record<string, unknown>), role: m.role }));
+
+  // Deduplicar por id (garante que memberships duplicadas não causem tenant duplicado no dropdown)
+  const seen = new Set<string>();
+  const uniqueTenants = tenants.filter((t) => {
+    const id = (t as Record<string, unknown>).id as string;
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
+  return NextResponse.json({ tenants: uniqueTenants });
 }
 
 // POST /api/tenants — cria tenant + membership owner

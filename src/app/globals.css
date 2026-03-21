@@ -58,7 +58,7 @@
 
   .sidebar-logo-icon {
     @apply w-8 h-8 rounded-lg flex items-center justify-center;
-    background: linear-gradient(135deg, hsl(238, 84%, 60%), hsl(265, 84%, 60%));
+    background: linear-gradient(135deg, #FF1A1A, #cc0000);
   }
 
   .sidebar-logo-text {
@@ -87,14 +87,14 @@
   }
 
   .sidebar-nav-item.active {
-    background-color: hsl(238, 84%, 15%);
-    color: hsl(238, 84%, 80%);
-    border-left: 3px solid hsl(238, 84%, 60%);
+    background-color: #1a0000;
+    color: #FF6666;
+    border-left: 3px solid #FF1A1A;
     padding-left: calc(0.75rem - 3px);
   }
 
   .sidebar-nav-item.active .nav-icon {
-    color: hsl(238, 84%, 70%);
+    color: #FF1A1A;
   }
 
   .sidebar-footer {
@@ -108,7 +108,12 @@
   }
 
   .btn-primary {
-    @apply btn px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500;
+    @apply btn px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-offset-2;
+    background-color: #FF1A1A;
+    focus-ring-color: #FF1A1A;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: #cc0000;
   }
 
   .btn-secondary {
@@ -304,7 +309,7 @@
 
   .progress-bar-fill {
     @apply h-2 rounded-full transition-all duration-500;
-    background: linear-gradient(90deg, hsl(238, 84%, 60%), hsl(265, 84%, 60%));
+    background: linear-gradient(90deg, #FF1A1A, #cc0000);
   }
 
   /* Select wrapper */

@@ -48,6 +48,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
+  const safeConc    = Math.min(5, Math.max(1, parseInt(String(concurrency))    || 3));
+  const safeAttempt = Math.min(10, Math.max(1, parseInt(String(max_attempts))  || 3));
+  const safeDelay   = Math.min(1440, Math.max(1, parseInt(String(retry_delay_minutes)) || 30));
+
   const service = createServiceClient();
   const { data, error } = await service
     .from("dial_queues")
@@ -58,9 +62,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       phone_number_id,
       lead_list_id,
       status: "draft",
-      concurrency,
-      max_attempts,
-      retry_delay_minutes,
+      concurrency:          safeConc,
+      max_attempts:         safeAttempt,
+      retry_delay_minutes:  safeDelay,
       webhook_url,
       ...(allowed_days         !== undefined && { allowed_days }),
       ...(allowed_time_window  !== undefined && { allowed_time_window }),

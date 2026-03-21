@@ -18,10 +18,15 @@ export async function GET(req: NextRequest, { params }: Params) {
   const offset = (page - 1) * limit;
 
   const service = createServiceClient();
+  const maxDuration = url.searchParams.get("max_duration")
+    ? parseInt(url.searchParams.get("max_duration")!)
+    : null;
+  const answeredOnly = url.searchParams.get("answered_only") === "true";
+
   let query = service
     .from("call_records")
     .select(
-      `id, vapi_call_id, status, ended_reason, cost, summary, created_at,
+      `id, vapi_call_id, status, ended_reason, cost, summary, duration_seconds, structured_outputs, created_at,
        leads!inner(phone_e164, data_json)`,
       { count: "exact" }
     )
@@ -31,6 +36,8 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   if (queueId) query = query.eq("dial_queue_id", queueId);
   if (leadId) query = query.eq("lead_id", leadId);
+  if (answeredOnly) query = query.in("ended_reason", ["customer-ended-call", "assistant-ended-call"]);
+  if (maxDuration != null) query = query.lte("duration_seconds", maxDuration);
 
   const { data, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -23,6 +23,7 @@ type Params = { params: Promise<{ tenantId: string; listId: string }> };
 export async function POST(req: NextRequest, { params }: Params) {
   const { tenantId, listId } = await params;
 
+
   const service = createServiceClient();
 
   // Buscar a lista e seu webhook_secret

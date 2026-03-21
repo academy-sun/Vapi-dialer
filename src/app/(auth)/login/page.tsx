@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -16,67 +15,145 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-
     if (error) {
-      setError(error.message);
+      setError("Email ou senha incorretos.");
       setLoading(false);
       return;
     }
-
     router.push("/app");
     router.refresh();
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-        <h1 className="text-2xl font-bold mb-6 text-gray-900">Entrar</h1>
+    <div style={{
+      minHeight: "100vh",
+      background: "#0D0D0D",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "24px",
+    }}>
+      {/* Logo */}
+      <div style={{ marginBottom: "40px", textAlign: "center" }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", gap: "4px" }}>
+          <span style={{ fontFamily: "Inter, sans-serif", fontSize: "36px", fontWeight: 700, color: "#FFFFFF", letterSpacing: "-1px" }}>
+            CALL
+          </span>
+          <span style={{ fontFamily: "Inter, sans-serif", fontSize: "42px", fontWeight: 700, color: "#FF1A1A", letterSpacing: "-1px" }}>
+            X
+          </span>
+        </div>
+        <p style={{ fontSize: "11px", color: "#555555", letterSpacing: "2px", marginTop: "4px" }}>
+          POWERED BY AI
+        </p>
+      </div>
+
+      {/* Card de login */}
+      <div style={{
+        width: "100%",
+        maxWidth: "400px",
+        background: "#111111",
+        border: "1px solid #222222",
+        borderRadius: "16px",
+        padding: "32px",
+      }}>
+        <h1 style={{ fontSize: "20px", fontWeight: 600, color: "#FFFFFF", marginBottom: "8px" }}>
+          Entrar
+        </h1>
+        <p style={{ fontSize: "14px", color: "#666666", marginBottom: "28px" }}>
+          Acesse sua conta para continuar
+        </p>
 
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4 text-sm">
+          <div style={{
+            background: "#1a0000",
+            border: "1px solid #FF1A1A33",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            marginBottom: "20px",
+            fontSize: "14px",
+            color: "#FF6666",
+          }}>
             {error}
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 500, color: "#999999", marginBottom: "8px" }}>
+              Email
+            </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
+              placeholder="seu@email.com"
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                background: "#1a1a1a",
+                border: "1px solid #2a2a2a",
+                borderRadius: "8px",
+                color: "#FFFFFF",
+                fontSize: "14px",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+            <label style={{ display: "block", fontSize: "13px", fontWeight: 500, color: "#999999", marginBottom: "8px" }}>
+              Senha
+            </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
+              placeholder="••••••••"
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                background: "#1a1a1a",
+                border: "1px solid #2a2a2a",
+                borderRadius: "8px",
+                color: "#FFFFFF",
+                fontSize: "14px",
+                outline: "none",
+                boxSizing: "border-box",
+              }}
             />
           </div>
+
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 font-medium"
+            style={{
+              width: "100%",
+              padding: "13px",
+              background: loading ? "#cc0000" : "#FF1A1A",
+              border: "none",
+              borderRadius: "8px",
+              color: "#FFFFFF",
+              fontSize: "15px",
+              fontWeight: 600,
+              cursor: loading ? "not-allowed" : "pointer",
+              marginTop: "8px",
+              transition: "background 0.15s",
+            }}
           >
             {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
-
-        <p className="mt-4 text-sm text-gray-600 text-center">
-          Não tem conta?{" "}
-          <Link href="/signup" className="text-blue-600 hover:underline">
-            Criar conta
-          </Link>
-        </p>
       </div>
+
+      <p style={{ marginTop: "24px", fontSize: "13px", color: "#444444" }}>
+        © {new Date().getFullYear()} Call X. Todos os direitos reservados.
+      </p>
     </div>
   );
 }

@@ -12,18 +12,31 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (response) return response;
 
   const url = new URL(req.url);
-  const page = parseInt(url.searchParams.get("page") ?? "1");
-  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50"), 100);
+  const page   = parseInt(url.searchParams.get("page")  ?? "1");
+  const limit  = Math.min(parseInt(url.searchParams.get("limit") ?? "50"), 100);
+  const search = url.searchParams.get("search")?.trim() ?? "";
   const offset = (page - 1) * limit;
 
   const service = createServiceClient();
-  const { data, error, count } = await service
+  let query = service
     .from("leads")
     .select("*", { count: "exact" })
     .eq("tenant_id", tenantId)
     .eq("lead_list_id", leadListId)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
+
+  if (search) {
+    // Escapar wildcards SQL especiais (%, _) para evitar table scan abusivo ou injeção de padrão
+    const escapedSearch = search.replace(/[%_\\]/g, "\\$&");
+    const phoneClean    = escapedSearch.replace(/[\s\-\(\)\+]/g, "");
+    // data_json::text casts the JSONB to text so ilike can search across all fields (names, etc.)
+    query = query.or(
+      `phone_e164.ilike.%${escapedSearch}%,phone_e164.ilike.%${phoneClean}%,data_json::text.ilike.%${escapedSearch}%`
+    );
+  }
+
+  const { data, error, count } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
