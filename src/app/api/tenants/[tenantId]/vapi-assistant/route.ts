@@ -120,20 +120,38 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   // ── Action: update-webhook — only patches serverUrl + serverMessages, no snapshot ──
   if (action === "update-webhook") {
     if (!serverUrl) return NextResponse.json({ error: "serverUrl obrigatório" }, { status: 400 });
+
+    console.log(`[update-webhook] tenant=${tenantId} assistantId=${assistantId} serverUrl=${serverUrl}`);
+
+    const patchBody = {
+      serverUrl,
+      serverMessages: ["end-of-call-report", "status-update", "tool-calls", "transcript"],
+    };
+    console.log(`[update-webhook] PATCH payload:`, JSON.stringify(patchBody));
+
     const patchRes = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
       method: "PATCH",
       headers,
-      body: JSON.stringify({
-        serverUrl,
-        serverMessages: ["end-of-call-report", "status-update", "tool-calls", "transcript"],
-      }),
+      body: JSON.stringify(patchBody),
       signal,
     });
+
+    const rawBody = await patchRes.text();
+    console.log(`[update-webhook] Vapi status=${patchRes.status} body=${rawBody.slice(0, 400)}`);
+
     if (!patchRes.ok) {
-      const err = await patchRes.text().catch(() => "");
-      return NextResponse.json({ error: `Vapi error: ${patchRes.status} ${err.slice(0, 200)}` }, { status: 502 });
+      console.error(`[update-webhook] ✗ Failed — assistantId=${assistantId} status=${patchRes.status}`);
+      return NextResponse.json(
+        { error: `Vapi error ${patchRes.status}: ${rawBody.slice(0, 300)}` },
+        { status: 502 }
+      );
     }
-    return NextResponse.json({ ok: true });
+
+    let updated: Record<string, unknown> = {};
+    try { updated = JSON.parse(rawBody); } catch { /* ignore */ }
+    console.log(`[update-webhook] ✓ OK — assistantId=${updated.id ?? assistantId} serverUrl=${updated.serverUrl ?? serverUrl}`);
+
+    return NextResponse.json({ ok: true, assistantId: updated.id ?? assistantId, serverUrl: updated.serverUrl ?? serverUrl });
   }
 
   // Fetch current state for snapshot — read body ONCE into a variable
