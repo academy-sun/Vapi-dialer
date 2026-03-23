@@ -38,6 +38,7 @@ interface AnalyticsData {
   statusBreakdown: Record<string, number>;
   endedReasonRaw: Record<string, number>;
   engagementRate: number;
+  timezone?: string;
 }
 
 function formatDurationLong(seconds: number): string {
@@ -148,7 +149,6 @@ function HeatmapSection({ data }: { data: AnalyticsData }) {
         <div className="flex items-center gap-2">
           <Flame className="w-4 h-4 text-orange-500" />
           <h3 className="text-sm font-semibold text-gray-700">Heatmap — Dia × Hora</h3>
-          <span className="text-xs text-gray-400">(UTC)</span>
         </div>
         <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
           {(["calls", "answered", "rate"] as HeatmapMode[]).map((m) => (
@@ -683,14 +683,14 @@ export default function AnalyticsPage() {
             <div className="card p-5">
               <div className="flex items-center gap-2 mb-4">
                 <BarChart3 className="w-4 h-4 text-purple-500" />
-                <h3 className="text-sm font-semibold text-gray-700">Volume por Hora do Dia (UTC)</h3>
+                <h3 className="text-sm font-semibold text-gray-700">Volume por Hora do Dia</h3>
               </div>
               {hourData.every((v) => v === 0) ? (
                 <p className="text-sm text-gray-400 text-center py-8">Sem dados ainda</p>
               ) : (
                 <BarChart data={hourData} labels={HOUR_LABELS} maxVal={maxHour} color="bg-purple-400" />
               )}
-              <p className="text-xs text-gray-400 mt-2">* Horários em UTC</p>
+              <p className="text-xs text-gray-400 mt-2">* Horários no fuso local do tenant</p>
             </div>
           </div>
 

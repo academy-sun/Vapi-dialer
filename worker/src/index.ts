@@ -605,9 +605,15 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
     const dateFmt = new Intl.DateTimeFormat("sv-SE", { timeZone: tz, dateStyle: "short" }); // "YYYY-MM-DD"
     const hFmt    = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hour12: false });
     const mFmt    = new Intl.DateTimeFormat("en-US", { timeZone: tz, minute: "2-digit" });
-    const approx  = new Date(`${dateFmt.format(new Date())}T00:00:00Z`);
-    const diffMs  = (parseInt(hFmt.format(approx)) * 60 + parseInt(mFmt.format(approx))) * 60_000;
-    const todayStartUTC = new Date(approx.getTime() - diffMs).toISOString();
+    const approx      = new Date(`${dateFmt.format(new Date())}T00:00:00Z`);
+    const hAtApprox   = parseInt(hFmt.format(approx));
+    const mAtApprox   = parseInt(mFmt.format(approx));
+    // Para UTC-: hora local no approx pertence ao dia anterior (ex: 21h para UTC-3).
+    // O delta correto é: avançar (24 - hAtApprox) horas (não recuar hAtApprox horas).
+    // Normalização: se deltaMin < -12h (i.e., fuso negativo), adicionar 24h.
+    let deltaMin = -(hAtApprox * 60 + mAtApprox);
+    if (deltaMin < -(12 * 60)) deltaMin += 24 * 60;
+    const todayStartUTC = new Date(approx.getTime() + deltaMin * 60_000).toISOString();
 
     const leadIds = leads.map((l) => l.id);
     const { data: todayRecords } = await supabase

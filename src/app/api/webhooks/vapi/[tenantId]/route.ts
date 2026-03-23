@@ -420,16 +420,17 @@ async function updateLeadAfterCall(
 
     const { data: queueInfo } = await service
       .from("dial_queues")
-      .select("max_attempts, retry_delay_minutes, allowed_days, allowed_time_window")
+      .select("max_attempts, retry_delay_minutes, allowed_days, allowed_time_window, max_daily_attempts")
       .eq("id", queueId)
       .eq("tenant_id", tenantId)
       .single();
 
-    const attempts    = lead?.attempt_count            ?? 0;
-    const maxAttempts = queueInfo?.max_attempts        ?? 3;
-    const retryDelay  = queueInfo?.retry_delay_minutes ?? 30;
-    const allowedDays = Array.isArray(queueInfo?.allowed_days) ? (queueInfo.allowed_days as number[]) : [];
-    const tw          = queueInfo?.allowed_time_window as TW | null ?? null;
+    const attempts        = lead?.attempt_count            ?? 0;
+    const maxAttempts     = queueInfo?.max_attempts        ?? 3;
+    const retryDelay      = queueInfo?.retry_delay_minutes ?? 30;
+    const allowedDays     = Array.isArray(queueInfo?.allowed_days) ? (queueInfo.allowed_days as number[]) : [];
+    const tw              = queueInfo?.allowed_time_window as TW | null ?? null;
+    const maxDailyAttempts = (queueInfo?.max_daily_attempts as number | null | undefined) ?? 0;
 
     if (attempts >= maxAttempts) {
       await service
@@ -438,7 +439,44 @@ async function updateLeadAfterCall(
         .eq("id", leadId);
       await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
-      const nextAt = scheduleNextAttempt(new Date(), retryDelay, allowedDays, tw);
+      // Verificar se o limite diário foi atingido (contar call_records de hoje para este lead)
+      let nextAt: string;
+      if (maxDailyAttempts > 0) {
+        // Calcular meia-noite de hoje no timezone da fila (corrigido para UTC-)
+        const tzForDay = tw?.timezone ?? "America/Sao_Paulo";
+        const dfFmt  = new Intl.DateTimeFormat("sv-SE", { timeZone: tzForDay, dateStyle: "short" });
+        const hFmtD  = new Intl.DateTimeFormat("en-US", { timeZone: tzForDay, hour: "2-digit", hour12: false });
+        const mFmtD  = new Intl.DateTimeFormat("en-US", { timeZone: tzForDay, minute: "2-digit" });
+        const approxDay = new Date(`${dfFmt.format(new Date())}T00:00:00Z`);
+        const hD = parseInt(hFmtD.format(approxDay));
+        const mD = parseInt(mFmtD.format(approxDay));
+        let deltaDayMin = -(hD * 60 + mD);
+        if (deltaDayMin < -(12 * 60)) deltaDayMin += 24 * 60;
+        const todayStartForWebhook = new Date(approxDay.getTime() + deltaDayMin * 60_000).toISOString();
+
+        const { count: todayCount } = await service
+          .from("call_records")
+          .select("id", { count: "exact", head: true })
+          .eq("lead_id", leadId)
+          .gte("created_at", todayStartForWebhook);
+
+        if ((todayCount ?? 0) >= maxDailyAttempts) {
+          // Limite diário atingido → reagendar para amanhã (início da janela permitida)
+          const days = Array.isArray(allowedDays) ? allowedDays : [];
+          if (tw && days.length > 0) {
+            const nextDay = _nextStart(new Date(), days, tw);
+            const jitterMs = Math.floor(Math.random() * 61) * 60_000;
+            nextAt = new Date(nextDay.getTime() + jitterMs).toISOString();
+          } else {
+            nextAt = new Date(Date.now() + 24 * 60 * 60_000).toISOString(); // +24h fallback
+          }
+        } else {
+          nextAt = scheduleNextAttempt(new Date(), retryDelay, allowedDays, tw);
+        }
+      } else {
+        nextAt = scheduleNextAttempt(new Date(), retryDelay, allowedDays, tw);
+      }
+
       await service
         .from("leads")
         .update({

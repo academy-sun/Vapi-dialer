@@ -160,46 +160,58 @@ export default function AssistantsClient() {
     setTestCall({ assistantId: card.id, assistantName: card.name, status: "connecting", volume: 0, muted: false });
 
     try {
-      const res = await fetch(`/api/tenants/${tenantId}/vapi-assistant/test-call`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ assistantId: card.id }),
-      });
-      if (!res.ok) {
-        const d = await res.json() as { error?: string };
-        setTestCall((prev) => prev ? { ...prev, status: "error", error: d.error ?? "Erro ao criar chamada" } : null);
+      // Buscar chave pública do servidor (nunca exposta diretamente — requer autenticação)
+      const keyRes = await fetch(`/api/tenants/${tenantId}/vapi-assistant/test-call`);
+      if (!keyRes.ok) {
+        const d = (await keyRes.json()) as { error?: string };
+        setTestCall((prev) =>
+          prev ? { ...prev, status: "error", error: d.error ?? "Chave pública Vapi não configurada" } : null
+        );
         return;
       }
-      const { webCallUrl, callId } = await res.json() as { webCallUrl: string; callId: string };
+      const { publicKey } = (await keyRes.json()) as { publicKey: string };
 
       // Importação dinâmica para evitar SSR (WebRTC é browser-only)
       const { default: Vapi } = await import("@vapi-ai/web");
-      const vapi = new Vapi("");
+      const vapi = new Vapi(publicKey);
       vapiRef.current = vapi;
 
       vapi.on("call-start", () => {
-        setTestCall((prev) => prev ? { ...prev, status: "active" } : null);
+        setTestCall((prev) => (prev ? { ...prev, status: "active" } : null));
       });
       vapi.on("call-end", () => {
-        setTestCall((prev) => prev ? { ...prev, status: "ended" } : null);
+        setTestCall((prev) => (prev ? { ...prev, status: "ended" } : null));
         vapiRef.current = null;
       });
       vapi.on("volume-level", (volume: number) => {
-        setTestCall((prev) => prev ? { ...prev, volume } : null);
+        setTestCall((prev) => (prev ? { ...prev, volume } : null));
       });
       vapi.on("error", (err: unknown) => {
-        const msg = err instanceof Error ? err.message : (typeof err === "string" ? err : "Erro de conexão");
-        setTestCall((prev) => prev ? { ...prev, status: "error", error: msg } : null);
+        const msg =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string"
+            ? err
+            : "Erro de conexão WebRTC";
+        setTestCall((prev) => (prev ? { ...prev, status: "error", error: msg } : null));
         vapiRef.current = null;
       });
 
-      await vapi.reconnect({ webCallUrl, id: callId });
-      // Garantir status active caso call-start não seja emitido pelo reconnect
-      setTestCall((prev) => prev?.status === "connecting" ? { ...prev, status: "active" } : prev);
-
+      // Iniciar chamada diretamente do browser com a chave pública
+      const result = await vapi.start(card.id); // card.id = assistantId Vapi
+      if (!result) {
+        setTestCall((prev) =>
+          prev?.status === "connecting"
+            ? { ...prev, status: "error", error: "Chamada não iniciada pelo Vapi" }
+            : prev
+        );
+        return;
+      }
+      // Garantir status active caso call-start já tenha sido emitido antes de chegar aqui
+      setTestCall((prev) => (prev?.status === "connecting" ? { ...prev, status: "active" } : prev));
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao conectar";
-      setTestCall((prev) => prev ? { ...prev, status: "error", error: msg } : null);
+      setTestCall((prev) => (prev ? { ...prev, status: "error", error: msg } : null));
       vapiRef.current = null;
     }
   }

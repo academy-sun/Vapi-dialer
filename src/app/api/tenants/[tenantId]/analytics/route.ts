@@ -401,6 +401,13 @@ export async function GET(req: NextRequest, { params }: Params) {
   const engagementRate =
     answeredCalls > 0 ? Math.round((engagement.over60s / answeredCalls) * 100) : 0;
 
+  // Buscar timezone do tenant para heatmap e volume por hora no fuso local
+  const { data: tenantInfo } = await service.from("tenants").select("timezone").eq("id", tenantId).single();
+  const tz = tenantInfo?.timezone ?? "America/Sao_Paulo";
+  const hFmtTz = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hour12: false });
+  const wdFmtTz = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" });
+  const WD_TZ: Record<string, number> = { Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6, Sun:7 };
+
   // Distribuição por hora: volume + taxa de atendimento
   const byHour:         Record<number, number> = {};
   const byHourAnswered: Record<number, number> = {};
@@ -420,11 +427,11 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   for (const c of calls) {
     const dt     = new Date(c.created_at);
-    const h      = dt.getUTCHours();
+    const h      = parseInt(hFmtTz.format(dt));
     byHour[h]++;
     if (classifyReason(c.ended_reason) === "answered") byHourAnswered[h]++;
 
-    const isoDay = dt.getUTCDay() === 0 ? 7 : dt.getUTCDay();
+    const isoDay = WD_TZ[wdFmtTz.format(dt)] ?? 1;
     byWeekday[isoDay]++;
     byDayHour[isoDay][h]++;
     if (classifyReason(c.ended_reason) === "answered") byDayHourAnswered[isoDay][h]++;
@@ -486,5 +493,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       failed:        leadsFailed,
       neverAnswered: leadsNeverAnswered,
     },
+
+    timezone: tz,
   });
 }
