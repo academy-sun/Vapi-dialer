@@ -103,7 +103,7 @@ interface DialQueue {
   concurrency:          number;
   max_attempts:         number;
   retry_delay_minutes:  number;
-  max_daily_attempts:   number;      // 0 = sem limite
+  max_daily_attempts:   number;      // 1–10 tentativas por lead por dia
   allowed_days:         number[];    // ISO weekday: 1=Seg … 7=Dom
   allowed_time_window:  TimeWindow;
 }

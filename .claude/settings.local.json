@@ -63,7 +63,9 @@
       "Bash(where npm:*)",
       "Bash(where node:*)",
       "Bash(curl -s http://localhost:3000)",
-      "Bash(wc -l \"C:/Users/henrique.silvatte/Desktop/Projetos Fabricio/Vapi-dialer/Vapi-dialer-master/src/app/\\(app\\)/app/tenants/[tenantId]/queues/page.tsx\")"
+      "Bash(wc -l \"C:/Users/henrique.silvatte/Desktop/Projetos Fabricio/Vapi-dialer/Vapi-dialer-master/src/app/\\(app\\)/app/tenants/[tenantId]/queues/page.tsx\")",
+      "Bash(find \"C:\\\\Users\\\\henrique.silvatte\\\\Desktop\\\\Projetos Fabricio\\\\Vapi-dialer\\\\Vapi-dialer-master\\\\src\\\\app\\\\\\(app\\)\\\\app\\\\tenants\\\\[tenantId]\" -type f -name \"*.tsx\" -o -name \"*.ts\")",
+      "Bash(find \"C:\\\\Users\\\\henrique.silvatte\\\\Desktop\\\\Projetos Fabricio\\\\Vapi-dialer\\\\Vapi-dialer-master\\\\src\\\\app\\\\\\(app\\)\\\\app\\\\tenants\\\\[tenantId]\\\\queues\" -type f)"
     ]
   }
 }

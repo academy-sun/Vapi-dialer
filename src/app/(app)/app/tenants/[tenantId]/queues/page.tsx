@@ -131,26 +131,14 @@ function AdvancedConfigFields({
       <div>
         <label className="form-label">Limite de tentativas por dia</label>
         <div className="flex items-center gap-3">
-          <input className="form-input w-28" type="number" min="0"
-            value={form.max_daily_attempts ?? "0"}
-            onChange={(e) => update("max_daily_attempts", String(Math.max(0, parseInt(e.target.value) || 0)))} />
+          <input className="form-input w-28" type="number" min="1" max="10"
+            value={form.max_daily_attempts ?? "3"}
+            onChange={(e) => update("max_daily_attempts", String(Math.min(10, Math.max(1, parseInt(e.target.value) || 1))))} />
           <p className="text-xs text-gray-400">
-            Por lead por dia. <span className="font-medium">0 = sem limite.</span> Leads que atingirem o limite são
+            Por lead por dia (1–10). Leads que atingirem o limite são
             reagendados para o próximo dia dentro da janela de horário.
           </p>
         </div>
-      </div>
-
-      {/* Aviso sobre limite de concorrência da org Vapi */}
-      <div className="flex items-start gap-2 p-3 rounded-lg bg-indigo-50 border border-indigo-100 text-xs text-indigo-700">
-        <svg className="w-3.5 h-3.5 shrink-0 mt-0.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" />
-        </svg>
-        <span>
-          <span className="font-medium">Slots compartilhados:</span> o limite total de chamadas simultâneas é definido pelo plano da sua conta Vapi (ex: 10 slots).
-          Com várias campanhas ativas ao mesmo tempo, o sistema distribui esses slots automaticamente entre elas —
-          configure o limite da organização em <span className="font-medium">Configuração Vapi → Slots simultâneos</span>.
-        </span>
       </div>
 
       {/* Time window */}
@@ -243,21 +231,14 @@ function CampaignWizard({
   const [form, setForm] = useState({
     name: "", assistant_id: "", phone_number_id: "",
     concurrency: "3", max_attempts: "3", retry_delay_minutes: "30",
-    max_daily_attempts: "0",
+    max_daily_attempts: "3",
     webhook_url: "", allowed_days: "1,2,3,4,5",
     time_start: "09:00", time_end: "18:00", timezone: "America/Sao_Paulo",
   });
 
   // Step 2: leads
-  const [leadsMode, setLeadsMode] = useState<"existing" | "csv" | "manual" | "webhook">("existing");
+  const leadsMode = "existing";
   const [selectedListId, setSelectedListId] = useState(leadLists[0]?.id ?? "");
-  const [newListName, setNewListName] = useState("");
-  const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvPreview, setCsvPreview] = useState<string[][]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
-  // Manual leads
-  const [manualLeads, setManualLeads] = useState<{ id: number; phone: string; first_name: string }[]>([]);
-  const manualNextId = useRef(0);
 
   // Step 3
   const [startImmediately, setStartImmediately] = useState(false);
@@ -268,28 +249,8 @@ function CampaignWizard({
     setForm((p) => ({ ...p, [k]: v }));
   }
 
-  function handleFileChange(file: File) {
-    setCsvFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      const raw = text.replace(/^\uFEFF/, "");
-      const firstLine = raw.split(/\r?\n/)[0] ?? "";
-      const sep = firstLine.includes(";") && firstLine.split(";").length > firstLine.split(",").length ? ";" : ",";
-      const rows = raw.split(/\r?\n/).filter(Boolean).slice(0, 6)
-        .map((r) => r.split(sep).map((c) => c.trim().replace(/^"|"$/g, "")));
-      setCsvPreview(rows);
-    };
-    reader.readAsText(file);
-    if (!newListName) setNewListName(form.name || "Nova Lista");
-  }
-
   const step1Valid = !!(form.name.trim() && form.assistant_id && form.phone_number_id);
-  const step2Valid =
-    leadsMode === "existing" ? !!selectedListId :
-    leadsMode === "csv"      ? !!(csvFile && newListName.trim()) :
-    leadsMode === "manual"   ? manualLeads.filter((l) => l.phone.trim()).length > 0 :
-    /* webhook */               true; // webhook mode sempre válido — leads virão depois
+  const step2Valid = !!selectedListId;
 
   const selectedAssistant  = vapiResources?.assistants.find((a) => a.id === form.assistant_id);
   const selectedPhone      = vapiResources?.phoneNumbers.find((p) => p.id === form.phone_number_id);
@@ -321,46 +282,7 @@ function CampaignWizard({
     setCreating(true);
     setError("");
     try {
-      let listId = selectedListId;
-
-      if (leadsMode === "csv" || leadsMode === "manual" || leadsMode === "webhook") {
-        // 1. Create lead list
-        const listName = (leadsMode === "csv" ? newListName.trim() : "") || form.name;
-        const listRes = await fetch(`/api/tenants/${tenantId}/lead-lists`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: listName }),
-        });
-        const listData = await listRes.json();
-        if (!listData.leadList) throw new Error(listData.error ?? "Erro ao criar lista");
-        listId = listData.leadList.id;
-
-        if (leadsMode === "csv") {
-          // 2a. Import CSV
-          const fd = new FormData();
-          fd.append("file", csvFile!);
-          const uploadRes = await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}/import`, {
-            method: "POST", body: fd,
-          });
-          if (!uploadRes.ok) {
-            const d = await uploadRes.json();
-            throw new Error(d.error ?? "Erro ao importar CSV");
-          }
-        } else if (leadsMode === "manual") {
-          // 2b. Import manual leads one by one
-          for (const ml of manualLeads) {
-            if (!ml.phone.trim()) continue;
-            const body: Record<string, string> = { phone: ml.phone.trim() };
-            if (ml.first_name.trim()) body.first_name = ml.first_name.trim();
-            await fetch(`/api/tenants/${tenantId}/lead-lists/${listId}/leads`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(body),
-            });
-          }
-        }
-        // webhook mode: list created, leads will arrive via webhook
-      }
+      const listId = selectedListId;
 
       // 3. Create campaign (queue)
       const queueRes = await fetch(`/api/tenants/${tenantId}/queues`, {
@@ -513,200 +435,25 @@ function CampaignWizard({
           {/* ── Step 2: Leads ─────────────────────────────────────────────── */}
           {step === 2 && (
             <div className="space-y-4">
-              <p className="text-sm text-gray-500">Escolha como adicionar os leads a esta campanha:</p>
-
-              {/* Mode selector */}
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { mode: "existing" as const, icon: Users,    title: "Lista existente",  desc: "Usar leads já importados"     },
-                  { mode: "csv"      as const, icon: Upload,   title: "Importar CSV/XLSX",     desc: "Nova lista via arquivo"       },
-                  { mode: "manual"   as const, icon: UserPlus, title: "Adicionar manual", desc: "Digitar leads um a um"        },
-                  { mode: "webhook"  as const, icon: Webhook,  title: "Via Webhook",      desc: "Receber leads automaticamente"},
-                ].map(({ mode, icon: Icon, title, desc }) => (
-                  <button key={mode} type="button" onClick={() => setLeadsMode(mode)}
-                    className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
-                      leadsMode === mode ? "border-indigo-400 bg-indigo-50" : "border-gray-100 hover:border-gray-200 hover:bg-gray-50"
-                    }`}>
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${leadsMode === mode ? "bg-indigo-600" : "bg-gray-100"}`}>
-                      <Icon className={`w-3.5 h-3.5 ${leadsMode === mode ? "text-white" : "text-gray-500"}`} />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-gray-800">{title}</p>
-                      <p className="text-xs text-gray-400">{desc}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
+              <p className="text-sm text-gray-500">Escolha a lista de leads que será vinculada a esta campanha:</p>
 
               {/* Existing list */}
-              {leadsMode === "existing" && (
-                leadLists.length === 0 ? (
-                  <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                    <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Nenhuma lista de leads criada ainda.</p>
-                    <p className="text-xs text-gray-400 mt-1">Use a opção "Importar CSV/XLSX" para criar uma nova.</p>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="form-label">Selecionar lista *</label>
-                    <select className="select-native" value={selectedListId}
-                      onChange={(e) => setSelectedListId(e.target.value)}>
-                      <option value="">— Escolher lista —</option>
-                      {leadLists.map((l) => (
-                        <option key={l.id} value={l.id}>{l.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )
-              )}
-
-              {/* CSV import */}
-              {leadsMode === "csv" && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="form-label">Nome da lista *</label>
-                    <input className="form-input"
-                      placeholder={form.name || "Ex: Prospecção Janeiro"}
-                      value={newListName || form.name}
-                      onChange={(e) => setNewListName(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="form-label">Arquivo CSV/XLSX *</label>
-                    <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-indigo-300 hover:bg-indigo-50 transition-colors cursor-pointer"
-                      onClick={() => fileRef.current?.click()}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFileChange(f); }}>
-                      {csvFile ? (
-                        <div className="flex items-center justify-center gap-2 text-sm text-emerald-700">
-                          <FileText className="w-5 h-5" />
-                          <span className="font-medium">{csvFile.name}</span>
-                          <span className="text-gray-400">({(csvFile.size / 1024).toFixed(1)} KB)</span>
-                        </div>
-                      ) : (
-                        <>
-                          <Upload className="w-7 h-7 text-gray-300 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">Arraste o CSV/XLSX ou clique para selecionar</p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            Coluna <code className="font-mono bg-gray-100 px-1 rounded">phone</code> obrigatória
-                          </p>
-                        </>
-                      )}
-                    </div>
-                    <input ref={fileRef} type="file" accept=".csv,.xlsx" className="hidden"
-                      onChange={(e) => { if (e.target.files?.[0]) handleFileChange(e.target.files[0]); }} />
-                  </div>
-                  {csvPreview.length > 0 && (
-                    <div className="rounded-lg border border-gray-100 overflow-hidden">
-                      <p className="text-xs text-gray-500 px-3 py-2 bg-gray-50 border-b border-gray-100">
-                        Pré-visualização (primeiras linhas)
-                      </p>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr>{csvPreview[0]?.map((h, i) => (
-                              <th key={i} className="px-3 py-2 text-left font-medium text-gray-600 border-b border-gray-100 bg-gray-50">{h}</th>
-                            ))}</tr>
-                          </thead>
-                          <tbody>
-                            {csvPreview.slice(1).map((row, i) => (
-                              <tr key={i} className="border-b border-gray-50 last:border-0">
-                                {row.map((cell, j) => (
-                                  <td key={j} className="px-3 py-1.5 text-gray-600 font-mono">{cell}</td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
+              {leadLists.length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                  <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">Nenhuma lista de leads criada ainda.</p>
+                  <p className="text-xs text-gray-400 mt-1">Acesse &quot;Listas de Leads&quot; no menu para criar uma nova.</p>
                 </div>
-              )}
-
-              {/* Manual leads */}
-              {leadsMode === "manual" && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-gray-500">Adicione os leads um a um:</p>
-                    <button type="button"
-                      onClick={() => {
-                        const id = manualNextId.current++;
-                        setManualLeads((p) => [...p, { id, phone: "", first_name: "" }]);
-                      }}
-                      className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors">
-                      <Plus className="w-3.5 h-3.5" /> Adicionar linha
-                    </button>
-                  </div>
-
-                  {manualLeads.length === 0 ? (
-                    <button type="button"
-                      onClick={() => {
-                        const id = manualNextId.current++;
-                        setManualLeads([{ id, phone: "", first_name: "" }]);
-                      }}
-                      className="w-full border-2 border-dashed border-gray-200 rounded-xl p-6 text-center text-sm text-gray-400 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
-                      <UserPlus className="w-6 h-6 mx-auto mb-2 text-gray-300" />
-                      Clique para adicionar o primeiro lead
-                    </button>
-                  ) : (
-                    <div className="space-y-2">
-                      {/* Header */}
-                      <div className="grid grid-cols-[1fr_1fr_auto] gap-2 px-1">
-                        <span className="text-xs font-medium text-gray-500">Telefone *</span>
-                        <span className="text-xs font-medium text-gray-500">Nome</span>
-                        <span className="w-7" />
-                      </div>
-                      {manualLeads.map((ml) => (
-                        <div key={ml.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-                          <input
-                            className="form-input text-sm"
-                            placeholder="+55 11 99999-9999"
-                            value={ml.phone}
-                            onChange={(e) => setManualLeads((p) => p.map((l) => l.id === ml.id ? { ...l, phone: e.target.value } : l))} />
-                          <input
-                            className="form-input text-sm"
-                            placeholder="Nome (opcional)"
-                            value={ml.first_name}
-                            onChange={(e) => setManualLeads((p) => p.map((l) => l.id === ml.id ? { ...l, first_name: e.target.value } : l))} />
-                          <button type="button"
-                            onClick={() => setManualLeads((p) => p.filter((l) => l.id !== ml.id))}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                      <p className="text-xs text-gray-400 mt-1">
-                        {manualLeads.filter((l) => l.phone.trim()).length} lead(s) com telefone preenchido
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Webhook */}
-              {leadsMode === "webhook" && (
-                <div className="space-y-3">
-                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Webhook className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <p className="text-sm font-semibold text-indigo-800">Como funciona o webhook de entrada</p>
-                    </div>
-                    <p className="text-xs text-gray-600">
-                      Uma lista vazia será criada junto com a campanha. Após criada, você poderá enviar leads
-                      diretamente via API/webhook para essa lista. Os leads chegam já na fila de discagem.
-                    </p>
-                    <div className="bg-white rounded-lg border border-indigo-100 p-3 font-mono text-xs text-gray-700 space-y-1">
-                      <p className="text-gray-400 text-xs mb-1">Endpoint para adicionar leads:</p>
-                      <p className="break-all text-indigo-700">
-                        POST /api/tenants/<span className="text-gray-400">{"{tenantId}"}</span>/lead-lists/<span className="text-gray-400">{"{listId}"}</span>/leads
-                      </p>
-                      <p className="text-gray-400 mt-1">Body (JSON):</p>
-                      <p>{`{ "phone": "+5511999990001", "first_name": "João" }`}</p>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      O <strong>listId</strong> aparecerá nos detalhes da campanha após a criação.
-                    </p>
-                  </div>
+              ) : (
+                <div>
+                  <label className="form-label">Selecionar lista *</label>
+                  <select className="select-native" value={selectedListId}
+                    onChange={(e) => setSelectedListId(e.target.value)}>
+                    <option value="">— Escolher lista —</option>
+                    {leadLists.map((l) => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>
@@ -722,7 +469,7 @@ function CampaignWizard({
                     { icon: Megaphone, color: "bg-indigo-100 text-indigo-600", label: "Campanha", value: form.name },
                     { icon: Zap, color: "bg-purple-100 text-purple-600", label: "Assistente", value: selectedAssistant?.name || form.assistant_id.slice(0, 20) + "…", mono: true },
                     { icon: ArrowRight, color: "bg-emerald-100 text-emerald-600", label: "Número", value: selectedPhone?.number || selectedPhone?.name || form.phone_number_id.slice(0, 20) + "…", mono: true },
-                    { icon: Users, color: "bg-blue-100 text-blue-600", label: "Lista de leads", value: leadsMode === "existing" ? (selectedList?.name ?? "—") : (newListName || form.name) },
+                    { icon: Users, color: "bg-blue-100 text-blue-600", label: "Lista de leads", value: selectedList?.name ?? "—" },
                   ].map(({ icon: Icon, color, label, value, mono }) => (
                     <div key={label} className="flex items-center gap-3">
                       <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${color}`}>
@@ -737,9 +484,6 @@ function CampaignWizard({
                   <span>Concorrência: <strong>{form.concurrency}</strong></span>
                   <span>Tentativas: <strong>{form.max_attempts}</strong></span>
                   <span>Intervalo: <strong>{form.retry_delay_minutes}min</strong></span>
-                  {leadsMode === "csv" && csvPreview.length > 1 && (
-                    <span>Leads no CSV: <strong>~{csvPreview.length - 1} (pré-visualizados)</strong></span>
-                  )}
                 </div>
               </div>
 
@@ -819,7 +563,7 @@ function EditCampaignModal({
     concurrency:         String(queue.concurrency),
     max_attempts:        String(queue.max_attempts),
     retry_delay_minutes: String(queue.retry_delay_minutes ?? 30),
-    max_daily_attempts:  String(queue.max_daily_attempts ?? 0),
+    max_daily_attempts:  String(Math.min(10, Math.max(1, queue.max_daily_attempts ?? 3))),
     webhook_url:         queue.webhook_url ?? "",
     allowed_days:        existingDays,
     time_start:          existingWindow?.start ?? "09:00",
@@ -937,21 +681,11 @@ function LeadsTab({
   const [pageInput, setPageInput] = useState("1");
   const [loading, setLoading]     = useState(true);
   const [showVars, setShowVars]   = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ imported: number; skipped: number } | null>(null);
-  const fileImportRef = useRef<HTMLInputElement>(null);
 
   // Search
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch]           = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Add lead inline form
-  const [showAddLead, setShowAddLead]   = useState(false);
-  const [addPhone, setAddPhone]         = useState("");
-  const [addName, setAddName]           = useState("");
-  const [addingLead, setAddingLead]     = useState(false);
-  const [addLeadError, setAddLeadError] = useState("");
 
   const limit = 20;
 
@@ -991,44 +725,6 @@ function LeadsTab({
     ? ["phone", "phone_e164", ...Object.keys(leads[0].data_json ?? {})]
     : ["phone", "phone_e164"];
 
-  async function handleImport(file: File) {
-    setImporting(true);
-    setImportResult(null);
-    const fd = new FormData();
-    fd.append("file", file);
-    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${queue.lead_list_id}/import`, { method: "POST", body: fd });
-    const data = await res.json();
-    setImportResult({ imported: data.imported ?? 0, skipped: data.skipped ?? 0 });
-    setImporting(false);
-    loadLeads(1);
-    setPage(1);
-  }
-
-  async function handleAddLead() {
-    if (!addPhone.trim()) return;
-    setAddingLead(true);
-    setAddLeadError("");
-    const body: Record<string, string> = { phone: addPhone.trim() };
-    if (addName.trim()) body.first_name = addName.trim();
-    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${queue.lead_list_id}/leads`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setAddLeadError(data.error ?? "Erro ao adicionar lead");
-    } else {
-      setAddPhone("");
-      setAddName("");
-      setShowAddLead(false);
-      setAddLeadError("");
-      loadLeads(1);
-      setPage(1);
-    }
-    setAddingLead(false);
-  }
-
   return (
     <div>
       {/* Leads tab header */}
@@ -1044,27 +740,6 @@ function LeadsTab({
               className={`btn-icon ${showVars ? "text-indigo-600 bg-indigo-50" : "text-gray-400 hover:text-indigo-500"}`}>
               <Braces className="w-4 h-4" />
             </button>
-            {/* Add lead — oculto quando campanha está encerrada */}
-            {queue.status !== "stopped" && (
-              <button
-                onClick={() => { setShowAddLead((v) => !v); setAddLeadError(""); }}
-                className={`btn btn-sm flex items-center gap-1.5 ${showAddLead ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
-                <UserPlus className="w-3.5 h-3.5" />
-                Adicionar Lead
-              </button>
-            )}
-            {/* Import CSV — oculto quando campanha está encerrada */}
-            {queue.status !== "stopped" && (
-              <button
-                onClick={() => fileImportRef.current?.click()}
-                disabled={importing}
-                className="btn btn-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5">
-                {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                {importing ? "Importando…" : "Importar CSV/XLSX"}
-              </button>
-            )}
-            <input ref={fileImportRef} type="file" accept=".csv,.xlsx" className="hidden"
-              onChange={(e) => { if (e.target.files?.[0]) handleImport(e.target.files[0]); }} />
           </div>
         </div>
 
@@ -1086,62 +761,6 @@ function LeadsTab({
           )}
         </div>
       </div>
-
-      {/* Add Lead inline form */}
-      {showAddLead && (
-        <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-100">
-          <p className="text-xs font-semibold text-emerald-800 mb-2 flex items-center gap-1.5">
-            <UserPlus className="w-3.5 h-3.5" /> Adicionar lead manualmente
-          </p>
-          <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <label className="text-xs text-gray-500 mb-1 block">Telefone *</label>
-              <input
-                className="form-input text-sm"
-                placeholder="+55 11 99999-9999"
-                value={addPhone}
-                onChange={(e) => setAddPhone(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddLead()}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-xs text-gray-500 mb-1 block">Nome (opcional)</label>
-              <input
-                className="form-input text-sm"
-                placeholder="Nome do lead"
-                value={addName}
-                onChange={(e) => setAddName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddLead()}
-              />
-            </div>
-            <button
-              onClick={handleAddLead}
-              disabled={addingLead || !addPhone.trim()}
-              className="btn-primary text-sm flex items-center gap-1.5 disabled:opacity-40">
-              {addingLead ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-              {addingLead ? "Adicionando…" : "Adicionar"}
-            </button>
-            <button onClick={() => { setShowAddLead(false); setAddLeadError(""); setAddPhone(""); setAddName(""); }}
-              className="btn-icon text-gray-400 hover:text-gray-600">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          {addLeadError && (
-            <p className="text-xs text-red-600 mt-2 flex items-center gap-1.5">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {addLeadError}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Import result */}
-      {importResult && (
-        <div className="mx-5 mt-3 flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-          {importResult.imported} leads importados
-          {importResult.skipped > 0 && <span className="text-amber-600 ml-1">· {importResult.skipped} ignorados</span>}
-        </div>
-      )}
 
       {/* LiquidJS variables */}
       {showVars && (
@@ -1176,10 +795,6 @@ function LeadsTab({
           ) : (
             <>
               Nenhum lead nesta lista.
-              <button onClick={() => fileImportRef.current?.click()}
-                className="block mx-auto mt-3 text-xs text-indigo-600 hover:text-indigo-800 underline">
-                Importar CSV/XLSX agora
-              </button>
             </>
           )}
         </div>

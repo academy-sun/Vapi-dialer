@@ -34,6 +34,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "name não pode ser vazio" }, { status: 400 });
   }
 
+  if (updates.max_daily_attempts !== undefined) {
+    const parsedDaily = parseInt(String(updates.max_daily_attempts));
+    if (isNaN(parsedDaily) || parsedDaily < 1 || parsedDaily > 10) {
+      return NextResponse.json(
+        { error: "O limite diário deve ser entre 1 e 10 tentativas" },
+        { status: 400 }
+      );
+    }
+    updates.max_daily_attempts = Math.min(10, Math.max(1, parsedDaily));
+  }
+
   const service = createServiceClient();
   const { data, error } = await service
     .from("dial_queues")
