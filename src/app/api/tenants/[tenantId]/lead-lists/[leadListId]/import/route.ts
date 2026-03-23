@@ -206,13 +206,48 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   }
 
-  let inserted = 0;
+  // ── Deduplicação: buscar phones já existentes nesta lista ──────────────────
+  let duplicateCount = 0;
+  let uniqueLeads = toInsert;
+
   if (toInsert.length > 0) {
+    // Buscar todos os phones já cadastrados na lista (sem limite — lista pode ser grande)
+    const existingPhones = new Set<string>();
+    let offset = 0;
+    const FETCH_BATCH = 1000;
+    while (true) {
+      const { data: existing, error: fetchErr } = await service
+        .from("leads")
+        .select("phone_e164")
+        .eq("lead_list_id", leadListId)
+        .range(offset, offset + FETCH_BATCH - 1);
+
+      if (fetchErr) break; // falha silenciosa — seguirá tentando inserir (constraint DB protege)
+      if (!existing || existing.length === 0) break;
+      existing.forEach((r) => existingPhones.add(r.phone_e164));
+      if (existing.length < FETCH_BATCH) break;
+      offset += FETCH_BATCH;
+    }
+
+    // Separar novos dos duplicados
+    const before = toInsert.length;
+    uniqueLeads = toInsert.filter(
+      (l) => !existingPhones.has((l as { phone_e164: string }).phone_e164)
+    );
+    duplicateCount = before - uniqueLeads.length;
+  }
+
+  let inserted = 0;
+  if (uniqueLeads.length > 0) {
     // Inserir em lotes de 100
-    for (let i = 0; i < toInsert.length; i += 100) {
-      const batch = toInsert.slice(i, i + 100);
+    for (let i = 0; i < uniqueLeads.length; i += 100) {
+      const batch = uniqueLeads.slice(i, i + 100);
       const { error: insertError } = await service.from("leads").insert(batch);
       if (insertError) {
+        // Violação de constraint única (race condition) — ignorar lote e continuar
+        if (insertError.code === "23505") {
+          continue;
+        }
         return NextResponse.json({ error: insertError.message }, { status: 500 });
       }
       inserted += batch.length;
@@ -221,7 +256,8 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   return NextResponse.json({
     imported: inserted,
-    skipped: errors.length,
+    skipped: errors.length + duplicateCount,
+    duplicates: duplicateCount,
     errors: errors.slice(0, 20),
   });
 }

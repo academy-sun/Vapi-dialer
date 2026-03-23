@@ -387,22 +387,31 @@ async function updateLeadAfterCall(
     return;
   }
 
-  // Inclui razões do Vapi v1 e v2
-  const noAnswerReasons = [
-    "no-answer",                  // Vapi v1
-    "customer-did-not-answer",    // Vapi v2
-    "busy",                       // Vapi v1
-    "customer-busy",              // Vapi v2
-    "voicemail",
-    "machine_end_silence",
-    "machine_end_other",
-    "silence-timed-out",          // Vapi v2: silêncio = caixa postal / não atendeu
-  ];
-  // endedReason null = chamada encerrada sem razão conhecida (ex: 503 sem diagnóstico) —
-  // tratar como no-answer para respeitar max_attempts e nunca marcar como "concluído"
-  const isNoAnswer = !endedReason || noAnswerReasons.some((r) => endedReason.includes(r));
+  // Razões que CONFIRMAM que a chamada foi realmente atendida.
+  // Apenas estas devem marcar o lead como "concluído".
+  // Qualquer outra razão (inclusive desconhecidas) cai no fluxo de não-atendido
+  // para respeitar max_attempts e nunca marcar como concluído por engano.
+  const ANSWERED_REASONS = new Set([
+    "customer-ended-call",     // cliente desligou normalmente
+    "assistant-ended-call",    // assistente encerrou intencionalmente
+    "exceeded-max-duration",   // ligação chegou ao limite de tempo (estava em curso)
+  ]);
 
-  if (isNoAnswer) {
+  const isAnswered = endedReason != null && ANSWERED_REASONS.has(endedReason);
+
+  if (isAnswered) {
+    // ── Chamada realmente atendida → concluído ──
+    await service
+      .from("leads")
+      .update({ status: "completed", last_outcome: endedReason })
+      .eq("id", leadId);
+    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "completed", service, callData);
+  } else {
+    // ── Não atendido, sem resposta, erro desconhecido, etc.
+    // endedReason null também cai aqui — tratado como não-atendido.
+    // Inclui razões do Vapi v1 e v2: no-answer, busy, voicemail,
+    // customer-did-not-answer, customer-busy, silence-timed-out,
+    // e qualquer razão nova/desconhecida que não seja atendimento confirmado.
     const { data: lead } = await service
       .from("leads")
       .select("attempt_count, last_attempt_at")
@@ -440,12 +449,6 @@ async function updateLeadAfterCall(
         .eq("id", leadId);
       await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "queued", service, callData);
     }
-  } else {
-    await service
-      .from("leads")
-      .update({ status: "completed", last_outcome: endedReason })
-      .eq("id", leadId);
-    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "completed", service, callData);
   }
 }
 

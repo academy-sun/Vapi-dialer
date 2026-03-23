@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import {
   Plus,
   Upload,
@@ -542,36 +543,69 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
   const phoneMappedCount = Object.values(mappings).filter(v => v === "phone").length;
   const canImport = phoneMappedCount === 1;
 
+  function applyParsedData(headers: string[], rows: Record<string, string>[]) {
+    setCsvHeaders(headers);
+    setPreviewRows(rows);
+    const initial: Record<string, string> = {};
+    headers.forEach(h => { initial[h] = autoSuggest(h); });
+    setMappings(initial);
+    setStep(2);
+  }
+
   function parseFile(file: File) {
     setSelectedFile(file);
     setError("");
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = (e.target?.result as string) ?? "";
-      const result = Papa.parse<Record<string, string>>(text, {
-        header: true,
-        preview: 4,
-        skipEmptyLines: true,
-      });
-      const headers = result.meta.fields ?? [];
-      const rows = result.data.slice(0, 3) as Record<string, string>[];
-      setCsvHeaders(headers);
-      setPreviewRows(rows);
-      // Auto-sugestão
-      const initial: Record<string, string> = {};
-      headers.forEach(h => { initial[h] = autoSuggest(h); });
-      setMappings(initial);
-      setStep(2); // avança automaticamente para o Step 2
-    };
-    reader.readAsText(file);
+    const ext = file.name.split(".").pop()?.toLowerCase();
+
+    if (ext === "xlsx") {
+      // ── XLSX: ler como ArrayBuffer e converter com a lib xlsx ──
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const buffer = e.target?.result as ArrayBuffer;
+          const wb = XLSX.read(buffer);
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          if (!ws) { setError("Planilha XLSX vazia"); return; }
+          // header:1 → retorna arrays de valores, primeira linha = cabeçalho
+          const raw = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: "" });
+          if (raw.length < 2) { setError("Planilha XLSX sem dados"); return; }
+          const headers = (raw[0] as string[]).map(String).filter(Boolean);
+          const rows = raw.slice(1, 4).map((row) => {
+            const r: Record<string, string> = {};
+            headers.forEach((h, i) => { r[h] = String((row as string[])[i] ?? ""); });
+            return r;
+          });
+          applyParsedData(headers, rows);
+        } catch {
+          setError("Erro ao ler o arquivo XLSX. Verifique se o arquivo não está corrompido.");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      // ── CSV: ler como texto com PapaParse ──
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = (e.target?.result as string) ?? "";
+        const result = Papa.parse<Record<string, string>>(text, {
+          header: true,
+          preview: 4,
+          skipEmptyLines: true,
+        });
+        const headers = result.meta.fields ?? [];
+        const rows = result.data.slice(0, 3) as Record<string, string>[];
+        applyParsedData(headers, rows);
+      };
+      reader.readAsText(file);
+    }
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file?.name.endsWith(".csv")) parseFile(file);
-    else setError("Apenas arquivos .csv são aceitos");
+    const ext = file?.name.split(".").pop()?.toLowerCase();
+    if (ext === "csv" || ext === "xlsx") parseFile(file);
+    else setError("Apenas arquivos .csv ou .xlsx são aceitos");
   }
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
@@ -677,8 +711,8 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
           >
             <input ref={fileRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFileInput} />
             <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-gray-700">Arraste um CSV ou XLSX, ou clique para selecionar</p>
-            <p className="text-xs text-gray-400 mt-1">Deve ter coluna <code className="bg-gray-100 px-1 rounded">phone</code> (ou telefone, celular)</p>
+            <p className="text-sm font-semibold text-gray-700">Arraste um arquivo CSV ou XLSX, ou clique para selecionar</p>
+            <p className="text-xs text-gray-400 mt-1">Deve ter coluna <code className="bg-gray-100 px-1 rounded">phone</code> (ou telefone, celular) · Duplicatas são ignoradas automaticamente</p>
           </div>
         )}
 
@@ -1263,12 +1297,27 @@ export default function LeadsPage() {
                         const extras = Object.entries(rest).map(([k, v]) => `${k}: ${v}`).join(" · ");
 
                         // Atendido: baseado em last_outcome
-                        const ANSWERED = new Set(["customer-ended-call", "assistant-ended-call"]);
-                        const NO_ANSWER = new Set(["no-answer", "busy", "voicemail", "machine_end_silence", "machine_end_other"]);
+                        // Fonte canônica — idêntica à usada no menu Campanhas (queues/page.tsx)
+                        const ANSWERED = new Set([
+                          "customer-ended-call",
+                          "assistant-ended-call",
+                          "exceeded-max-duration",
+                        ]);
+                        const NO_ANSWER = new Set([
+                          // Vapi v1
+                          "no-answer", "busy", "voicemail",
+                          "machine_end_silence", "machine_end_other",
+                          // Vapi v2
+                          "customer-did-not-answer", "customer-busy", "silence-timed-out",
+                          // Erros técnicos (provider fault) — não foi atendido
+                          "pipeline-error", "transport-error",
+                        ]);
                         const answered =
                           lead.last_outcome == null ? null
                           : ANSWERED.has(lead.last_outcome) ? true
-                          : NO_ANSWER.has(lead.last_outcome) ? false
+                          : NO_ANSWER.has(lead.last_outcome) ||
+                            lead.last_outcome.startsWith("sip-") ||
+                            lead.last_outcome.startsWith("pipeline-error") ? false
                           : null;
 
                         // Próxima tentativa
