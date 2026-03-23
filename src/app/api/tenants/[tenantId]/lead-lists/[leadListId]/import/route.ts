@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireTenantAccess } from "@/lib/auth-helper";
 import { createServiceClient } from "@/lib/supabase/service";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
+import * as XLSX from "xlsx";
 
 type Params = { params: Promise<{ tenantId: string; leadListId: string }> };
 
@@ -15,7 +16,7 @@ function toSnakeCase(str: string): string {
 }
 
 // POST /api/tenants/:tenantId/lead-lists/:leadListId/import
-// Body: multipart/form-data com campo "file" (CSV) e opcional "mappings" (JSON)
+// Body: multipart/form-data com campo "file" (CSV ou XLSX) e opcional "mappings" (JSON)
 export async function POST(req: NextRequest, { params }: Params) {
   const { tenantId, leadListId } = await params;
   const { response, user } = await requireTenantAccess(tenantId);
@@ -61,7 +62,29 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const useMappings = Object.keys(mappings).length > 0;
 
-  const rawText = await file.text();
+  // Detectar tipo de arquivo (CSV ou XLSX)
+  let rawText: string;
+  const fileExt = file.name.split(".").pop()?.toLowerCase();
+
+  if (fileExt === "xlsx") {
+    // Converter XLSX para CSV
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer);
+    const firstSheet = wb.SheetNames[0];
+    if (!firstSheet) {
+      return NextResponse.json({ error: "Arquivo XLSX está vazio" }, { status: 400 });
+    }
+    const ws = wb.Sheets[firstSheet];
+    rawText = XLSX.utils.sheet_to_csv(ws, { blankrows: false });
+  } else if (fileExt === "csv") {
+    // Modo CSV tradicional
+    rawText = await file.text();
+  } else {
+    return NextResponse.json(
+      { error: "Formato aceito: CSV ou XLSX. Enviado: ." + (fileExt || "sem extensão") },
+      { status: 400 }
+    );
+  }
   // Remove BOM (Excel UTF-8 salva com \uFEFF no início)
   const csvText = rawText.replace(/^\uFEFF/, "");
   const lines = csvText.split(/\r?\n/).filter((l) => l.trim() !== "");

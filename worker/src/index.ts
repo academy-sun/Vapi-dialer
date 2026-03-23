@@ -103,6 +103,7 @@ interface DialQueue {
   concurrency:          number;
   max_attempts:         number;
   retry_delay_minutes:  number;
+  max_daily_attempts:   number;      // 1–10 tentativas por lead por dia
   allowed_days:         number[];    // ISO weekday: 1=Seg … 7=Dom
   allowed_time_window:  TimeWindow;
 }
@@ -588,12 +589,68 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
       ).data
     : [];
 
-  const leads: Lead[] = [
+  let leads: Lead[] = [
     ...(priorityLeads ?? []),
     ...(freshLeads    ?? []),
   ] as Lead[];
 
   if (leads.length === 0) return;
+
+  // ── Filtro de limite diário ──────────────────────────────────────────────────
+  // Se max_daily_attempts > 0, remover leads que já atingiram o limite de hoje.
+  // "Hoje" = meia-noite do timezone da fila (ou UTC como fallback).
+  if (queue.max_daily_attempts > 0) {
+    const tz = queue.allowed_time_window?.timezone ?? "UTC";
+    // Início do dia atual no timezone da fila (mesmo padrão do nextWindowStart)
+    const dateFmt = new Intl.DateTimeFormat("sv-SE", { timeZone: tz, dateStyle: "short" }); // "YYYY-MM-DD"
+    const hFmt    = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hour12: false });
+    const mFmt    = new Intl.DateTimeFormat("en-US", { timeZone: tz, minute: "2-digit" });
+    const approx  = new Date(`${dateFmt.format(new Date())}T00:00:00Z`);
+    const diffMs  = (parseInt(hFmt.format(approx)) * 60 + parseInt(mFmt.format(approx))) * 60_000;
+    const todayStartUTC = new Date(approx.getTime() - diffMs).toISOString();
+
+    const leadIds = leads.map((l) => l.id);
+    const { data: todayRecords } = await supabase
+      .from("call_records")
+      .select("lead_id")
+      .in("lead_id", leadIds)
+      .gte("created_at", todayStartUTC);
+
+    const dailyCount = new Map<string, number>();
+    for (const r of todayRecords ?? []) {
+      const id = (r as { lead_id: string }).lead_id;
+      dailyCount.set(id, (dailyCount.get(id) ?? 0) + 1);
+    }
+
+    const overLimitIds: string[] = [];
+    leads = leads.filter((l) => {
+      if ((dailyCount.get(l.id) ?? 0) >= queue.max_daily_attempts) {
+        overLimitIds.push(l.id);
+        return false;
+      }
+      return true;
+    });
+
+    // Reagendar leads que atingiram o limite para o próximo dia (início da janela permitida)
+    if (overLimitIds.length > 0) {
+      const nextDayStart = nextWindowStart(new Date(), queue.allowed_days ?? [], queue.allowed_time_window);
+      const jitterMs    = Math.floor(Math.random() * 61) * 60_000; // 0-60 min de jitter
+      const retryAt     = new Date(nextDayStart.getTime() + jitterMs).toISOString();
+
+      await supabase
+        .from("leads")
+        .update({ next_attempt_at: retryAt })
+        .in("id", overLimitIds);
+
+      console.log(
+        `[worker] Fila="${queue.name}" | ${overLimitIds.length} lead(s) atingiram o limite diário` +
+        ` (${queue.max_daily_attempts}/dia) — reagendados para ${retryAt}`
+      );
+    }
+
+    if (leads.length === 0) return;
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
 
   console.log(
     `[worker] Fila="${queue.name}" (${queue.id}) | lista=${queue.lead_list_id} | ` +
@@ -719,7 +776,7 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
     .from("dial_queues")
     .select(`
       id, tenant_id, name, assistant_id, phone_number_id, lead_list_id,
-      concurrency, max_attempts, retry_delay_minutes,
+      concurrency, max_attempts, retry_delay_minutes, max_daily_attempts,
       allowed_days, allowed_time_window
     `)
     .eq("status", "running");

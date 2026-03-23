@@ -233,6 +233,46 @@ feature/fix branch → staging → PR → main
 
 ---
 
+## 13. Checklist Antes de Qualquer Commit
+
+- [ ] `npx tsc --noEmit` → zero erros TypeScript
+- [ ] `npm run build` (ou `next build`) → build limpo, sem warnings
+- [ ] Sem `console.log`, `debugger`, ou statements temporários esquecidos
+- [ ] Migration criada se mudou schema (colocar em `supabase/migrations/`)
+- [ ] Tipos TS atualizados se criou nova tabela/coluna
+
+---
+
+## 14. Padrão de Commit Messages
+
+```
+feat(escopo): descrição
+fix(escopo): descrição
+refactor(escopo): descrição
+docs(escopo): descrição
+migration: descrição (sem escopo)
+chore(escopo): descrição
+```
+
+**Exemplos:**
+- `feat(campaigns): add CSV/XLSX import support`
+- `fix(leads): validate phone numbers in batch import`
+- `migration: add_assistant_snapshots_table`
+
+---
+
+## 15. Workflow de Nova Feature
+
+1. **Explorar:** Ler arquivos relevantes (types, API routes, components)
+2. **Database:** Se mudou schema → criar migration SQL em `supabase/migrations/`
+3. **API:** Implementar route em `src/app/api/`
+4. **Frontend:** Componente(s) em `src/app/(app)/`
+5. **Validar:** `npx tsc --noEmit` (zero erros)
+6. **Testar:** Funcionalidade + edge cases
+7. **Commit:** Seguir padrão de messages
+
+---
+
 ## 13. Pendências / Próximas Features
 
 - [ ] **Analytics Admin Global** — overview de todos os tenants (cards globais, calls-by-day, filtro 7/30/90d)

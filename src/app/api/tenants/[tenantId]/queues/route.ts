@@ -36,6 +36,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     concurrency = 3,
     max_attempts = 3,
     retry_delay_minutes = 30,
+    max_daily_attempts = 3,
     webhook_url = null,
     allowed_days,
     allowed_time_window,
@@ -48,9 +49,18 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
+  const parsedDaily = parseInt(String(max_daily_attempts));
+  if (isNaN(parsedDaily) || parsedDaily < 1 || parsedDaily > 10) {
+    return NextResponse.json(
+      { error: "O limite diário deve ser entre 1 e 10 tentativas" },
+      { status: 400 }
+    );
+  }
+
   const safeConc    = Math.min(5, Math.max(1, parseInt(String(concurrency))    || 3));
   const safeAttempt = Math.min(10, Math.max(1, parseInt(String(max_attempts))  || 3));
   const safeDelay   = Math.min(1440, Math.max(1, parseInt(String(retry_delay_minutes)) || 30));
+  const safeDaily   = Math.min(10, Math.max(1, parsedDaily));
 
   const service = createServiceClient();
   const { data, error } = await service
@@ -65,6 +75,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       concurrency:          safeConc,
       max_attempts:         safeAttempt,
       retry_delay_minutes:  safeDelay,
+      max_daily_attempts:   safeDaily,
       webhook_url,
       ...(allowed_days         !== undefined && { allowed_days }),
       ...(allowed_time_window  !== undefined && { allowed_time_window }),

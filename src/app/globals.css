@@ -47,13 +47,13 @@
   /* Sidebar */
   .sidebar {
     @apply flex flex-col h-screen w-64 fixed left-0 top-0 overflow-y-auto;
-    background-color: hsl(224, 71%, 4%);
-    border-right: 1px solid hsl(224, 40%, 12%);
+    background-color: #000000;
+    border-right: 1px solid #1a1a1a;
   }
 
   .sidebar-logo {
     @apply flex items-center gap-2.5 px-5 py-5;
-    border-bottom: 1px solid hsl(224, 40%, 12%);
+    border-bottom: 1px solid #1a1a1a;
   }
 
   .sidebar-logo-icon {
@@ -82,24 +82,22 @@
   }
 
   .sidebar-nav-item:hover {
-    background-color: hsl(224, 40%, 10%);
-    color: hsl(220, 14%, 96%);
+    background-color: #FF1A1A;
+    color: #FFFFFF;
   }
 
   .sidebar-nav-item.active {
-    background-color: #1a0000;
-    color: #FF6666;
-    border-left: 3px solid #FF1A1A;
-    padding-left: calc(0.75rem - 3px);
+    background-color: #FF1A1A;
+    color: #FFFFFF;
   }
 
   .sidebar-nav-item.active .nav-icon {
-    color: #FF1A1A;
+    color: #FFFFFF;
   }
 
   .sidebar-footer {
     @apply mt-auto px-4 py-4;
-    border-top: 1px solid hsl(224, 40%, 12%);
+    border-top: 1px solid #1a1a1a;
   }
 
   /* Buttons */

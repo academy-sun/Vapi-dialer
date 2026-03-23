@@ -675,9 +675,9 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
           >
-            <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileInput} />
+            <input ref={fileRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFileInput} />
             <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-gray-700">Arraste um CSV ou clique para selecionar</p>
+            <p className="text-sm font-semibold text-gray-700">Arraste um CSV ou XLSX, ou clique para selecionar</p>
             <p className="text-xs text-gray-400 mt-1">Deve ter coluna <code className="bg-gray-100 px-1 rounded">phone</code> (ou telefone, celular)</p>
           </div>
         )}

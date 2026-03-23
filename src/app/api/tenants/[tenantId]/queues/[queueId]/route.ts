@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   // Campos editáveis
-  const allowed = ["name", "assistant_id", "phone_number_id", "concurrency", "max_attempts", "retry_delay_minutes", "webhook_url", "allowed_days", "allowed_time_window"];
+  const allowed = ["name", "assistant_id", "phone_number_id", "concurrency", "max_attempts", "retry_delay_minutes", "max_daily_attempts", "webhook_url", "allowed_days", "allowed_time_window"];
   const updates: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in body) updates[key] = body[key];
@@ -32,6 +32,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   if (updates.name !== undefined && !String(updates.name).trim()) {
     return NextResponse.json({ error: "name não pode ser vazio" }, { status: 400 });
+  }
+
+  if (updates.max_daily_attempts !== undefined) {
+    const parsedDaily = parseInt(String(updates.max_daily_attempts));
+    if (isNaN(parsedDaily) || parsedDaily < 1 || parsedDaily > 10) {
+      return NextResponse.json(
+        { error: "O limite diário deve ser entre 1 e 10 tentativas" },
+        { status: 400 }
+      );
+    }
+    updates.max_daily_attempts = Math.min(10, Math.max(1, parsedDaily));
   }
 
   const service = createServiceClient();
