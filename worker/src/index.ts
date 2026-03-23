@@ -445,12 +445,40 @@ async function processLead(
     );
   } catch (err) {
     // ── 4. Falha na API Vapi → reagendar ou marcar como falha ──
-    const isRateLimit = err instanceof AxiosError && err.response?.status === 429;
-    const httpStatus  = err instanceof AxiosError ? err.response?.status : null;
-    const errorBody   = err instanceof AxiosError ? JSON.stringify(err.response?.data) : null;
-    const errorLabel  = err instanceof AxiosError
+    const isRateLimit       = err instanceof AxiosError && err.response?.status === 429;
+    const httpStatus        = err instanceof AxiosError ? err.response?.status : null;
+    const errorBody         = err instanceof AxiosError ? JSON.stringify(err.response?.data) : null;
+    const errorLabel        = err instanceof AxiosError
       ? `HTTP ${httpStatus}: ${errorBody}`
       : String(err);
+
+    // ── Over Concurrency Limit (400 com "Over Concurrency Limit" no body) ──
+    // Nenhuma chamada foi estabelecida — reverter status sem contar tentativa.
+    const isConcurrencyLimit =
+      httpStatus === 400 &&
+      typeof err === "object" && err !== null &&
+      err instanceof AxiosError &&
+      (err.response?.data as { message?: string })?.message
+        ?.toLowerCase()
+        .includes("over concurrency limit");
+
+    if (isConcurrencyLimit) {
+      console.warn(
+        `[worker] ⚠ Over Concurrency Limit — revertendo lead ${lead.id} sem contar tentativa` +
+        ` | fila=${queue.name} | tenant=${queue.tenant_id}`
+      );
+      // Reverter para o status anterior e DECREMENTAR attempt_count (nenhuma chamada ocorreu)
+      await supabase
+        .from("leads")
+        .update({
+          status:          lead.status,        // volta para 'queued' ou 'callbackScheduled'
+          attempt_count:   lead.attempt_count, // reverte — não conta como tentativa
+          next_attempt_at: new Date(Date.now() + 60_000).toISOString(), // retry em 60s
+          last_outcome:    "concurrency-limited",
+        })
+        .eq("id", lead.id);
+      return;
+    }
 
     console.error(
       `[worker] ✗ Falha ao ligar para ${lead.phone_e164}` +
@@ -460,7 +488,7 @@ async function processLead(
     );
 
     // Log extra para erros de validação do Vapi (422 / 400) — indica payload inválido
-    if (httpStatus === 422 || httpStatus === 400) {
+    if (httpStatus === 422 || (httpStatus === 400 && !isConcurrencyLimit)) {
       console.error(
         `[worker] ⚠ Payload rejeitado pelo Vapi (HTTP ${httpStatus}) — verifique assistantId, phoneNumberId e variableValues` +
         ` | assistantId=${queue.assistant_id} | phoneNumberId=${queue.phone_number_id}` +
