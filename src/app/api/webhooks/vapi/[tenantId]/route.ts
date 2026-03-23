@@ -350,15 +350,20 @@ async function updateLeadAfterCall(
     return;
   }
 
-  // Erros do provedor SIP (503, 408, etc.) — re-queuar sem contar como tentativa
-  const isProviderFault = endedReason
-    ? endedReason.includes("error-providerfault") ||
-      endedReason.includes("sip-503") ||
-      endedReason.includes("sip-408") ||
-      endedReason.includes("sip-500") ||
-      endedReason.includes("sip-502") ||
-      endedReason.includes("sip-504")
-    : false;
+  // Erros do provedor SIP / rede — re-queuar sem contar como tentativa
+  // Cobre: Vapi v1 (sip-5xx), Vapi v2 (pipeline-error, transport-error) e
+  // códigos numéricos puros ("503"). Nota: endedReason null é tratado separado (abaixo).
+  const isProviderFault = endedReason != null && (
+    endedReason.includes("error-providerfault") ||
+    endedReason.includes("sip-503") ||
+    endedReason.includes("sip-408") ||
+    endedReason.includes("sip-500") ||
+    endedReason.includes("sip-502") ||
+    endedReason.includes("sip-504") ||
+    /^(503|408|500|502|504)$/.test(endedReason) ||
+    endedReason.startsWith("pipeline-error") ||
+    endedReason === "transport-error"
+  );
 
   if (isProviderFault) {
     console.log(`[webhook] Provider fault detectado (${endedReason}) — re-queue sem contar tentativa`);
@@ -393,7 +398,9 @@ async function updateLeadAfterCall(
     "machine_end_other",
     "silence-timed-out",          // Vapi v2: silêncio = caixa postal / não atendeu
   ];
-  const isNoAnswer = endedReason ? noAnswerReasons.some((r) => endedReason.includes(r)) : false;
+  // endedReason null = chamada encerrada sem razão conhecida (ex: 503 sem diagnóstico) —
+  // tratar como no-answer para respeitar max_attempts e nunca marcar como "concluído"
+  const isNoAnswer = !endedReason || noAnswerReasons.some((r) => endedReason.includes(r));
 
   if (isNoAnswer) {
     const { data: lead } = await service

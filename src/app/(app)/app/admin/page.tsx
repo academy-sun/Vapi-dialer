@@ -115,6 +115,10 @@ export default function AdminOverviewPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/app/admin/agents-monitor" className="btn-secondary flex items-center gap-2">
+            <Users className="w-4 h-4" />
+            Agentes
+          </Link>
           <Link href="/app/admin/sandbox" className="btn-secondary flex items-center gap-2">
             <FlaskConical className="w-4 h-4" />
             Sandbox

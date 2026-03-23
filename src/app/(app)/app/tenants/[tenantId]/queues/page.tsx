@@ -24,6 +24,7 @@ interface Queue {
   assistant_id: string; phone_number_id: string;
   concurrency: number; max_attempts: number;
   retry_delay_minutes: number;
+  max_daily_attempts: number;
   lead_list_id: string;
   webhook_url?: string;
   allowed_days?: unknown;
@@ -112,7 +113,7 @@ function AdvancedConfigFields({
           <label className="form-label">Máx. tentativas</label>
           <input className="form-input" type="number" min="1" max="10"
             value={form.max_attempts} onChange={(e) => update("max_attempts", e.target.value)} />
-          <p className="text-xs text-gray-400 mt-1">Por lead</p>
+          <p className="text-xs text-gray-400 mt-1">Por lead (total)</p>
         </div>
         <div>
           <label className="form-label">Intervalo</label>
@@ -123,6 +124,20 @@ function AdvancedConfigFields({
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">min</span>
           </div>
           <p className="text-xs text-gray-400 mt-1">Entre tentativas</p>
+        </div>
+      </div>
+
+      {/* Daily attempt limit */}
+      <div>
+        <label className="form-label">Limite de tentativas por dia</label>
+        <div className="flex items-center gap-3">
+          <input className="form-input w-28" type="number" min="0"
+            value={form.max_daily_attempts ?? "0"}
+            onChange={(e) => update("max_daily_attempts", String(Math.max(0, parseInt(e.target.value) || 0)))} />
+          <p className="text-xs text-gray-400">
+            Por lead por dia. <span className="font-medium">0 = sem limite.</span> Leads que atingirem o limite são
+            reagendados para o próximo dia dentro da janela de horário.
+          </p>
         </div>
       </div>
 
@@ -228,6 +243,7 @@ function CampaignWizard({
   const [form, setForm] = useState({
     name: "", assistant_id: "", phone_number_id: "",
     concurrency: "3", max_attempts: "3", retry_delay_minutes: "30",
+    max_daily_attempts: "0",
     webhook_url: "", allowed_days: "1,2,3,4,5",
     time_start: "09:00", time_end: "18:00", timezone: "America/Sao_Paulo",
   });
@@ -294,6 +310,7 @@ function CampaignWizard({
       concurrency: parseInt(form.concurrency),
       max_attempts: parseInt(form.max_attempts),
       retry_delay_minutes: parseInt(form.retry_delay_minutes ?? "30"),
+      max_daily_attempts: parseInt(form.max_daily_attempts ?? "0") || 0,
       webhook_url: form.webhook_url?.trim() || null,
       allowed_days: allowedDays,
       allowed_time_window: allowedTimeWindow,
@@ -502,7 +519,7 @@ function CampaignWizard({
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { mode: "existing" as const, icon: Users,    title: "Lista existente",  desc: "Usar leads já importados"     },
-                  { mode: "csv"      as const, icon: Upload,   title: "Importar CSV",     desc: "Nova lista via arquivo"       },
+                  { mode: "csv"      as const, icon: Upload,   title: "Importar CSV/XLSX",     desc: "Nova lista via arquivo"       },
                   { mode: "manual"   as const, icon: UserPlus, title: "Adicionar manual", desc: "Digitar leads um a um"        },
                   { mode: "webhook"  as const, icon: Webhook,  title: "Via Webhook",      desc: "Receber leads automaticamente"},
                 ].map(({ mode, icon: Icon, title, desc }) => (
@@ -527,7 +544,7 @@ function CampaignWizard({
                   <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
                     <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">Nenhuma lista de leads criada ainda.</p>
-                    <p className="text-xs text-gray-400 mt-1">Use a opção "Importar CSV" para criar uma nova.</p>
+                    <p className="text-xs text-gray-400 mt-1">Use a opção "Importar CSV/XLSX" para criar uma nova.</p>
                   </div>
                 ) : (
                   <div>
@@ -554,7 +571,7 @@ function CampaignWizard({
                       onChange={(e) => setNewListName(e.target.value)} />
                   </div>
                   <div>
-                    <label className="form-label">Arquivo CSV *</label>
+                    <label className="form-label">Arquivo CSV/XLSX *</label>
                     <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-indigo-300 hover:bg-indigo-50 transition-colors cursor-pointer"
                       onClick={() => fileRef.current?.click()}
                       onDragOver={(e) => e.preventDefault()}
@@ -568,14 +585,14 @@ function CampaignWizard({
                       ) : (
                         <>
                           <Upload className="w-7 h-7 text-gray-300 mx-auto mb-2" />
-                          <p className="text-sm text-gray-500">Arraste o CSV ou clique para selecionar</p>
+                          <p className="text-sm text-gray-500">Arraste o CSV/XLSX ou clique para selecionar</p>
                           <p className="text-xs text-gray-400 mt-1">
                             Coluna <code className="font-mono bg-gray-100 px-1 rounded">phone</code> obrigatória
                           </p>
                         </>
                       )}
                     </div>
-                    <input ref={fileRef} type="file" accept=".csv" className="hidden"
+                    <input ref={fileRef} type="file" accept=".csv,.xlsx" className="hidden"
                       onChange={(e) => { if (e.target.files?.[0]) handleFileChange(e.target.files[0]); }} />
                   </div>
                   {csvPreview.length > 0 && (
@@ -802,6 +819,7 @@ function EditCampaignModal({
     concurrency:         String(queue.concurrency),
     max_attempts:        String(queue.max_attempts),
     retry_delay_minutes: String(queue.retry_delay_minutes ?? 30),
+    max_daily_attempts:  String(queue.max_daily_attempts ?? 0),
     webhook_url:         queue.webhook_url ?? "",
     allowed_days:        existingDays,
     time_start:          existingWindow?.start ?? "09:00",
@@ -1026,22 +1044,26 @@ function LeadsTab({
               className={`btn-icon ${showVars ? "text-indigo-600 bg-indigo-50" : "text-gray-400 hover:text-indigo-500"}`}>
               <Braces className="w-4 h-4" />
             </button>
-            {/* Add lead */}
-            <button
-              onClick={() => { setShowAddLead((v) => !v); setAddLeadError(""); }}
-              className={`btn btn-sm flex items-center gap-1.5 ${showAddLead ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
-              <UserPlus className="w-3.5 h-3.5" />
-              Adicionar Lead
-            </button>
-            {/* Import CSV */}
-            <button
-              onClick={() => fileImportRef.current?.click()}
-              disabled={importing}
-              className="btn btn-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5">
-              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              {importing ? "Importando…" : "Importar CSV"}
-            </button>
-            <input ref={fileImportRef} type="file" accept=".csv" className="hidden"
+            {/* Add lead — oculto quando campanha está encerrada */}
+            {queue.status !== "stopped" && (
+              <button
+                onClick={() => { setShowAddLead((v) => !v); setAddLeadError(""); }}
+                className={`btn btn-sm flex items-center gap-1.5 ${showAddLead ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+                <UserPlus className="w-3.5 h-3.5" />
+                Adicionar Lead
+              </button>
+            )}
+            {/* Import CSV — oculto quando campanha está encerrada */}
+            {queue.status !== "stopped" && (
+              <button
+                onClick={() => fileImportRef.current?.click()}
+                disabled={importing}
+                className="btn btn-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 flex items-center gap-1.5">
+                {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                {importing ? "Importando…" : "Importar CSV/XLSX"}
+              </button>
+            )}
+            <input ref={fileImportRef} type="file" accept=".csv,.xlsx" className="hidden"
               onChange={(e) => { if (e.target.files?.[0]) handleImport(e.target.files[0]); }} />
           </div>
         </div>
@@ -1156,7 +1178,7 @@ function LeadsTab({
               Nenhum lead nesta lista.
               <button onClick={() => fileImportRef.current?.click()}
                 className="block mx-auto mt-3 text-xs text-indigo-600 hover:text-indigo-800 underline">
-                Importar CSV agora
+                Importar CSV/XLSX agora
               </button>
             </>
           )}
@@ -1190,11 +1212,14 @@ function LeadsTab({
                     </td>
                     <td className="px-4 py-2.5 text-gray-500 text-center font-mono text-xs">{lead.attempt_count}</td>
                     <td className="px-4 py-2.5 text-center">
-                      {(lead.status === "completed" || lead.status === "callbackScheduled") ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />
-                      ) : (
-                        <span className="text-gray-200">—</span>
-                      )}
+                      {(() => {
+                        const ANSWERED = new Set(["customer-ended-call", "assistant-ended-call"]);
+                        const NO_ANSWER = new Set(["no-answer", "customer-did-not-answer", "busy", "customer-busy", "voicemail", "machine_end_silence", "machine_end_other", "silence-timed-out"]);
+                        const outcome = lead.last_outcome ?? "";
+                        if (ANSWERED.has(outcome)) return <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />;
+                        if (NO_ANSWER.has(outcome)) return <XCircle className="w-4 h-4 text-gray-300 inline-block" />;
+                        return <span className="text-gray-200">—</span>;
+                      })()}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-gray-500">
                       {lead.next_attempt_at ? (
@@ -1322,6 +1347,7 @@ export default function CampaignsPage() {
       concurrency:         parseInt(form.concurrency),
       max_attempts:        parseInt(form.max_attempts),
       retry_delay_minutes: parseInt(form.retry_delay_minutes ?? "30"),
+      max_daily_attempts:  parseInt(form.max_daily_attempts ?? "0") || 0,
       webhook_url:         form.webhook_url?.trim() || null,
       allowed_days:        allowedDays,
       allowed_time_window: allowedTimeWindow,
