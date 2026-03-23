@@ -9,7 +9,16 @@ WHERE a.created_at < b.created_at
   AND a.phone_e164 = b.phone_e164
   AND a.lead_list_id = b.lead_list_id;
 
--- 2. Adicionar constraint UNIQUE
-ALTER TABLE leads
-  ADD CONSTRAINT IF NOT EXISTS leads_phone_list_unique
-  UNIQUE (phone_e164, lead_list_id);
+-- 2. Adicionar constraint UNIQUE (se ainda não existir)
+-- PostgreSQL não suporta "ADD CONSTRAINT IF NOT EXISTS" — usar bloco DO para checar.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'leads_phone_list_unique'
+  ) THEN
+    ALTER TABLE leads
+      ADD CONSTRAINT leads_phone_list_unique
+      UNIQUE (phone_e164, lead_list_id);
+  END IF;
+END
+$$;
