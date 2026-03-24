@@ -1022,6 +1022,18 @@ export default function LeadsPage() {
     loadLeads();
   }
 
+  async function deleteLead(leadId: string, phone: string) {
+    if (!confirm(`Tem certeza que deseja apagar o lead ${phone}?`)) return;
+    const res = await fetch(`/api/tenants/${tenantId}/lead-lists/${selectedListId}/leads/${leadId}`, { method: "DELETE" });
+    if (res.ok) {
+      showToast(`Lead ${phone} removido.`);
+      setLeads((prev) => prev.filter((l) => l.id !== leadId));
+    } else {
+      const data = await res.json();
+      showToast(data.error || "Erro ao deletar lead", "error");
+    }
+  }
+
   function handleImportComplete(imported: number, skipped: number) {
     showToast(
       `✓ ${imported} leads importados${skipped > 0 ? `, ${skipped} ignorados` : ""}`,
@@ -1308,6 +1320,7 @@ export default function LeadsPage() {
                         <th>Atendido?</th>
                         <th>Status</th>
                         <th>Tent.</th>
+                        <th className="w-10"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1394,6 +1407,15 @@ export default function LeadsPage() {
                               </div>
                             </td>
                             <td className="text-gray-500 text-center">{lead.attempt_count}</td>
+                            <td>
+                              <button
+                                onClick={() => deleteLead(lead.id, lead.phone_e164)}
+                                className="w-7 h-7 flex items-center justify-center rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors ml-auto"
+                                title="Apagar lead"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
                           </tr>
                         );
                       })}
