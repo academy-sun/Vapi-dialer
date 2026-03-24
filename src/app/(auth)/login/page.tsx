@@ -1,14 +1,13 @@
 "use client";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
   const supabase = createClient();
 
   async function handleLogin(e: React.FormEvent) {
@@ -21,8 +20,7 @@ export default function LoginPage() {
       setLoading(false);
       return;
     }
-    router.push("/app");
-    router.refresh();
+    window.location.href = "/app";
   }
 
   return (
@@ -127,6 +125,16 @@ export default function LoginPage() {
                 boxSizing: "border-box",
               }}
             />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
+              <Link href="/forgot-password" style={{ 
+                fontSize: "12px", 
+                color: "#FF1A1A", 
+                textDecoration: "none",
+                fontWeight: 500
+              }}>
+                Esqueceu a senha?
+              </Link>
+            </div>
           </div>
 
           <button
