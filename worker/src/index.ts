@@ -448,13 +448,11 @@ async function processLead(
 
     // ── Over Concurrency Limit (400 com "Over Concurrency Limit" no body) ──
     // Nenhuma chamada foi estabelecida — reverter status sem contar tentativa.
+    const errMessage = err instanceof AxiosError ? (err.response?.data as any)?.message : null;
     const isConcurrencyLimit =
       httpStatus === 400 &&
-      typeof err === "object" && err !== null &&
-      err instanceof AxiosError &&
-      (err.response?.data as { message?: string })?.message
-        ?.toLowerCase()
-        .includes("over concurrency limit");
+      typeof errMessage === "string" &&
+      errMessage.toLowerCase().includes("over concurrency limit");
 
     if (isConcurrencyLimit) {
       console.warn(
