@@ -473,7 +473,7 @@ async function processLead(
         .update({
           status:          lead.status,        // volta para 'queued' ou 'callbackScheduled'
           attempt_count:   lead.attempt_count, // reverte — não conta como tentativa
-          next_attempt_at: new Date(Date.now() + 60_000).toISOString(), // retry em 60s
+          next_attempt_at: new Date(Date.now() + 10_000).toISOString(), // retry em 10s (slot pode abrir rapidamente)
           last_outcome:    "concurrency-limited",
         })
         .eq("id", lead.id);
@@ -496,37 +496,21 @@ async function processLead(
       );
     }
 
-    // ── Erros de provedor SIP (503 / 408) ── reagendar com delay, mas com cap de tentativas
-    // O attempt_count JÁ foi incrementado no "claim" atômico acima (step 1).
-    // Portanto precisamos verificar max_attempts mesmo aqui para evitar loop infinito.
+    // ── Erros de provedor SIP (503 / 408) ── reagendar SEM contar tentativa
+    // Erros de infra do provedor não devem consumir attempt_count do lead.
+    // Revertemos ao status original e ao attempt_count anterior (mesmo padrão do Over Concurrency Limit).
     const isProviderFault = httpStatus === 503 || httpStatus === 408;
     if (isProviderFault) {
-      if (newAttemptCount >= queue.max_attempts) {
-        // Atingiu o limite mesmo com erros de provedor — marcar como failed para não lopar
-        console.warn(
-          `[worker] ✗ Lead ${lead.id} atingiu max_attempts (${queue.max_attempts}) por erros de provedor ` +
-          `(HTTP ${httpStatus}) — marcando como failed`
-        );
-        await supabase
-          .from("leads")
-          .update({
-            status:        "failed",
-            attempt_count: newAttemptCount,
-            last_outcome:  `provider-fault-limit-${httpStatus}`,
-          })
-          .eq("id", lead.id);
-        return;
-      }
-
       const nextAt = new Date(Date.now() + 60_000).toISOString();
       console.warn(
         `[worker] ⚠ Provedor SIP indisponível (HTTP ${httpStatus}) — ` +
-        `reagendando lead ${lead.id} em 60s (tentativa ${newAttemptCount}/${queue.max_attempts})`
+        `revertendo lead ${lead.id} para "${lead.status}" sem contar tentativa`
       );
       await supabase
         .from("leads")
         .update({
-          status:          "queued",
+          status:          lead.status,        // volta ao status original (queued/callbackScheduled)
+          attempt_count:   lead.attempt_count, // reverte — erro de infra não conta como tentativa
           next_attempt_at: nextAt,
           last_outcome:    `provider-${httpStatus}`,
         })

@@ -108,7 +108,17 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   // ── end-of-call-report ──
   if (msgType === "end-of-call-report") {
-    await handleEndOfCallReport(tenantId, message, service);
+    try {
+      await handleEndOfCallReport(tenantId, message, service);
+    } catch (err) {
+      // Retornar 200 mesmo em erro interno para evitar loop de retry do Vapi.
+      // O erro é logado para diagnóstico — o lead pode precisar de reconciliação manual.
+      console.error(
+        `[webhook] ✗ Erro ao processar end-of-call-report | tenant=${tenantId}` +
+        ` | erro=${err instanceof Error ? err.message : String(err)}` +
+        ` | payload=${JSON.stringify(message).slice(0, 300)}`
+      );
+    }
     return NextResponse.json({ ok: true });
   }
 
@@ -355,6 +365,7 @@ async function updateLeadAfterCall(
   // códigos numéricos puros ("503"). Nota: endedReason null é tratado separado (abaixo).
   const isProviderFault = endedReason != null && (
     endedReason.includes("error-providerfault") ||
+    endedReason.includes("error-vapifault") ||      // falha de infra Vapi (ex: Deepgram indisponível)
     endedReason.includes("sip-503") ||
     endedReason.includes("sip-408") ||
     endedReason.includes("sip-500") ||
@@ -362,7 +373,7 @@ async function updateLeadAfterCall(
     endedReason.includes("sip-504") ||
     /^(503|408|500|502|504)$/.test(endedReason) ||
     endedReason.startsWith("pipeline-error") ||
-    endedReason === "transport-error"
+    endedReason.startsWith("transport-error")       // cobre subtipos futuros (ex: transport-error-dtls-failed)
   );
 
   if (isProviderFault) {
