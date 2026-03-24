@@ -22,23 +22,38 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (queueError || !queue) {
     return NextResponse.json({ error: "Queue não encontrada" }, { status: 404 });
   }
+  const [totalRes, completedRes, failedRes, callingRes] = await Promise.all([
+    service
+      .from("leads")
+      .select("*", { count: "exact", head: true })
+      .eq("lead_list_id", queue.lead_list_id)
+      .eq("tenant_id", tenantId),
+    service
+      .from("leads")
+      .select("*", { count: "exact", head: true })
+      .eq("lead_list_id", queue.lead_list_id)
+      .eq("tenant_id", tenantId)
+      .eq("status", "completed"),
+    service
+      .from("leads")
+      .select("*", { count: "exact", head: true })
+      .eq("lead_list_id", queue.lead_list_id)
+      .eq("tenant_id", tenantId)
+      .eq("status", "failed"),
+    service
+      .from("leads")
+      .select("*", { count: "exact", head: true })
+      .eq("lead_list_id", queue.lead_list_id)
+      .eq("tenant_id", tenantId)
+      .eq("status", "calling"),
+  ]);
 
-  // Contagem por status
-  const { data: counts } = await service
-    .from("leads")
-    .select("status")
-    .eq("lead_list_id", queue.lead_list_id)
-    .eq("tenant_id", tenantId);
-
-  const summary: Record<string, number> = {};
-  for (const row of counts ?? []) {
-    summary[row.status] = (summary[row.status] ?? 0) + 1;
-  }
-
-  const total = Object.values(summary).reduce((a, b) => a + b, 0);
-  const done = (summary.completed ?? 0) + (summary.failed ?? 0) + (summary.doNotCall ?? 0);
-  const calling = summary.calling ?? 0;
-  const pending = (summary.new ?? 0) + (summary.queued ?? 0) + (summary.callbackScheduled ?? 0);
+  const total     = totalRes.count ?? 0;
+  const completed = completedRes.count ?? 0;
+  const failed    = failedRes.count ?? 0;
+  const calling   = callingRes.count ?? 0;
+  const done      = completed + failed;
+  const pending   = Math.max(0, total - done - calling);
 
   return NextResponse.json({
     queueStatus: queue.status,
@@ -46,7 +61,11 @@ export async function GET(_req: NextRequest, { params }: Params) {
     done,
     calling,
     pending,
-    byStatus: summary,
+    byStatus: {
+      completed,
+      failed,
+      calling
+    },
     progressPct: total > 0 ? Math.round((done / total) * 100) : 0,
   });
 }
