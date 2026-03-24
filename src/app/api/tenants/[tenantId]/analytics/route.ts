@@ -156,8 +156,10 @@ function isConversionConfigured(
 // ─── Handler principal ────────────────────────────────────────────────────────
 export async function GET(req: NextRequest, { params }: Params) {
   const { tenantId } = await params;
-  const { response } = await requireTenantAccess(tenantId);
+  const { response, membership } = await requireTenantAccess(tenantId);
   if (response) return response;
+
+  const userRole = membership?.role ?? "member";
 
   const { searchParams } = new URL(req.url);
   const queueId = searchParams.get("queueId") ?? null;
@@ -451,6 +453,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   ).length;
 
   return NextResponse.json({
+    userRole,
     campaigns,
     assistants: assistantsList,
     selectedQueueId: queueId,
