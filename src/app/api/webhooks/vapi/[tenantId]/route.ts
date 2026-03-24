@@ -266,6 +266,7 @@ async function handleEndOfCallReport(
       existing.dial_queue_id,
       tenantId,
       endedReason,
+      durationSeconds,
       service,
       callData,
     );
@@ -327,7 +328,7 @@ async function handleEndOfCallReport(
     cost_breakdown:       costBreakdown,
   });
 
-  await updateLeadAfterCall(lead.id, queue.id, tenantId, endedReason, service, callData);
+  await updateLeadAfterCall(lead.id, queue.id, tenantId, endedReason, durationSeconds, service, callData);
 }
 
 interface CallData {
@@ -341,12 +342,13 @@ interface CallData {
 }
 
 async function updateLeadAfterCall(
-  leadId:      string,
-  queueId:     string,
-  tenantId:    string,
-  endedReason: string | null,
-  service:     ReturnType<typeof createServiceClient>,
-  callData?:   CallData
+  leadId:          string,
+  queueId:         string,
+  tenantId:        string,
+  endedReason:     string | null,
+  durationSeconds: number | null,
+  service:         ReturnType<typeof createServiceClient>,
+  callData?:       CallData
 ) {
   // Verificar se há callback scheduled futuro
   const { data: pendingCallback } = await service
@@ -417,7 +419,15 @@ async function updateLeadAfterCall(
     "exceeded-max-duration",   // ligação chegou ao limite de tempo (estava em curso)
   ]);
 
-  const isAnswered = endedReason != null && ANSWERED_REASONS.has(endedReason);
+  // silence-timed-out com duração >= 1s = chamada foi atendida (gerou custo real).
+  // O cliente atendeu mas ficou em silêncio ou caiu. Tratamos como concluído para não
+  // gerar retry indesejado. Duração 0 (sem conexão real) continua no fluxo de retry.
+  const silenceButAnswered =
+    endedReason === "silence-timed-out" &&
+    durationSeconds != null &&
+    durationSeconds >= 1;
+
+  const isAnswered = endedReason != null && (ANSWERED_REASONS.has(endedReason) || silenceButAnswered);
 
   if (isAnswered) {
     // ── Chamada realmente atendida → concluído ──
