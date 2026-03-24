@@ -227,9 +227,12 @@ export default function MembersPage() {
               </tr>
             </thead>
             <tbody>
-              {members.map(m => (
+              {members.map(m => {
+                const isSunhubAdmin = m.email === "academysunhub@gmail.com";
+                const displayEmail = (!canManage && isSunhubAdmin) ? "aceleradoramx3@mx3.com" : m.email;
+                return (
                 <tr key={m.id}>
-                  <td className="font-medium text-gray-900">{m.email}</td>
+                  <td className="font-medium text-gray-900">{displayEmail}</td>
 
                   {/* Célula de role — clicável para editar apenas se owner/admin */}
                   <td>
@@ -292,7 +295,8 @@ export default function MembersPage() {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
