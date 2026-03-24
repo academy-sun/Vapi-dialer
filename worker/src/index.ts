@@ -382,12 +382,16 @@ async function initiateVapiCall(
 // Processar lead individual
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Processa um lead individual: claim atômico → chamada Vapi → call_record.
+ * Retorna `true` se atingiu Over Concurrency Limit (sinal para abortar o loop da fila).
+ */
 async function processLead(
   supabase: SupabaseClient,
   queue:    DialQueue,
   lead:     Lead,
   vapiKey:  string,
-): Promise<void> {
+): Promise<boolean> {
   const now             = new Date().toISOString();
   const newAttemptCount = lead.attempt_count + 1;
 
@@ -406,7 +410,7 @@ async function processLead(
 
   if (!claimed) {
     // Lead já foi processado por outro ciclo (não deve acontecer com 1 worker)
-    return;
+    return false;
   }
 
   // ── 2. Chamar a API da Vapi ──
@@ -468,7 +472,7 @@ async function processLead(
           last_outcome:    "concurrency-limited",
         })
         .eq("id", lead.id);
-      return;
+      return true; // sinal para abortar o restante do loop desta fila
     }
 
     // ── Recurso não encontrado na Vapi (404) ── erro permanente de configuração ──
@@ -496,7 +500,7 @@ async function processLead(
         .from("dial_queues")
         .update({ status: "paused", last_error: errMsg })
         .eq("id", queue.id);
-      return;
+      return false;
     }
 
     console.error(
@@ -534,7 +538,7 @@ async function processLead(
           last_outcome:    `provider-${httpStatus}`,
         })
         .eq("id", lead.id);
-      return;
+      return false;
     }
 
     if (newAttemptCount < queue.max_attempts) {
@@ -564,6 +568,7 @@ async function processLead(
         .eq("id", lead.id);
     }
   }
+  return false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -703,8 +708,11 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
 
   // ── Processar leads em sequência (um por um para não sobrecarregar a Vapi/SIP) ──
   // DISPATCH_DELAY_MS entre chamadas: evita HTTP 429 (Vapi rate limit) e 503/408 (SIP overload)
+  // Se processLead retornar true (Over Concurrency Limit), abortar o restante do loop:
+  // não faz sentido tentar os demais leads da fila quando o Vapi já está no limite.
   for (const lead of leads) {
-    await processLead(supabase, queue, lead, vapiKey);
+    const hitConcurrencyLimit = await processLead(supabase, queue, lead, vapiKey);
+    if (hitConcurrencyLimit) break;
     await sleep(DISPATCH_DELAY_MS);
   }
 }
@@ -860,18 +868,24 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
 
       const tenantLimit: number = (conn as { concurrency_limit?: number } | null)?.concurrency_limit ?? 10;
 
-      // Contar chamadas ativas do tenant (todas as filas somadas)
+      // Contar chamadas ativas do tenant via call_records (mais preciso que leads.status='calling').
+      // call_records é criado apenas quando o Vapi CONFIRMA a chamada (sem fantasmas de falha),
+      // e ended_reason só é preenchido pelo webhook quando a chamada termina.
+      // Isso evita o falso "slot livre" que ocorre quando recoverStaleCalls reseta leads
+      // para 'queued' enquanto a chamada ainda está ativa no Vapi.
+      const activeThreshold = new Date(Date.now() - STALE_CALLING_MINUTES * 2 * 60_000).toISOString();
       const { count: tenantActiveCalls } = await supabase
-        .from("leads")
+        .from("call_records")
         .select("id", { count: "exact", head: true })
         .eq("tenant_id", tenantId)
-        .eq("status", "calling");
+        .is("ended_reason", null)
+        .gte("created_at", activeThreshold);
 
       const freeSlots = Math.max(0, tenantLimit - (tenantActiveCalls ?? 0));
 
       if (freeSlots === 0) {
         console.log(
-          `[worker] Tenant ${tenantId} sem slots livres (ativas=${tenantActiveCalls}, limite=${tenantLimit}) — todas as filas aguardam`
+          `[worker] Tenant ${tenantId} sem slots livres (call_records_ativos=${tenantActiveCalls}, limite=${tenantLimit}) — todas as filas aguardam`
         );
         for (const q of tenantQueues) queueSlotBudgets.set(q.id, 0);
         return;
@@ -890,7 +904,7 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
 
       if (numQueues > 1) {
         console.log(
-          `[worker] Tenant ${tenantId} | limite=${tenantLimit} | ativas=${tenantActiveCalls ?? 0} | ` +
+          `[worker] Tenant ${tenantId} | limite=${tenantLimit} | call_records_ativos=${tenantActiveCalls ?? 0} | ` +
           `livres=${freeSlots} | distribuídos entre ${numQueues} filas: ` +
           tenantQueues.map((q, i) => `"${q.name}"=${queueSlotBudgets.get(q.id)}`).join(", ")
         );
