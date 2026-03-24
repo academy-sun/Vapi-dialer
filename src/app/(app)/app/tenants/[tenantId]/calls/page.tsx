@@ -23,6 +23,8 @@ import {
   ExternalLink,
   Hash,
   AlertCircle,
+  Plus,
+  Loader2,
 } from "lucide-react";
 
 interface Queue { id: string; name: string }
@@ -317,6 +319,10 @@ export default function CallsPage() {
   const [searchCallId, setSearchCallId] = useState("");
   const [shortDurationMode, setShortDurationMode] = useState(false);
   const [maxDuration, setMaxDuration] = useState("30");
+  const [filterInteresse, setFilterInteresse] = useState<"all" | "sucesso" | "fracasso" | "none">("all");
+  const [showRetrabalhoModal, setShowRetrabalhoModal] = useState(false);
+  const [retrabalhoName, setRetrabalhoName] = useState("");
+  const [retrabalhoLoading, setRetrabalhoLoading] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"created_at" | "cost" | "duration" | "score">("created_at");
@@ -378,6 +384,30 @@ export default function CallsPage() {
 
   useEffect(() => { loadCalls(); }, [loadCalls]);
 
+  async function createRetrabalhoList() {
+    if (!retrabalhoName.trim()) return;
+    setRetrabalhoLoading(true);
+    try {
+      const leads = filteredCalls
+        .filter((c) => c.leads?.phone_e164)
+        .map((c) => ({ phone_e164: c.leads!.phone_e164, data_json: c.leads!.data_json ?? {} }));
+      const res = await fetch(`/api/tenants/${tenantId}/lead-lists/from-calls`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: retrabalhoName.trim(), leads }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.error ?? "Erro ao criar lista", "error"); return; }
+      showToast(`Lista "${retrabalhoName.trim()}" criada com ${data.imported} leads!`);
+      setShowRetrabalhoModal(false);
+      setRetrabalhoName("");
+    } catch {
+      showToast("Erro de conexão", "error");
+    } finally {
+      setRetrabalhoLoading(false);
+    }
+  }
+
   async function openDetail(callId: string) {
     setShowTranscript(false);
     const res = await fetch(`/api/tenants/${tenantId}/calls/${callId}`);
@@ -391,7 +421,19 @@ export default function CallsPage() {
       || (c.leads?.phone_e164 ?? "").includes(searchPhone.replace(/\D/g, ""))
       || getNomeDisplay(c.leads?.data_json).toLowerCase().includes(searchPhone.trim().toLowerCase());
     const matchCallId = !searchCallId || c.vapi_call_id.toLowerCase().includes(searchCallId.trim().toLowerCase());
-    return matchReason && matchPhone && matchCallId;
+    let matchInteresse = true;
+    if (filterInteresse !== "all") {
+      const result = c.structured_outputs ? extractResult(c.structured_outputs) : null;
+      const val = result ? getInteresseValue(result) : undefined;
+      if (filterInteresse === "none") {
+        matchInteresse = val === undefined || val === null;
+      } else if (filterInteresse === "sucesso") {
+        matchInteresse = val !== undefined && val !== null && isSuccessValue(val);
+      } else if (filterInteresse === "fracasso") {
+        matchInteresse = val !== undefined && val !== null && isFailureValue(val);
+      }
+    }
+    return matchReason && matchPhone && matchCallId && matchInteresse;
   });
 
   const sortedCalls = [...filteredCalls].sort((a, b) => {
@@ -520,9 +562,21 @@ export default function CallsPage() {
               );
             })}
           </select>
-          {hasActiveFilters && (
+          {/* Filtro por Critério de Sucesso */}
+          <select
+            className="select-native text-sm py-2.5"
+            value={filterInteresse}
+            onChange={(e) => setFilterInteresse(e.target.value as typeof filterInteresse)}
+          >
+            <option value="all">Qualquer critério de sucesso</option>
+            <option value="sucesso">✅ Sucesso</option>
+            <option value="fracasso">❌ Fracasso</option>
+            <option value="none">— Sem avaliação</option>
+          </select>
+
+          {(hasActiveFilters || filterInteresse !== "all") && (
             <button
-              onClick={() => { setFilterReason("all"); setSearchPhone(""); setSearchCallId(""); setFilterQueue("all"); }}
+              onClick={() => { setFilterReason("all"); setSearchPhone(""); setSearchCallId(""); setFilterQueue("all"); setFilterInteresse("all"); }}
               className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
             >
               <X className="w-3.5 h-3.5" /> Limpar filtros
@@ -530,7 +584,7 @@ export default function CallsPage() {
           )}
         </div>
 
-        {/* Filtro duração curta */}
+        {/* Filtro duração curta + Retrabalho */}
         <div className="flex items-center gap-3 pt-1 border-t border-gray-100 flex-wrap">
           <Timer className="w-4 h-4 text-gray-400 shrink-0" />
           <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
@@ -557,6 +611,43 @@ export default function CallsPage() {
                 Leads que atenderam mas desligaram rápido — candidatos a re-trabalho
               </span>
             </>
+          )}
+
+          {/* Botão Criar Lista de Retrabalho */}
+          {filteredCalls.length > 0 && (
+            <div className="ml-auto relative">
+              {!showRetrabalhoModal ? (
+                <button
+                  onClick={() => { setRetrabalhoName(`Retrabalho ${new Date().toLocaleDateString("pt-BR")}`); setShowRetrabalhoModal(true); }}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Criar lista de retrabalho ({filteredCalls.length})
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 bg-white border border-indigo-200 rounded-lg px-3 py-2 shadow-sm">
+                  <input
+                    type="text"
+                    className="form-input text-xs py-1.5 w-52"
+                    placeholder="Nome da lista..."
+                    value={retrabalhoName}
+                    onChange={(e) => setRetrabalhoName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") createRetrabalhoList(); if (e.key === "Escape") setShowRetrabalhoModal(false); }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={createRetrabalhoList}
+                    disabled={retrabalhoLoading || !retrabalhoName.trim()}
+                    className="btn-primary text-xs py-1.5 px-3 shrink-0"
+                  >
+                    {retrabalhoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Criar"}
+                  </button>
+                  <button onClick={() => setShowRetrabalhoModal(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
