@@ -311,12 +311,6 @@ async function initiateVapiCall(
   // Nota: o Vapi não aceita serverUrl nem server.url no payload do /call/phone.
   // O webhook de end-of-call-report deve ser configurado no painel do Vapi
   // em: Dashboard → Settings → Server URL → https://<app>/api/webhooks/vapi/<tenantId>
-  if (APP_BASE_URL) {
-    console.log(
-      `[worker] ⚠ Configure o Server URL no painel do Vapi: ` +
-      `${APP_BASE_URL}/api/webhooks/vapi/${tenantId}`
-    );
-  }
 
   // variableValues: somente primitivos não-vazios
   const variableValues: Record<string, string> = {};
