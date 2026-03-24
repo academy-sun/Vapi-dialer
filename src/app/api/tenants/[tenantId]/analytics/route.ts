@@ -164,6 +164,9 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { searchParams } = new URL(req.url);
   const queueId = searchParams.get("queueId") ?? null;
   const assistantId = searchParams.get("assistantId") ?? null;
+  // Filtro de período: 7, 30, 90 ou 365 dias (padrão 90)
+  const days = Math.min(365, Math.max(7, Number(searchParams.get("days") ?? "90")));
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
 
   const service = createServiceClient();
 
@@ -234,10 +237,13 @@ export async function GET(req: NextRequest, { params }: Params) {
     : null;
 
   // ── 2. Call records ──
+  // structured_outputs (JSONB pesado) vem em query separada abaixo — evita transferir
+  // dados grandes desnecessariamente para chamadas que não têm outputs.
   let callQuery = service
     .from("call_records")
-    .select("cost, duration_seconds, ended_reason, created_at, structured_outputs, dial_queue_id")
+    .select("id, cost, duration_seconds, ended_reason, created_at, dial_queue_id")
     .eq("tenant_id", tenantId)
+    .gte("created_at", since)
     .limit(10000);
 
   if (queueId) {
@@ -285,20 +291,51 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { data: callData, error: callError } = await callQuery;
   if (callError) return NextResponse.json({ error: callError.message }, { status: 500 });
 
-  // ── 3. Leads (filtrado por lead_list se campanha selecionada) ──
+  // ── 2b. Structured outputs — query separada, só registros não-nulos ──
+  // Muito mais leve: só transfere JSONB para o subconjunto de chamadas que têm outputs.
+  let soQuery = service
+    .from("call_records")
+    .select("id, structured_outputs, dial_queue_id")
+    .eq("tenant_id", tenantId)
+    .gte("created_at", since)
+    .not("structured_outputs", "is", null)
+    .limit(10000);
+  if (queueId) {
+    soQuery = soQuery.eq("dial_queue_id", queueId);
+  } else if (filteredQueueIds && filteredQueueIds.length > 0) {
+    soQuery = soQuery.in("dial_queue_id", filteredQueueIds);
+  }
+  const { data: soData } = await soQuery;
+  // Mapa callId → structured_outputs para lookup O(1) nos cálculos de conversão
+  const soMap = new Map<string, unknown>();
+  for (const r of (soData ?? [])) soMap.set(r.id, r.structured_outputs);
+
+  // ── 3. Leads health — usar COUNT-only queries (evita buscar milhares de rows) ──
+  // Mesmo padrão da rota /progress, que não travou o Supabase.
   const selectedQueue = queueId
     ? (campaignsRaw ?? []).find((q) => q.id === queueId)
     : null;
   const leadListId = selectedQueue?.lead_list_id ?? null;
 
-  let leadsQuery = service
-    .from("leads")
-    .select("id, status, attempt_count, last_outcome", { count: "exact" })
-    .eq("tenant_id", tenantId);
-  if (leadListId) leadsQuery = leadsQuery.eq("lead_list_id", leadListId);
+  const leadsBase = () => {
+    const q = service
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId);
+    return leadListId ? q.eq("lead_list_id", leadListId) : q;
+  };
 
-  const { data: leadsRaw, count: totalLeads } = await leadsQuery;
-  const leads = leadsRaw ?? [];
+  const [totalLeadsRes, remainingRes, failedRes, neverAnsweredRes] = await Promise.all([
+    leadsBase(),
+    leadsBase().in("status", ["queued", "callbackScheduled", "new"]),
+    leadsBase().eq("status", "failed"),
+    leadsBase().eq("status", "failed").gte("attempt_count", 3),
+  ]);
+
+  const totalLeads        = totalLeadsRes.count ?? 0;
+  const leadsRemaining    = remainingRes.count ?? 0;
+  const leadsFailed       = failedRes.count ?? 0;
+  const leadsNeverAnswered = neverAnsweredRes.count ?? 0;
 
   // ── Agregações ────────────────────────────────────────────────────────────
   const calls = callData ?? [];
@@ -330,15 +367,15 @@ export async function GET(req: NextRequest, { params }: Params) {
   const answeredCalls    = statusBreakdown.answered;
   const notAnsweredCalls = statusBreakdown["no-answer"];
 
-  // Structured outputs
-  const structuredWithOutput = calls.filter((c) => c.structured_outputs != null).length;
+  // Structured outputs — usar soMap/soData da query dedicada
+  const structuredWithOutput = soMap.size;
 
   // Cálculo de conversão por chamada, usando a config do assistente correto:
   //   1. Busca assistantId da chamada via queueAssistantMap
   //   2. Busca config em assistant_configs para aquele assistantId
   //   3. Fallback para vapi_connections (tenant-level) se não houver config por assistente
   //   4. Fallback para heurística se nem tenant-level estiver configurado
-  const structuredSuccessCalls = calls.filter((c) => {
+  const structuredSuccessCalls = (soData ?? []).filter((c) => {
     const callAssistantId = c.dial_queue_id ? queueAssistantMap.get(c.dial_queue_id) : undefined;
     const assistantCfg    = callAssistantId ? (assistantConfigMap.get(callAssistantId) ?? null) : null;
     const sfField = assistantCfg?.success_field ?? configuredSuccessField;
@@ -445,15 +482,10 @@ export async function GET(req: NextRequest, { params }: Params) {
       byHour[h] > 0 ? Math.round((byHourAnswered[h] / byHour[h]) * 100) : 0;
   }
 
-  // Saúde da lista
-  const leadsRemaining     = leads.filter((l) => ["queued", "callbackScheduled"].includes(l.status)).length;
-  const leadsFailed        = leads.filter((l) => l.status === "failed").length;
-  const leadsNeverAnswered = leads.filter(
-    (l) => l.status === "failed" && (l.attempt_count ?? 0) >= 3
-  ).length;
-
   return NextResponse.json({
     userRole,
+    days,
+    since,
     campaigns,
     assistants: assistantsList,
     selectedQueueId: queueId,

@@ -408,6 +408,7 @@ export default function AnalyticsPage() {
 
   const selectedAssistant = searchParams.get("assistantId") ?? "";
   const selectedQueue = searchParams.get("queueId") ?? "";
+  const selectedDays = searchParams.get("days") ?? "90";
 
   // Buscar nomes reais dos assistentes via vapi-resources (uma vez por tenant)
   useEffect(() => {
@@ -431,16 +432,17 @@ export default function AnalyticsPage() {
     const params = new URLSearchParams();
     if (selectedAssistant) params.set("assistantId", selectedAssistant);
     if (selectedQueue) params.set("queueId", selectedQueue);
+    params.set("days", selectedDays);
 
     const res = await fetch(`/api/tenants/${tenantId}/analytics?${params}`);
     if (res.ok) setData(await res.json());
     setLoading(false);
     setRefreshing(false);
-  }, [tenantId, selectedAssistant, selectedQueue]);
+  }, [tenantId, selectedAssistant, selectedQueue, selectedDays]);
 
   useEffect(() => { load(); }, [load]);
 
-  function setFilter(key: "assistantId" | "queueId", value: string) {
+  function setFilter(key: "assistantId" | "queueId" | "days", value: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (value) {
       params.set(key, value);
@@ -526,6 +528,21 @@ export default function AnalyticsPage() {
               {visibleCampaigns.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
+            </select>
+          </div>
+
+          {/* Period filter */}
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
+            <select
+              className="form-input py-1.5 text-sm"
+              value={selectedDays}
+              onChange={(e) => setFilter("days", e.target.value)}
+            >
+              <option value="7">Últimos 7 dias</option>
+              <option value="30">Últimos 30 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="365">Último ano</option>
             </select>
           </div>
 
