@@ -421,8 +421,9 @@ export default function AppShell({
             <div className="mt-4 pt-4" style={{ borderTop: "1px solid #222222" }}>
               <p className="sidebar-section-label" style={{ color: "#FF1A1A", marginTop: "16px" }}>Admin</p>
               {[
-                { label: "Visão Geral",  href: "/app/admin",         icon: LayoutDashboard },
-                { label: "Sandbox",      href: "/app/admin/sandbox", icon: FlaskConical    },
+                { label: "Visão Geral",  href: "/app/admin",                  icon: LayoutDashboard },
+                { label: "Analytics",    href: "/app/admin/analytics",        icon: BarChart2       },
+                { label: "Sandbox",      href: "/app/admin/sandbox",          icon: FlaskConical    },
               ].map((item) => {
                 const Icon = item.icon;
                 const isActive = pathname.startsWith(item.href);
