@@ -6,6 +6,17 @@ import * as XLSX from "xlsx";
 
 type Params = { params: Promise<{ tenantId: string; leadListId: string }> };
 
+// Campos que mapeiam para customer.name no Vapi — limite de 40 chars
+const NAME_FIELDS = new Set(["name", "nome", "first_name", "primeiro_nome", "last_name", "sobrenome", "razao_social"]);
+function truncateDataJsonNames(dataJson: Record<string, string>): Record<string, string> {
+  for (const key of Object.keys(dataJson)) {
+    if (NAME_FIELDS.has(key.toLowerCase()) && dataJson[key].length > 40) {
+      dataJson[key] = dataJson[key].substring(0, 37) + "...";
+    }
+  }
+  return dataJson;
+}
+
 function toSnakeCase(str: string): string {
   return str
     .toLowerCase()
@@ -162,7 +173,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         tenant_id: tenantId,
         lead_list_id: leadListId,
         phone_e164: parsed.format("E.164"),
-        data_json: dataJson,
+        data_json: truncateDataJsonNames(dataJson),
         status: "new",
       });
     }
@@ -200,7 +211,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         tenant_id: tenantId,
         lead_list_id: leadListId,
         phone_e164: parsed.format("E.164"),
-        data_json: dataJson,
+        data_json: truncateDataJsonNames(dataJson),
         status: "new",
       });
     }

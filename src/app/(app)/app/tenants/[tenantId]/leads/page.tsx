@@ -36,6 +36,12 @@ interface LeadList {
   created_at: string;
 }
 
+interface Queue {
+  id: string;
+  name: string;
+  lead_list_id: string;
+}
+
 interface Lead {
   id: string;
   phone_e164: string;
@@ -895,12 +901,117 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
   );
 }
 
+/* ── Modal: Vincular lista a campanha ── */
+function LinkToCampaignModal({
+  list,
+  queues,
+  tenantId,
+  onClose,
+  onSuccess,
+}: {
+  list: LeadList;
+  queues: Queue[];
+  tenantId: string;
+  onClose: () => void;
+  onSuccess: (added: number, skipped: number, campaignName: string) => void;
+}) {
+  const [selectedQueueId, setSelectedQueueId] = useState(queues[0]?.id ?? "");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  // Filtrar campanhas que ainda não usam esta lista
+  const eligible = queues.filter((q) => q.lead_list_id !== list.id);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedQueueId) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(
+        `/api/tenants/${tenantId}/queues/${selectedQueueId}/add-leads`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sourceListId: list.id }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Erro ao vincular"); return; }
+      const campaignName = queues.find((q) => q.id === selectedQueueId)?.name ?? selectedQueueId;
+      onSuccess(data.added, data.skipped, campaignName);
+      onClose();
+    } catch {
+      setError("Erro de conexão");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay animate-fadeIn" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="card-header flex items-center justify-between">
+          <h2 className="text-base font-semibold text-gray-900">Incluir em campanha</h2>
+          <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="card-body space-y-4">
+          <p className="text-sm text-gray-500">
+            Copiar leads de <strong className="text-gray-700">{list.name}</strong> para a lista de uma campanha existente.
+            Duplicatas são ignoradas automaticamente.
+          </p>
+
+          {eligible.length === 0 ? (
+            <div className="alert-error">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="text-sm">Nenhuma campanha disponível (todas já usam esta lista).</span>
+            </div>
+          ) : (
+            <div>
+              <label className="form-label">Campanha de destino</label>
+              <select
+                className="select-native"
+                value={selectedQueueId}
+                onChange={(e) => setSelectedQueueId(e.target.value)}
+                required
+              >
+                {eligible.map((q) => (
+                  <option key={q.id} value={q.id}>{q.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {error && (
+            <div className="alert-error">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="text-sm">{error}</span>
+            </div>
+          )}
+
+          <div className="flex gap-3 justify-end pt-2">
+            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
+            <button type="submit" disabled={loading || eligible.length === 0} className="btn-primary">
+              {loading
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Incluindo...</>
+                : <><ArrowRight className="w-4 h-4" /> Incluir leads</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════
    Página principal
 ══════════════════════════════════════════════════════════════ */
 export default function LeadsPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const [lists, setLists]                   = useState<LeadList[]>([]);
+  const [queues, setQueues]                 = useState<Queue[]>([]);
   const [selectedListId, setSelectedListId] = useState("");
   const [listConfirmed, setListConfirmed]   = useState(false);
   const [leads, setLeads]                   = useState<Lead[]>([]);
@@ -913,6 +1024,8 @@ export default function LeadsPage() {
   // Edição inline de nome da lista
   const [editingListId, setEditingListId]   = useState<string | null>(null);
   const [editingListName, setEditingListName] = useState("");
+  // Modal "Incluir em campanha"
+  const [linkingList, setLinkingList]       = useState<LeadList | null>(null);
   const { toasts, show: showToast } = useToast();
 
   function handleSelectList(id: string) {
@@ -920,7 +1033,7 @@ export default function LeadsPage() {
     setListConfirmed(false);
   }
 
-  useEffect(() => { loadLists(); }, [tenantId]);
+  useEffect(() => { loadLists(); loadQueues(); }, [tenantId]);
   useEffect(() => { if (selectedListId) loadLeads(); }, [selectedListId]);
 
   async function loadLists() {
@@ -934,6 +1047,15 @@ export default function LeadsPage() {
     // Evita resetar a seleção quando loadLists é chamado após criar/renomear lista
     setSelectedListId((prev) => prev || data.leadLists?.[0]?.id || "");
     } catch { setPageError("Erro de conexão ao carregar listas."); }
+  }
+
+  async function loadQueues() {
+    try {
+      const res = await fetch(`/api/tenants/${tenantId}/queues`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setQueues(data.queues ?? []);
+    } catch { /* silencioso — funcionalidade opcional */ }
   }
 
   async function loadLeads() {
@@ -1170,6 +1292,16 @@ export default function LeadsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLinkingList(list);
+                        }}
+                        className="w-7 h-7 flex items-center justify-center rounded hover:bg-indigo-100 text-gray-400 hover:text-indigo-600 transition-colors"
+                        title="Incluir em campanha existente"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1470,6 +1602,19 @@ export default function LeadsPage() {
           onClose={() => setShowAddLead(false)}
           onAdd={addLeadManual}
           listName={activeList.name}
+        />
+      )}
+
+      {/* Modal: Incluir lista em campanha */}
+      {linkingList && (
+        <LinkToCampaignModal
+          list={linkingList}
+          queues={queues}
+          tenantId={tenantId}
+          onClose={() => setLinkingList(null)}
+          onSuccess={(added, skipped, campaignName) => {
+            showToast(`${added} lead(s) incluído(s) em "${campaignName}"${skipped > 0 ? ` · ${skipped} duplicata(s) ignorada(s)` : ""}`);
+          }}
         />
       )}
 

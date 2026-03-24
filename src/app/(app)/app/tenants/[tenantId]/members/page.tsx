@@ -27,6 +27,7 @@ function useToast() {
 export default function MembersPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const [members, setMembers] = useState<Member[]>([]);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [email, setEmail] = useState("");
@@ -44,6 +45,7 @@ export default function MembersPage() {
     const res = await fetch(`/api/tenants/${tenantId}/members`);
     const data = await res.json();
     setMembers(data.members ?? []);
+    if (data.currentUserRole) setCurrentUserRole(data.currentUserRole);
     setLoading(false);
   }, [tenantId]);
 
@@ -109,9 +111,11 @@ export default function MembersPage() {
     loadMembers();
   }
 
-  // Role do usuário logado neste tenant
+  // Role efetivo: vem da API (inclui admins globais sem membership row)
+  // Fallback: buscar no array de membros pelo userId atual (para membros regulares)
   const currentMember = members.find(m => m.user_id === currentUserId);
-  const canManage = !loading && (currentMember?.role === "owner" || currentMember?.role === "admin");
+  const effectiveRole = currentUserRole ?? currentMember?.role ?? null;
+  const canManage = !loading && (effectiveRole === "owner" || effectiveRole === "admin");
 
   return (
     <div>
