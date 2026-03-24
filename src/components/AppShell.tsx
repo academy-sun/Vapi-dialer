@@ -426,7 +426,7 @@ export default function AppShell({
                 { label: "Sandbox",      href: "/app/admin/sandbox",          icon: FlaskConical    },
               ].map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname.startsWith(item.href);
+                const isActive = pathname === item.href;
                 return (
                   <Link
                     key={item.href}

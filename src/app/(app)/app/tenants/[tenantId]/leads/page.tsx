@@ -535,7 +535,7 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
   const [previewRows, setPreviewRows] = useState<Record<string, string>[]>([]);
   const [mappings, setMappings]       = useState<Record<string, string>>({});
   const [importing, setImporting]     = useState(false);
-  const [result, setResult]           = useState<{ imported: number; skipped: number } | null>(null);
+  const [result, setResult]           = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
   const [error, setError]             = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -590,6 +590,7 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
           header: true,
           preview: 4,
           skipEmptyLines: true,
+          delimiter: "",  // auto-detect: suporta CSV com , ou ;
         });
         const headers = result.meta.fields ?? [];
         const rows = result.data.slice(0, 3) as Record<string, string>[];
@@ -631,7 +632,7 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
         setImporting(false);
         return;
       }
-      setResult({ imported: data.imported, skipped: data.skipped });
+      setResult({ imported: data.imported, skipped: data.skipped, errors: data.errors ?? [] });
       onImportComplete(data.imported, data.skipped);
       setStep(3); // Mostra o resultado do sucesso só após as funções terminarem antes de dar loading false
     } catch {
@@ -712,7 +713,7 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
             <input ref={fileRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFileInput} />
             <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
             <p className="text-sm font-semibold text-gray-700">Arraste um arquivo CSV ou XLSX, ou clique para selecionar</p>
-            <p className="text-xs text-gray-400 mt-1">Deve ter coluna <code className="bg-gray-100 px-1 rounded">phone</code> (ou telefone, celular) · Duplicatas são ignoradas automaticamente</p>
+            <p className="text-xs text-gray-400 mt-1">Aceita <strong className="text-gray-500">CSV</strong> e <strong className="text-gray-500">XLSX</strong> · Mapeie as colunas no próximo passo · Duplicatas ignoradas automaticamente</p>
           </div>
         )}
 
@@ -836,7 +837,7 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
                 {importing ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Importando...</>
                 ) : (
-                  <><Upload className="w-4 h-4" /> Importar ({csvHeaders.length} colunas)</>
+                  <><Upload className="w-4 h-4" /> Importar ({Object.values(mappings).filter(v => v !== "__ignore__").length} colunas)</>
                 )}
               </button>
             </div>
@@ -845,21 +846,48 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
 
         {/* ── STEP 3: Resultado ── */}
         {step === 3 && result && (
-          <div className="text-center py-8 space-y-4">
-            <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-7 h-7 text-emerald-500" />
-            </div>
-            <div>
+          <div className="py-6 space-y-4">
+            <div className="text-center space-y-2">
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto ${result.imported > 0 ? "bg-emerald-50" : "bg-amber-50"}`}>
+                {result.imported > 0
+                  ? <CheckCircle2 className="w-7 h-7 text-emerald-500" />
+                  : <AlertTriangle className="w-7 h-7 text-amber-500" />
+                }
+              </div>
               <p className="text-base font-semibold text-gray-900">
-                {result.imported} leads importados com sucesso
+                {result.imported > 0
+                  ? `${result.imported} leads importados com sucesso`
+                  : "Nenhum lead importado"}
               </p>
               {result.skipped > 0 && (
-                <p className="text-sm text-gray-400 mt-1">{result.skipped} linhas ignoradas (telefone inválido ou duplicado)</p>
+                <p className="text-sm text-gray-400">
+                  {result.skipped} linha{result.skipped !== 1 ? "s" : ""} ignorada{result.skipped !== 1 ? "s" : ""} (telefone inválido ou duplicado)
+                </p>
               )}
             </div>
-            <button onClick={reset} className="btn-secondary mx-auto">
-              <Upload className="w-4 h-4" /> Importar outro arquivo
-            </button>
+
+            {/* Detalhes dos erros */}
+            {result.errors.length > 0 && (
+              <div className="bg-red-50 border border-red-100 rounded-lg p-4 text-left space-y-1.5">
+                <p className="text-xs font-semibold text-red-700 flex items-center gap-1.5">
+                  <XCircle className="w-3.5 h-3.5" /> {result.errors.length} erro{result.errors.length !== 1 ? "s" : ""} de validação
+                </p>
+                <ul className="text-xs text-red-600 space-y-0.5 max-h-32 overflow-y-auto">
+                  {result.errors.map((e, i) => (
+                    <li key={i} className="font-mono">{e}</li>
+                  ))}
+                </ul>
+                {result.errors.length === 20 && (
+                  <p className="text-xs text-red-400 italic">Mostrando primeiros 20 erros.</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-center">
+              <button onClick={reset} className="btn-secondary">
+                <Upload className="w-4 h-4" /> Importar outro arquivo
+              </button>
+            </div>
           </div>
         )}
       </div>

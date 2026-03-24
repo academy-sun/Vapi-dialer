@@ -1346,11 +1346,11 @@ export default function CampaignsPage() {
                             <span className={statusCfg.badge}>{statusCfg.label}</span>
                           </div>
                           <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <p className="text-xs text-gray-400 mb-1">Sucessos</p>
+                            <p className="text-xs text-gray-400 mb-1">Ligações atendidas</p>
                             <p className="text-xl font-bold text-emerald-600">{prog?.byStatus?.completed ?? 0}</p>
                           </div>
                           <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <p className="text-xs text-gray-400 mb-1">Falhas</p>
+                            <p className="text-xs text-gray-400 mb-1">Não atendidas</p>
                             <p className="text-xl font-bold text-red-500">{prog?.byStatus?.failed ?? 0}</p>
                           </div>
                           <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
