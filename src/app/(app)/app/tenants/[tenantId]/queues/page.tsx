@@ -941,11 +941,17 @@ export default function CampaignsPage() {
 
   useEffect(() => {
     loadQueues();
-    loadVapiResources();
     fetch(`/api/tenants/${tenantId}/lead-lists`)
       .then((r) => r.json())
       .then((d) => setLeadLists(d.leadLists ?? []));
-  }, [tenantId, loadQueues, loadVapiResources]);
+  }, [tenantId, loadQueues]);
+
+  // Lazy Load dos assistentes/números da Vapi apenas quando um modal for aberto
+  useEffect(() => {
+    if ((showCreate || editingQueue) && !vapiResources && !vapiLoading) {
+      loadVapiResources();
+    }
+  }, [showCreate, editingQueue, vapiResources, vapiLoading, loadVapiResources]);
 
   // Poll progress for running campaigns
   useEffect(() => {
