@@ -11,6 +11,7 @@ interface Campaign { id: string; name: string; assistantId: string }
 interface AssistantRef { id: string; name: string }
 
 interface AnalyticsData {
+  userRole: string;
   campaigns: Campaign[];
   assistants: AssistantRef[];
   selectedQueueId: string | null;
@@ -270,7 +271,8 @@ function TalkTimeSection({ data }: { data: AnalyticsData }) {
         <div className="rounded-lg bg-gray-50 px-3 py-2">
           <p className="text-xs text-gray-400">Máximo</p>
           <p className="text-lg font-bold text-gray-900">{formatDurationShort(data.maxDurationSec ?? 0)}</p>
-          {costPerMin != null && (
+          {costPerMin != null && !
+            (data.userRole === "member") && (
             <p className="text-[10px] text-gray-400">
               ${costPerMin.toFixed(4)}/min
             </p>
@@ -469,6 +471,7 @@ export default function AnalyticsPage() {
     : null;
 
   const hasFilters = selectedAssistant || selectedQueue;
+  const isMember = !data || data.userRole === "member";
 
   return (
     <div>
@@ -558,9 +561,11 @@ export default function AnalyticsPage() {
             <StatCard title="Não Atendidas" value={data.notAnsweredCalls.toLocaleString("pt-BR")} sub={pct(data.notAnsweredCalls, data.totalCalls) + " do total"} icon={PhoneOff} color="text-red-500" bg="bg-red-50" />
           </div>
 
-          {/* Stat Cards row 2 */}
+      {/* Stat Cards row 2 */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard title="Gasto Total" value={`$${data.totalCost.toFixed(4)}`} icon={DollarSign} color="text-amber-600" bg="bg-amber-50" />
+            {!isMember && (
+              <StatCard title="Gasto Total" value={`$${data.totalCost.toFixed(4)}`} icon={DollarSign} color="text-amber-600" bg="bg-amber-50" />
+            )}
             <StatCard title="Tempo Total em Chamada" value={formatDurationLong(data.totalDurationSec)} icon={Clock} color="text-purple-600" bg="bg-purple-50" />
             <StatCard title="Tempo Médio (Atendidas)" value={formatDurationShort(data.avgDurationSec)} sub="Apenas chamadas atendidas" icon={Timer} color="text-cyan-600" bg="bg-cyan-50" />
             <StatCard
@@ -577,8 +582,8 @@ export default function AnalyticsPage() {
             />
           </div>
 
-          {/* ROI card — only when configured */}
-          {data.costPerConversion != null && (
+          {/* ROI card — only when configured and user is not a member */}
+          {!isMember && data.costPerConversion != null && (
             <div className="card p-5 border-l-4 border-indigo-500">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Custo por Conversão (ROI)</p>
               <p className="text-3xl font-bold text-gray-900">${data.costPerConversion.toFixed(2)}</p>
@@ -625,46 +630,48 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-            <div className="card p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <DollarSign className="w-4 h-4 text-amber-500" />
-                <h3 className="text-sm font-semibold text-gray-700">Análise de Custos</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                  <span className="text-sm text-gray-600">Custo total</span>
-                  <span className="font-mono font-semibold text-gray-900">${data.totalCost.toFixed(4)}</span>
+            {!isMember && (
+              <div className="card p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <DollarSign className="w-4 h-4 text-amber-500" />
+                  <h3 className="text-sm font-semibold text-gray-700">Análise de Custos</h3>
                 </div>
-                {data.totalCalls > 0 && (
+                <div className="space-y-3">
                   <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                    <span className="text-sm text-gray-600">Custo por chamada</span>
-                    <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.totalCalls).toFixed(4)}</span>
+                    <span className="text-sm text-gray-600">Custo total</span>
+                    <span className="font-mono font-semibold text-gray-900">${data.totalCost.toFixed(4)}</span>
                   </div>
-                )}
-                {data.answeredCalls > 0 && (
-                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                    <span className="text-sm text-gray-600">Custo por chamada atendida</span>
-                    <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.answeredCalls).toFixed(4)}</span>
+                  {data.totalCalls > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-sm text-gray-600">Custo por chamada</span>
+                      <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.totalCalls).toFixed(4)}</span>
+                    </div>
+                  )}
+                  {data.answeredCalls > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-sm text-gray-600">Custo por chamada atendida</span>
+                      <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.answeredCalls).toFixed(4)}</span>
+                    </div>
+                  )}
+                  {data.totalDurationSec > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-sm text-gray-600">Custo por minuto</span>
+                      <span className="font-mono font-semibold text-gray-900">${(data.totalCost / (data.totalDurationSec / 60)).toFixed(4)}</span>
+                    </div>
+                  )}
+                  {data.totalLeads > 0 && (
+                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
+                      <span className="text-sm text-gray-600">Custo por lead</span>
+                      <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.totalLeads).toFixed(4)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-sm text-gray-600">Tempo total em ligação</span>
+                    <span className="font-semibold text-gray-900">{formatDurationLong(data.totalDurationSec)}</span>
                   </div>
-                )}
-                {data.totalDurationSec > 0 && (
-                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                    <span className="text-sm text-gray-600">Custo por minuto</span>
-                    <span className="font-mono font-semibold text-gray-900">${(data.totalCost / (data.totalDurationSec / 60)).toFixed(4)}</span>
-                  </div>
-                )}
-                {data.totalLeads > 0 && (
-                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                    <span className="text-sm text-gray-600">Custo por lead</span>
-                    <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.totalLeads).toFixed(4)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">Tempo total em ligação</span>
-                  <span className="font-semibold text-gray-900">{formatDurationLong(data.totalDurationSec)}</span>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Charts */}

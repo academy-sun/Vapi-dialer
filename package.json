@@ -8,7 +8,7 @@
     "start": "next start",
     "worker": "tsx watch worker/src/index.ts",
     "worker:prod": "tsx worker/src/index.ts",
-    "reconcile": "tsx scripts/reconcile-null-webhooks.ts"
+    "reconcile": "tsx --env-file=.env scripts/reconcile-null-webhooks.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
