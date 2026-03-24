@@ -218,6 +218,9 @@ async function handleEndOfCallReport(
   const structuredOutputs   = (artifact.structuredOutputs ?? null) as Record<string, unknown> | null;
   const recordingUrl        = (artifact.recordingUrl       ?? message.recordingUrl       ?? null) as string | null;
   const stereoRecordingUrl  = (artifact.stereoRecordingUrl ?? message.stereoRecordingUrl ?? null) as string | null;
+  const startedAt           = (message.startedAt    as string) ?? null;
+  const endedAt             = (message.endedAt      as string) ?? null;
+  const costBreakdown       = (message.costBreakdown as Record<string, unknown>) ?? null;
 
   // Dados completos para repassar ao webhook de saída
   const callData = {
@@ -244,14 +247,17 @@ async function handleEndOfCallReport(
     await service
       .from("call_records")
       .update({
-        ended_reason:        endedReason,
+        ended_reason:         endedReason,
         cost,
         transcript,
         summary,
-        duration_seconds:    durationSeconds,
-        structured_outputs:  structuredOutputs,
-        recording_url:       recordingUrl,
+        duration_seconds:     durationSeconds,
+        structured_outputs:   structuredOutputs,
+        recording_url:        recordingUrl,
         stereo_recording_url: stereoRecordingUrl,
+        started_at:           startedAt,
+        ended_at:             endedAt,
+        cost_breakdown:       costBreakdown,
       })
       .eq("vapi_call_id", vapiCallId);
 
@@ -316,6 +322,9 @@ async function handleEndOfCallReport(
     structured_outputs:   structuredOutputs,
     recording_url:        recordingUrl,
     stereo_recording_url: stereoRecordingUrl,
+    started_at:           startedAt,
+    ended_at:             endedAt,
+    cost_breakdown:       costBreakdown,
   });
 
   await updateLeadAfterCall(lead.id, queue.id, tenantId, endedReason, service, callData);

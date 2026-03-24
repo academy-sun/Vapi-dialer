@@ -29,6 +29,7 @@ interface Queue {
   webhook_url?: string;
   allowed_days?: unknown;
   allowed_time_window?: unknown;
+  last_error?: string | null;
 }
 interface Progress {
   queueStatus: string; total: number; done: number;
@@ -1195,6 +1196,7 @@ export default function CampaignsPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={statusCfg.badge}>{statusCfg.label}</span>
+
                       <button onClick={() => setEditingQueue(q)} className="btn-icon text-gray-400 hover:text-indigo-600" title="Editar campanha">
                         <Pencil className="w-4 h-4" />
                       </button>
@@ -1205,6 +1207,17 @@ export default function CampaignsPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Banner de erro de configuração (ex: assistente/número deletado no Vapi) */}
+                  {q.last_error && (
+                    <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 mb-4">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-semibold text-amber-800">Campanha pausada automaticamente por erro de configuração</p>
+                        <p className="text-xs text-amber-700 mt-0.5">{q.last_error}</p>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Progress bar */}
                   {prog && (
@@ -1333,11 +1346,11 @@ export default function CampaignsPage() {
                             <span className={statusCfg.badge}>{statusCfg.label}</span>
                           </div>
                           <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <p className="text-xs text-gray-400 mb-1">Sucessos</p>
+                            <p className="text-xs text-gray-400 mb-1">Ligações atendidas</p>
                             <p className="text-xl font-bold text-emerald-600">{prog?.byStatus?.completed ?? 0}</p>
                           </div>
                           <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <p className="text-xs text-gray-400 mb-1">Falhas</p>
+                            <p className="text-xs text-gray-400 mb-1">Não atendidas</p>
                             <p className="text-xl font-bold text-red-500">{prog?.byStatus?.failed ?? 0}</p>
                           </div>
                           <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
