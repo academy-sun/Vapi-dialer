@@ -354,9 +354,16 @@ async function initiateVapiCall(
     customerData.first_name ??
     customerData.primeiro_nome ??
     null;
+
+  // Vapi exige name <= 40 chars
+  let safeName = nameValue ? String(nameValue).trim() : undefined;
+  if (safeName && safeName.length > 40) {
+    safeName = safeName.substring(0, 37) + "...";
+  }
+
   const customerPayload: Record<string, unknown> = {
     number: phoneE164,
-    ...(nameValue ? { name: String(nameValue) } : {}),
+    ...(safeName ? { name: safeName } : {}),
   };
 
   const { data } = await axios.post<VapiCallResponse>(
@@ -503,6 +510,33 @@ async function processLead(
       return false;
     }
 
+    // ── Erro de validação de dados (422) ── falha permanente, não tentar de novo ──
+    // Ocorre quando: número não é E.164 válido, nome > 40 chars, etc.
+    // Retentar não adianta — o dado em si é inválido. Marcar como failed definitivo.
+    if (httpStatus === 422) {
+      let lastOutcome = "invalid-data";
+      const msgLower = (typeof errMessage === "string" ? errMessage : (errorBody ?? "")).toLowerCase();
+      if (msgLower.includes("e.164") || msgLower.includes("phone") || msgLower.includes("number")) {
+        lastOutcome = "invalid-phone";
+      } else if (msgLower.includes("name") || msgLower.includes("characters")) {
+        lastOutcome = "invalid-name";
+      }
+      console.error(
+        `[worker] ✗ Dado inválido para lead ${lead.id} (${lead.phone_e164}) — falha permanente` +
+        ` | outcome=${lastOutcome} | fila=${queue.name}` +
+        ` | resposta Vapi: ${errorBody}`
+      );
+      await supabase
+        .from("leads")
+        .update({
+          status:        "failed",
+          attempt_count: newAttemptCount,
+          last_outcome:  lastOutcome,
+        })
+        .eq("id", lead.id);
+      return false;
+    }
+
     console.error(
       `[worker] ✗ Falha ao ligar para ${lead.phone_e164}` +
       ` | tentativa ${newAttemptCount}/${queue.max_attempts}` +
@@ -510,10 +544,10 @@ async function processLead(
       ` | erro: ${errorLabel}`,
     );
 
-    // Log extra para erros de validação do Vapi (422 / 400) — indica payload inválido
-    if (httpStatus === 422 || (httpStatus === 400 && !isConcurrencyLimit)) {
+    // Log extra para erros de payload (400) — indica configuração inválida
+    if (httpStatus === 400 && !isConcurrencyLimit) {
       console.error(
-        `[worker] ⚠ Payload rejeitado pelo Vapi (HTTP ${httpStatus}) — verifique assistantId, phoneNumberId e variableValues` +
+        `[worker] ⚠ Payload rejeitado pelo Vapi (HTTP 400) — verifique assistantId e phoneNumberId` +
         ` | assistantId=${queue.assistant_id} | phoneNumberId=${queue.phone_number_id}` +
         ` | resposta Vapi: ${errorBody}`
       );

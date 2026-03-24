@@ -676,12 +676,13 @@ function LeadsTab({
   queue: Queue;
   leadListName: string;
 }) {
-  const [leads, setLeads]         = useState<Lead[]>([]);
-  const [total, setTotal]         = useState(0);
-  const [page, setPage]           = useState(1);
-  const [pageInput, setPageInput] = useState("1");
-  const [loading, setLoading]     = useState(true);
-  const [showVars, setShowVars]   = useState(false);
+  const [leads, setLeads]           = useState<Lead[]>([]);
+  const [total, setTotal]           = useState(0);
+  const [page, setPage]             = useState(1);
+  const [pageInput, setPageInput]   = useState("1");
+  const [loading, setLoading]       = useState(true);
+  const [showVars, setShowVars]     = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   // Search
   const [searchInput, setSearchInput] = useState("");
@@ -720,6 +721,23 @@ function LeadsTab({
       setSearch(v);
       setPage(1);
     }, 400);
+  }
+
+  async function removeLead(lead: Lead) {
+    if (!confirm(`Remover ${lead.phone_e164} da campanha?\nO lead permanecerá na lista de leads, mas não será mais discado.`)) return;
+    setRemovingId(lead.id);
+    try {
+      const res = await fetch(
+        `/api/tenants/${tenantId}/lead-lists/${queue.lead_list_id}/leads/${lead.id}`,
+        { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "doNotCall" }) }
+      );
+      if (res.ok) {
+        setLeads((prev) => prev.filter((l) => l.id !== lead.id));
+        setTotal((t) => Math.max(0, t - 1));
+      }
+    } finally {
+      setRemovingId(null);
+    }
   }
 
   const liquidVars: string[] = leads.length > 0
@@ -810,6 +828,7 @@ function LeadsTab({
                 <th className="text-center px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Tent.</th>
                 <th className="text-center px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Atendido?</th>
                 <th className="text-left px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Próx. tentativa</th>
+                <th className="px-4 py-2.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -858,6 +877,20 @@ function LeadsTab({
                         </span>
                       ) : (
                         <span className="text-gray-200">—</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2.5 text-right">
+                      {lead.status !== "doNotCall" && lead.status !== "completed" && (
+                        <button
+                          onClick={() => removeLead(lead)}
+                          disabled={removingId === lead.id}
+                          title="Remover da campanha (não será mais discado)"
+                          className="w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                        >
+                          {removingId === lead.id
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <Ban className="w-3.5 h-3.5" />}
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -1033,11 +1066,25 @@ export default function CampaignsPage() {
   async function duplicateQueue(queue: Queue) {
     const allowedDays = Array.isArray(queue.allowed_days) ? (queue.allowed_days as unknown as number[]) : [1, 2, 3, 4, 5];
     const tw = queue.allowed_time_window as { start?: string; end?: string; timezone?: string } | null;
+
+    // 1. Criar nova lista de leads vazia (sem copiar os leads da original)
+    const origListName = leadLists.find((l) => l.id === queue.lead_list_id)?.name ?? "Lista";
+    const listRes = await fetch(`/api/tenants/${tenantId}/lead-lists`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: `${origListName} (cópia)` }),
+    });
+    const listData = await listRes.json();
+    if (!listRes.ok || !listData.leadList) {
+      showToast(listData.error ?? "Erro ao criar lista para cópia", "error");
+      return;
+    }
+
+    // 2. Criar campanha duplicada apontando para a nova lista vazia
     const payload = {
       name:                `Cópia de ${queue.name}`,
       assistant_id:        queue.assistant_id,
       phone_number_id:     queue.phone_number_id,
-      lead_list_id:        queue.lead_list_id,
+      lead_list_id:        listData.leadList.id,
       concurrency:         queue.concurrency,
       max_attempts:        queue.max_attempts,
       retry_delay_minutes: queue.retry_delay_minutes ?? 30,
@@ -1051,7 +1098,8 @@ export default function CampaignsPage() {
     const data = await res.json();
     if (data.queue) {
       setQueues((prev) => [data.queue, ...prev]);
-      showToast(`Campanha "${data.queue.name}" duplicada!`);
+      setLeadLists((prev) => [listData.leadList, ...prev]);
+      showToast(`Campanha "${data.queue.name}" duplicada (sem leads). Use "Lista de Leads" para adicionar leads.`);
     } else {
       showToast(data.error ?? "Erro ao duplicar", "error");
     }

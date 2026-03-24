@@ -80,11 +80,16 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   // Campos extras (exceto o telefone) vão para data_json
+  // Campos de nome truncados a 40 chars (limite do campo customer.name do Vapi)
   const phoneFields = new Set(["phone", "telefone", "fone", "celular"]);
+  const nameFields  = new Set(["name", "nome", "first_name", "primeiro_nome", "last_name", "sobrenome", "razao_social"]);
   const data_json: Record<string, string> = {};
   for (const [k, v] of Object.entries(body)) {
     if (!phoneFields.has(k) && v !== null && v !== undefined) {
-      data_json[k] = String(v).trim();
+      const val = String(v).trim();
+      data_json[k] = (nameFields.has(k.toLowerCase()) && val.length > 40)
+        ? val.substring(0, 37) + "..."
+        : val;
     }
   }
 

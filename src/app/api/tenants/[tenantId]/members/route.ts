@@ -39,7 +39,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     created_at: m.created_at,
   }));
 
-  return NextResponse.json({ members });
+  // Retorna o role efetivo do usuário logado (inclui admins globais sem membership row)
+  return NextResponse.json({ members, currentUserRole: membership?.role ?? null });
 }
 
 // POST /api/tenants/:tenantId/members — cria usuário + membership
