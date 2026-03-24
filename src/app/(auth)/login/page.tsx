@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -127,6 +128,16 @@ export default function LoginPage() {
                 boxSizing: "border-box",
               }}
             />
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
+              <Link href="/forgot-password" style={{ 
+                fontSize: "12px", 
+                color: "#FF1A1A", 
+                textDecoration: "none",
+                fontWeight: 500
+              }}>
+                Esqueceu a senha?
+              </Link>
+            </div>
           </div>
 
           <button
