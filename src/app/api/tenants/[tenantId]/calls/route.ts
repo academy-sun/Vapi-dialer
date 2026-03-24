@@ -14,7 +14,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const queueId = url.searchParams.get("queueId");
   const leadId = url.searchParams.get("leadId");
   const page = parseInt(url.searchParams.get("page") ?? "1");
-  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50"), 100);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50"), 2000);
   const offset = (page - 1) * limit;
 
   const service = createServiceClient();

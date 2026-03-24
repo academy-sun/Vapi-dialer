@@ -306,6 +306,7 @@ function useToast() {
 export default function CallsPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const [calls, setCalls] = useState<Call[]>([]);
+  const [totalCalls, setTotalCalls] = useState(0);
   const [queues, setQueues] = useState<Queue[]>([]);
   const [selected, setSelected] = useState<CallDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -354,7 +355,7 @@ export default function CallsPage() {
     else setLoading(true);
 
     try {
-      const params = new URLSearchParams({ limit: "100" });
+      const params = new URLSearchParams({ limit: "1500" });
       if (filterQueue !== "all") params.set("queueId", filterQueue);
       if (shortDurationMode) {
         params.set("answered_only", "true");
@@ -365,6 +366,7 @@ export default function CallsPage() {
       if (!res.ok) { setPageError("Falha ao carregar chamadas."); setLoading(false); setRefreshing(false); return; }
       const data = await res.json();
       setCalls(data.calls ?? []);
+      setTotalCalls(data.total ?? 0);
       if (showRefresh) showToast("Chamadas atualizadas!");
     } catch {
       setPageError("Erro de conexão ao carregar chamadas.");
@@ -447,9 +449,9 @@ export default function CallsPage() {
         <div>
           <h1 className="page-title">Chamadas</h1>
           <p className="page-subtitle">
-            {calls.length > 0 && (
+            {totalCalls > 0 && (
               <>
-                {calls.length} chamadas
+                {totalCalls} chamadas {calls.length < totalCalls ? `(exibindo últimas ${calls.length})` : ""}
                 {isAdminOrOwner && ` · Custo: $${totalCost.toFixed(4)}`}
                 {totalDurSec > 0 && ` · Tempo total: ${formatDuration(totalDurSec)}`}
               </>
