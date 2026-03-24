@@ -467,16 +467,43 @@ async function processLead(
         `[worker] ⚠ Over Concurrency Limit — revertendo lead ${lead.id} sem contar tentativa` +
         ` | fila=${queue.name} | tenant=${queue.tenant_id}`
       );
-      // Reverter para o status anterior e DECREMENTAR attempt_count (nenhuma chamada ocorreu)
       await supabase
         .from("leads")
         .update({
-          status:          lead.status,        // volta para 'queued' ou 'callbackScheduled'
-          attempt_count:   lead.attempt_count, // reverte — não conta como tentativa
-          next_attempt_at: new Date(Date.now() + 10_000).toISOString(), // retry em 10s (slot pode abrir rapidamente)
+          status:          lead.status,
+          attempt_count:   lead.attempt_count,
+          next_attempt_at: new Date(Date.now() + 10_000).toISOString(),
           last_outcome:    "concurrency-limited",
         })
         .eq("id", lead.id);
+      return;
+    }
+
+    // ── Recurso não encontrado na Vapi (404) ── erro permanente de configuração ──
+    // assistantId ou phoneNumberId inválido/deletado. Todos os leads desta fila falhariam
+    // pelo mesmo motivo — pausar a fila inteira e registrar o erro para o operador corrigir.
+    if (httpStatus === 404) {
+      const errMsg =
+        `Recurso não encontrado no Vapi (404). Verifique se o assistente e o número de ` +
+        `telefone ainda existem no painel Vapi. ` +
+        `assistantId=${queue.assistant_id} | phoneNumberId=${queue.phone_number_id}`;
+      console.error(
+        `[worker] ✗ 404 Vapi — pausando fila "${queue.name}" | tenant=${queue.tenant_id} | ${errMsg}`
+      );
+      // Reverter lead sem contar tentativa
+      await supabase
+        .from("leads")
+        .update({
+          status:        lead.status,
+          attempt_count: lead.attempt_count,
+          last_outcome:  "config-error-404",
+        })
+        .eq("id", lead.id);
+      // Pausar fila e registrar motivo
+      await supabase
+        .from("dial_queues")
+        .update({ status: "paused", last_error: errMsg })
+        .eq("id", queue.id);
       return;
     }
 

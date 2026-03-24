@@ -24,9 +24,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
   const previousStatus = queue.status;
 
   // Ativar fila — múltiplas campanhas do mesmo tenant podem rodar simultaneamente
+  // last_error é limpo ao reiniciar para não exibir banner de erro obsoleto
   const { error } = await service
     .from("dial_queues")
-    .update({ status: "running" })
+    .update({ status: "running", last_error: null })
     .eq("id", queueId)
     .eq("tenant_id", tenantId);
 
