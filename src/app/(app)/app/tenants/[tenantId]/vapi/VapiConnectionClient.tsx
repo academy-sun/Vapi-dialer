@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import {
   Key, Lock, Eye, EyeOff, Copy, Check, AlertTriangle, CheckCircle2,
   Loader2, Link, Info, Bot, ChevronDown, ChevronUp, Save, RotateCcw,
-  Sparkles, Zap, Trash2, Plus, Pencil, Webhook,
+  Sparkles, Zap, Trash2, Plus, Pencil, Webhook, Globe,
 } from "lucide-react";
 
 interface Connection {
@@ -13,6 +13,7 @@ interface Connection {
   is_active: boolean;
   created_at: string;
   concurrency_limit: number | null;
+  has_public_key?: boolean;
 }
 
 interface Assistant { id: string; name: string }
@@ -65,6 +66,11 @@ export default function VapiConnectionClient() {
   // ── Section 1.5: Concurrency limit ──
   const [concurrencyLimit, setConcurrencyLimit] = useState<number>(10);
   const [savingConcurrency, setSavingConcurrency] = useState(false);
+
+  // ── Section 1.6: Chave Pública Vapi ──
+  const [publicKeyInput, setPublicKeyInput] = useState("");
+  const [savingPublicKey, setSavingPublicKey] = useState(false);
+  const [expandPublicKeyForm, setExpandPublicKeyForm] = useState(false);
 
   // ── Section 2: Assistentes configurados (assistant_configs) ──
   const [assistants, setAssistants] = useState<Assistant[]>([]);
@@ -233,6 +239,25 @@ export default function VapiConnectionClient() {
       showToast(d.error ?? "Erro ao salvar", "error");
     }
     setSavingConcurrency(false);
+  }
+
+  async function handleSavePublicKey() {
+    setSavingPublicKey(true);
+    const res = await fetch(`/api/tenants/${tenantId}/vapi-connection`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicKey: publicKeyInput }),
+    });
+    if (res.ok) {
+      showToast("Chave Pública salva!");
+      setPublicKeyInput("");
+      setExpandPublicKeyForm(false);
+      loadConnection();
+    } else {
+      const d = await res.json();
+      showToast(d.error ?? "Erro ao salvar", "error");
+    }
+    setSavingPublicKey(false);
   }
 
   async function handleSaveAssistant() {
@@ -474,6 +499,85 @@ export default function VapiConnectionClient() {
         )}
 
       </div>{/* end grid linha 1 */}
+
+      {/* Chave Pública Vapi (para Testar Assistente) */}
+      {connection && (
+        <div className="card mb-5">
+          <div className="card-header flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-indigo-500" />
+              Chave Pública Vapi
+            </h2>
+            {connection.has_public_key && !expandPublicKeyForm && (
+              <button
+                onClick={() => setExpandPublicKeyForm(true)}
+                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline underline-offset-2"
+              >
+                Atualizar
+              </button>
+            )}
+          </div>
+
+          {connection.has_public_key && !expandPublicKeyForm ? (
+            <div className="card-body">
+              <div className="flex items-center gap-3 py-1">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Chave Pública configurada</p>
+                  <p className="text-xs text-gray-400 font-mono">pk_live_••••••••  ·  Botão &quot;Testar Assistente&quot; disponível</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="card-body space-y-4">
+              {!connection.has_public_key && (
+                <div className="alert-warning text-sm">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+                  <span>
+                    Sem chave pública configurada — o botão <strong>&quot;Testar Assistente&quot;</strong> ficará indisponível.
+                    Encontre sua chave pública em{" "}
+                    <span className="font-medium">Vapi Dashboard → Account → API Keys → Public Key</span>.
+                  </span>
+                </div>
+              )}
+              <div>
+                <label className="form-label flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-gray-500" />
+                  Vapi Public Key
+                </label>
+                <input
+                  type="password"
+                  className="form-input font-mono"
+                  value={publicKeyInput}
+                  onChange={(e) => setPublicKeyInput(e.target.value)}
+                  placeholder="pk_live_..."
+                />
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Chave pública para iniciar chamadas WebRTC diretamente do navegador.
+                  Diferente da chave privada — é segura para uso no frontend.
+                </p>
+              </div>
+              <div className="flex items-center justify-between pt-1">
+                {connection.has_public_key && (
+                  <button type="button" onClick={() => setExpandPublicKeyForm(false)} className="btn-ghost text-sm">
+                    Cancelar
+                  </button>
+                )}
+                <button
+                  onClick={handleSavePublicKey}
+                  disabled={savingPublicKey || !publicKeyInput.trim()}
+                  className="btn-primary ml-auto"
+                >
+                  {savingPublicKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  Salvar Chave Pública
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Linha 2: Webhook do Assistente — full width */}
       {connection && (

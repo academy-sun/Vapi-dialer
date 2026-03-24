@@ -21,27 +21,45 @@ export async function GET() {
 
   const tenantIds = tenants.map((t) => t.id);
 
-  // Buscar contagens em paralelo
+  // Contagens reais por tenant (SELECT COUNT(*)) — evita o teto de 1.000 rows do PostgREST
   const [
-    { data: leadCounts },
-    { data: callCounts },
+    leadCountResults,
+    callCountResults,
+    activeCallResults,
     { data: queueCounts },
     { data: vapiConnections },
     { data: memberCounts },
-    { data: activeCallLeads },
     { data: activeCampaigns },
   ] = await Promise.all([
-    // Total de leads por tenant
-    service
-      .from("leads")
-      .select("tenant_id")
-      .in("tenant_id", tenantIds),
-    // Total de chamadas por tenant
-    service
-      .from("call_records")
-      .select("tenant_id")
-      .in("tenant_id", tenantIds),
-    // Filas por tenant (todas)
+    // COUNT exato de leads por tenant (sem fetch de linhas)
+    Promise.all(
+      tenantIds.map((id) =>
+        service
+          .from("leads")
+          .select("*", { count: "exact", head: true })
+          .eq("tenant_id", id)
+      )
+    ),
+    // COUNT exato de chamadas por tenant
+    Promise.all(
+      tenantIds.map((id) =>
+        service
+          .from("call_records")
+          .select("*", { count: "exact", head: true })
+          .eq("tenant_id", id)
+      )
+    ),
+    // COUNT de leads em discagem agora (status=calling) — tipicamente < 50, count exato por segurança
+    Promise.all(
+      tenantIds.map((id) =>
+        service
+          .from("leads")
+          .select("*", { count: "exact", head: true })
+          .eq("tenant_id", id)
+          .eq("status", "calling")
+      )
+    ),
+    // Filas por tenant (baixo volume — sem risco de teto)
     service
       .from("dial_queues")
       .select("tenant_id, status")
@@ -57,12 +75,6 @@ export async function GET() {
       .from("memberships")
       .select("tenant_id")
       .in("tenant_id", tenantIds),
-    // Chamadas ativas agora (leads em discagem)
-    service
-      .from("leads")
-      .select("tenant_id")
-      .in("tenant_id", tenantIds)
-      .eq("status", "calling"),
     // Campanhas running/paused com detalhes (para controle remoto no admin)
     service
       .from("dial_queues")
@@ -71,16 +83,26 @@ export async function GET() {
       .in("status", ["running", "paused"]),
   ]);
 
+  // Mapas tenant_id → contagem real
+  const leadCountByTenant: Record<string, number>       = {};
+  const callCountByTenant: Record<string, number>       = {};
+  const activeCallByTenant: Record<string, number>      = {};
+  tenantIds.forEach((id, i) => {
+    leadCountByTenant[id]  = leadCountResults[i].count  ?? 0;
+    callCountByTenant[id]  = callCountResults[i].count  ?? 0;
+    activeCallByTenant[id] = activeCallResults[i].count ?? 0;
+  });
+
   // Agregar por tenant
   const aggregated = tenants.map((t) => {
-    const leads       = (leadCounts ?? []).filter((r) => r.tenant_id === t.id).length;
-    const calls       = (callCounts ?? []).filter((r) => r.tenant_id === t.id).length;
+    const leads       = leadCountByTenant[t.id]  ?? 0;
+    const calls       = callCountByTenant[t.id]  ?? 0;
     const queues      = (queueCounts ?? []).filter((r) => r.tenant_id === t.id);
     const running     = queues.filter((q) => q.status === "running").length;
     const totalQ      = queues.length;
     const vapiOk      = (vapiConnections ?? []).some((v) => v.tenant_id === t.id);
     const members     = (memberCounts ?? []).filter((m) => m.tenant_id === t.id).length;
-    const activeCalls = (activeCallLeads ?? []).filter((r) => r.tenant_id === t.id).length;
+    const activeCalls = activeCallByTenant[t.id] ?? 0;
     const campaigns   = (activeCampaigns ?? [])
       .filter((c) => c.tenant_id === t.id)
       .map((c) => ({ id: c.id, name: c.name, status: c.status, concurrency: c.concurrency }));

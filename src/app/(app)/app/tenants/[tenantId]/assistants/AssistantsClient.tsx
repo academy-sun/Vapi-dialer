@@ -1,9 +1,9 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import {
   Bot, ChevronDown, ChevronUp, Save, Loader2, AlertTriangle,
-  Check, RefreshCw, Mic, Sparkles,
+  Check, RefreshCw, Mic, Sparkles, Phone, PhoneOff, MicOff, X, CheckCircle2,
 } from "lucide-react";
 
 interface Assistant {
@@ -36,6 +36,17 @@ interface AssistantCard {
   saved: boolean;
 }
 
+type TestCallStatus = "connecting" | "active" | "ended" | "error";
+
+interface TestCallState {
+  assistantId: string;
+  assistantName: string;
+  status: TestCallStatus;
+  error?: string;
+  volume: number;
+  muted: boolean;
+}
+
 interface ToastMsg { id: string; message: string; type: "success" | "error" }
 
 function useToast() {
@@ -54,6 +65,9 @@ export default function AssistantsClient() {
   const [cards, setCards] = useState<AssistantCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [noVapi, setNoVapi] = useState(false);
+  const [testCall, setTestCall] = useState<TestCallState | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const vapiRef = useRef<any>(null);
 
   const loadAssistants = useCallback(async () => {
     setLoading(true);
@@ -86,7 +100,6 @@ export default function AssistantsClient() {
     setCards((prev) => prev.map((c) => {
       if (c.id !== id) return c;
       if (c.expanded) return { ...c, expanded: false };
-      // expand — load if not yet loaded
       return { ...c, expanded: true };
     }));
 
@@ -141,6 +154,81 @@ export default function AssistantsClient() {
       updateCard(id, { saving: false, error: d.error ?? "Erro ao salvar" });
       showToast(d.error ?? "Erro ao salvar", "error");
     }
+  }
+
+  async function startTestCall(card: AssistantCard) {
+    setTestCall({ assistantId: card.id, assistantName: card.name, status: "connecting", volume: 0, muted: false });
+
+    try {
+      // Buscar chave pública do servidor (nunca exposta diretamente — requer autenticação)
+      const keyRes = await fetch(`/api/tenants/${tenantId}/vapi-assistant/test-call`);
+      if (!keyRes.ok) {
+        const d = (await keyRes.json()) as { error?: string };
+        setTestCall((prev) =>
+          prev ? { ...prev, status: "error", error: d.error ?? "Chave pública Vapi não configurada" } : null
+        );
+        return;
+      }
+      const { publicKey } = (await keyRes.json()) as { publicKey: string };
+
+      // Importação dinâmica para evitar SSR (WebRTC é browser-only)
+      const { default: Vapi } = await import("@vapi-ai/web");
+      const vapi = new Vapi(publicKey);
+      vapiRef.current = vapi;
+
+      vapi.on("call-start", () => {
+        setTestCall((prev) => (prev ? { ...prev, status: "active" } : null));
+      });
+      vapi.on("call-end", () => {
+        setTestCall((prev) => (prev ? { ...prev, status: "ended" } : null));
+        vapiRef.current = null;
+      });
+      vapi.on("volume-level", (volume: number) => {
+        setTestCall((prev) => (prev ? { ...prev, volume } : null));
+      });
+      vapi.on("error", (err: unknown) => {
+        const msg =
+          err instanceof Error
+            ? err.message
+            : typeof err === "string"
+            ? err
+            : "Erro de conexão WebRTC";
+        setTestCall((prev) => (prev ? { ...prev, status: "error", error: msg } : null));
+        vapiRef.current = null;
+      });
+
+      // Iniciar chamada diretamente do browser com a chave pública
+      const result = await vapi.start(card.id); // card.id = assistantId Vapi
+      if (!result) {
+        setTestCall((prev) =>
+          prev?.status === "connecting"
+            ? { ...prev, status: "error", error: "Chamada não iniciada pelo Vapi" }
+            : prev
+        );
+        return;
+      }
+      // Garantir status active caso call-start já tenha sido emitido antes de chegar aqui
+      setTestCall((prev) => (prev?.status === "connecting" ? { ...prev, status: "active" } : prev));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao conectar";
+      setTestCall((prev) => (prev ? { ...prev, status: "error", error: msg } : null));
+      vapiRef.current = null;
+    }
+  }
+
+  async function stopTestCall() {
+    if (vapiRef.current) {
+      await (vapiRef.current.stop() as Promise<void>).catch(() => {});
+      vapiRef.current = null;
+    }
+    setTestCall(null);
+  }
+
+  function toggleMute() {
+    if (!vapiRef.current) return;
+    const newMuted = !testCall?.muted;
+    vapiRef.current.setMuted(newMuted);
+    setTestCall((prev) => prev ? { ...prev, muted: newMuted } : null);
   }
 
   if (loading) {
@@ -204,32 +292,47 @@ export default function AssistantsClient() {
         {cards.map((card) => (
           <div key={card.id} className="card">
             {/* Header row — always visible */}
-            <button
-              onClick={() => toggleCard(card.id)}
-              className="w-full flex items-center justify-between gap-3 p-5 hover:bg-gray-50 transition-colors text-left"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
-                  <Bot className="w-4 h-4 text-indigo-500" />
+            <div className="flex items-center">
+              <button
+                onClick={() => toggleCard(card.id)}
+                className="flex-1 flex items-center justify-between gap-3 p-5 hover:bg-gray-50 transition-colors text-left min-w-0"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                    <Bot className="w-4 h-4 text-indigo-500" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">{card.name}</p>
+                    <p className="text-xs text-gray-400 font-mono truncate">{card.id.slice(0, 20)}&hellip;</p>
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-gray-900 truncate">{card.name}</p>
-                  <p className="text-xs text-gray-400 font-mono truncate">{card.id.slice(0, 20)}&hellip;</p>
+                <div className="flex items-center gap-2 shrink-0">
+                  {card.loading && <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />}
+                  {card.allFields.length > 0 && (
+                    <span className="badge badge-indigo flex items-center gap-1 text-xs">
+                      <Sparkles className="w-3 h-3" />
+                      {card.allFields.length} campo{card.allFields.length !== 1 ? "s" : ""}
+                    </span>
+                  )}
+                  {card.expanded
+                    ? <ChevronUp className="w-4 h-4 text-gray-400" />
+                    : <ChevronDown className="w-4 h-4 text-gray-400" />}
                 </div>
+              </button>
+
+              {/* Botão Testar — fora do toggle para evitar aninhamento de <button> */}
+              <div className="pr-4 shrink-0">
+                <button
+                  onClick={() => void startTestCall(card)}
+                  disabled={testCall !== null}
+                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-green-50 hover:border-green-300 hover:text-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  title="Testar assistente via WebRTC"
+                >
+                  <Phone className="w-3.5 h-3.5" />
+                  Testar
+                </button>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {card.loading && <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />}
-                {card.allFields.length > 0 && (
-                  <span className="badge badge-indigo flex items-center gap-1 text-xs">
-                    <Sparkles className="w-3 h-3" />
-                    {card.allFields.length} campo{card.allFields.length !== 1 ? "s" : ""}
-                  </span>
-                )}
-                {card.expanded
-                  ? <ChevronUp className="w-4 h-4 text-gray-400" />
-                  : <ChevronDown className="w-4 h-4 text-gray-400" />}
-              </div>
-            </button>
+            </div>
 
             {/* Expanded editor */}
             {card.expanded && (
@@ -324,6 +427,111 @@ export default function AssistantsClient() {
           </div>
         ))}
       </div>
+
+      {/* ── Modal: Testar Assistente ── */}
+      {testCall && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="font-semibold text-gray-900">Testar Assistente</h2>
+              {(testCall.status === "ended" || testCall.status === "error") && (
+                <button onClick={() => setTestCall(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mb-5 truncate">{testCall.assistantName}</p>
+
+            {/* Connecting */}
+            {testCall.status === "connecting" && (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <div className="relative">
+                  <div className="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center">
+                    <Phone className="w-6 h-6 text-indigo-500" />
+                  </div>
+                  <div className="absolute inset-0 rounded-full border-2 border-indigo-300 animate-ping opacity-60" />
+                </div>
+                <p className="text-sm text-gray-600 font-medium">Conectando ao assistente…</p>
+                <p className="text-xs text-gray-400">Aguarde, isso pode levar alguns segundos</p>
+              </div>
+            )}
+
+            {/* Active call */}
+            {testCall.status === "active" && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl">
+                  <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shrink-0" />
+                  <span className="text-sm font-medium text-emerald-700">Em chamada</span>
+                </div>
+
+                {/* Volume meter */}
+                <div>
+                  <p className="text-xs text-gray-400 mb-1.5">Volume do agente</p>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-400 rounded-full transition-all duration-75"
+                      style={{ width: `${Math.min(100, testCall.volume * 300)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Controls */}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={toggleMute}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
+                      testCall.muted
+                        ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
+                        : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
+                    }`}
+                  >
+                    {testCall.muted
+                      ? <><MicOff className="w-4 h-4" />Ativar mic</>
+                      : <><Mic className="w-4 h-4" />Mutar mic</>
+                    }
+                  </button>
+                  <button
+                    onClick={() => void stopTestCall()}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors"
+                  >
+                    <PhoneOff className="w-4 h-4" />
+                    Encerrar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Ended */}
+            {testCall.status === "ended" && (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center">
+                  <CheckCircle2 className="w-7 h-7 text-emerald-500" />
+                </div>
+                <p className="text-sm font-medium text-gray-700">Chamada encerrada</p>
+                <p className="text-xs text-gray-400">O teste foi concluído com sucesso</p>
+                <button onClick={() => setTestCall(null)} className="btn-secondary mt-2">
+                  Fechar
+                </button>
+              </div>
+            )}
+
+            {/* Error */}
+            {testCall.status === "error" && (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+                  <AlertTriangle className="w-7 h-7 text-red-400" />
+                </div>
+                <p className="text-sm font-medium text-gray-700">Erro ao conectar</p>
+                <p className="text-xs text-red-500 text-center max-w-xs">{testCall.error ?? "Erro desconhecido"}</p>
+                <button onClick={() => setTestCall(null)} className="btn-secondary mt-2">
+                  Fechar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Toasts */}
       <div className="toast-container">

@@ -85,6 +85,20 @@ function isLongTextField(key: string, value: unknown): boolean {
          lk.includes("comment") || lk.includes("reason") || lk.includes("detail");
 }
 
+/** Extrai o nome de exibição do lead a partir de data_json.
+ *  Prioridade: nome_identificacao > name > first_name > nome > primeiro_nome */
+function getNomeDisplay(dataJson: Record<string, string> | null | undefined): string {
+  if (!dataJson) return "";
+  return (
+    dataJson.nome_identificacao ??
+    dataJson.name ??
+    dataJson.first_name ??
+    dataJson.nome ??
+    dataJson.primeiro_nome ??
+    ""
+  );
+}
+
 function formatPhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");
   if (digits.length === 12) return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
@@ -136,9 +150,24 @@ function extractResult(outputs: Record<string, unknown>): Record<string, unknown
   return outputs;
 }
 
+// Chaves buscadas em ordem de prioridade para o campo "INTERESSE".
+// Cobre diferentes nomenclaturas usadas em campanhas distintas.
+const INTERESSE_KEYS = [
+  "interesse", "Interesse", "INTERESSE",
+  "interest", "Interest", "INTEREST",
+  "nivel_interesse", "nivelInteresse", "nivel_de_interesse",
+  "lead_interest", "leadInterest",
+  "success", "sucesso", "Sucesso",
+  "interested", "successEvaluation", "success_evaluation",
+];
+
 function getInteresseValue(result: Record<string, unknown>): unknown {
-  return result.interesse ?? result.success ?? result.sucesso ??
-         result.interested ?? result.successEvaluation ?? result.success_evaluation;
+  for (const key of INTERESSE_KEYS) {
+    if (key in result && result[key] != null && result[key] !== "") {
+      return result[key];
+    }
+  }
+  return undefined;
 }
 
 function isSuccessValue(v: unknown): boolean {
@@ -356,7 +385,9 @@ export default function CallsPage() {
 
   const filteredCalls = calls.filter((c) => {
     const matchReason = filterReason === "all" || c.ended_reason === filterReason;
-    const matchPhone  = !searchPhone  || (c.leads?.phone_e164 ?? "").includes(searchPhone.replace(/\D/g, ""));
+    const matchPhone  = !searchPhone
+      || (c.leads?.phone_e164 ?? "").includes(searchPhone.replace(/\D/g, ""))
+      || getNomeDisplay(c.leads?.data_json).toLowerCase().includes(searchPhone.trim().toLowerCase());
     const matchCallId = !searchCallId || c.vapi_call_id.toLowerCase().includes(searchCallId.trim().toLowerCase());
     return matchReason && matchPhone && matchCallId;
   });
@@ -457,7 +488,7 @@ export default function CallsPage() {
             <input
               type="text"
               className="form-input pl-9 max-w-xs text-sm"
-              placeholder="Buscar por telefone..."
+              placeholder="Buscar por telefone ou nome..."
               value={searchPhone}
               onChange={(e) => setSearchPhone(e.target.value)}
             />
@@ -597,6 +628,7 @@ export default function CallsPage() {
             <thead>
               <tr>
                 <th><span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />Telefone</span></th>
+                <th>Nome</th>
                 <th>Resultado</th>
                 <th><span className="flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" />Duração</span></th>
                 <th>Interesse</th>
@@ -620,6 +652,9 @@ export default function CallsPage() {
                   >
                     <td className="font-mono font-medium text-gray-900">
                       {call.leads ? formatPhone(call.leads.phone_e164) : "—"}
+                    </td>
+                    <td className="text-sm text-gray-700">
+                      {getNomeDisplay(call.leads?.data_json) || <span className="text-gray-300">—</span>}
                     </td>
                     <td>
                       <span className={reason.badge}>{reason.label}</span>

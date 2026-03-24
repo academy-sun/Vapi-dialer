@@ -445,12 +445,40 @@ async function processLead(
     );
   } catch (err) {
     // ── 4. Falha na API Vapi → reagendar ou marcar como falha ──
-    const isRateLimit = err instanceof AxiosError && err.response?.status === 429;
-    const httpStatus  = err instanceof AxiosError ? err.response?.status : null;
-    const errorBody   = err instanceof AxiosError ? JSON.stringify(err.response?.data) : null;
-    const errorLabel  = err instanceof AxiosError
+    const isRateLimit       = err instanceof AxiosError && err.response?.status === 429;
+    const httpStatus        = err instanceof AxiosError ? err.response?.status : null;
+    const errorBody         = err instanceof AxiosError ? JSON.stringify(err.response?.data) : null;
+    const errorLabel        = err instanceof AxiosError
       ? `HTTP ${httpStatus}: ${errorBody}`
       : String(err);
+
+    // ── Over Concurrency Limit (400 com "Over Concurrency Limit" no body) ──
+    // Nenhuma chamada foi estabelecida — reverter status sem contar tentativa.
+    const isConcurrencyLimit =
+      httpStatus === 400 &&
+      typeof err === "object" && err !== null &&
+      err instanceof AxiosError &&
+      (err.response?.data as { message?: string })?.message
+        ?.toLowerCase()
+        .includes("over concurrency limit");
+
+    if (isConcurrencyLimit) {
+      console.warn(
+        `[worker] ⚠ Over Concurrency Limit — revertendo lead ${lead.id} sem contar tentativa` +
+        ` | fila=${queue.name} | tenant=${queue.tenant_id}`
+      );
+      // Reverter para o status anterior e DECREMENTAR attempt_count (nenhuma chamada ocorreu)
+      await supabase
+        .from("leads")
+        .update({
+          status:          lead.status,        // volta para 'queued' ou 'callbackScheduled'
+          attempt_count:   lead.attempt_count, // reverte — não conta como tentativa
+          next_attempt_at: new Date(Date.now() + 10_000).toISOString(), // retry em 10s (slot pode abrir rapidamente)
+          last_outcome:    "concurrency-limited",
+        })
+        .eq("id", lead.id);
+      return;
+    }
 
     console.error(
       `[worker] ✗ Falha ao ligar para ${lead.phone_e164}` +
@@ -460,7 +488,7 @@ async function processLead(
     );
 
     // Log extra para erros de validação do Vapi (422 / 400) — indica payload inválido
-    if (httpStatus === 422 || httpStatus === 400) {
+    if (httpStatus === 422 || (httpStatus === 400 && !isConcurrencyLimit)) {
       console.error(
         `[worker] ⚠ Payload rejeitado pelo Vapi (HTTP ${httpStatus}) — verifique assistantId, phoneNumberId e variableValues` +
         ` | assistantId=${queue.assistant_id} | phoneNumberId=${queue.phone_number_id}` +
@@ -468,37 +496,21 @@ async function processLead(
       );
     }
 
-    // ── Erros de provedor SIP (503 / 408) ── reagendar com delay, mas com cap de tentativas
-    // O attempt_count JÁ foi incrementado no "claim" atômico acima (step 1).
-    // Portanto precisamos verificar max_attempts mesmo aqui para evitar loop infinito.
+    // ── Erros de provedor SIP (503 / 408) ── reagendar SEM contar tentativa
+    // Erros de infra do provedor não devem consumir attempt_count do lead.
+    // Revertemos ao status original e ao attempt_count anterior (mesmo padrão do Over Concurrency Limit).
     const isProviderFault = httpStatus === 503 || httpStatus === 408;
     if (isProviderFault) {
-      if (newAttemptCount >= queue.max_attempts) {
-        // Atingiu o limite mesmo com erros de provedor — marcar como failed para não lopar
-        console.warn(
-          `[worker] ✗ Lead ${lead.id} atingiu max_attempts (${queue.max_attempts}) por erros de provedor ` +
-          `(HTTP ${httpStatus}) — marcando como failed`
-        );
-        await supabase
-          .from("leads")
-          .update({
-            status:        "failed",
-            attempt_count: newAttemptCount,
-            last_outcome:  `provider-fault-limit-${httpStatus}`,
-          })
-          .eq("id", lead.id);
-        return;
-      }
-
       const nextAt = new Date(Date.now() + 60_000).toISOString();
       console.warn(
         `[worker] ⚠ Provedor SIP indisponível (HTTP ${httpStatus}) — ` +
-        `reagendando lead ${lead.id} em 60s (tentativa ${newAttemptCount}/${queue.max_attempts})`
+        `revertendo lead ${lead.id} para "${lead.status}" sem contar tentativa`
       );
       await supabase
         .from("leads")
         .update({
-          status:          "queued",
+          status:          lead.status,        // volta ao status original (queued/callbackScheduled)
+          attempt_count:   lead.attempt_count, // reverte — erro de infra não conta como tentativa
           next_attempt_at: nextAt,
           last_outcome:    `provider-${httpStatus}`,
         })
@@ -605,9 +617,15 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
     const dateFmt = new Intl.DateTimeFormat("sv-SE", { timeZone: tz, dateStyle: "short" }); // "YYYY-MM-DD"
     const hFmt    = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "2-digit", hour12: false });
     const mFmt    = new Intl.DateTimeFormat("en-US", { timeZone: tz, minute: "2-digit" });
-    const approx  = new Date(`${dateFmt.format(new Date())}T00:00:00Z`);
-    const diffMs  = (parseInt(hFmt.format(approx)) * 60 + parseInt(mFmt.format(approx))) * 60_000;
-    const todayStartUTC = new Date(approx.getTime() - diffMs).toISOString();
+    const approx      = new Date(`${dateFmt.format(new Date())}T00:00:00Z`);
+    const hAtApprox   = parseInt(hFmt.format(approx));
+    const mAtApprox   = parseInt(mFmt.format(approx));
+    // Para UTC-: hora local no approx pertence ao dia anterior (ex: 21h para UTC-3).
+    // O delta correto é: avançar (24 - hAtApprox) horas (não recuar hAtApprox horas).
+    // Normalização: se deltaMin < -12h (i.e., fuso negativo), adicionar 24h.
+    let deltaMin = -(hAtApprox * 60 + mAtApprox);
+    if (deltaMin < -(12 * 60)) deltaMin += 24 * 60;
+    const todayStartUTC = new Date(approx.getTime() + deltaMin * 60_000).toISOString();
 
     const leadIds = leads.map((l) => l.id);
     const { data: todayRecords } = await supabase

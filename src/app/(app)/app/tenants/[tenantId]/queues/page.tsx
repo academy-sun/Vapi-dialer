@@ -828,11 +828,24 @@ function LeadsTab({
                     <td className="px-4 py-2.5 text-gray-500 text-center font-mono text-xs">{lead.attempt_count}</td>
                     <td className="px-4 py-2.5 text-center">
                       {(() => {
-                        const ANSWERED = new Set(["customer-ended-call", "assistant-ended-call"]);
-                        const NO_ANSWER = new Set(["no-answer", "customer-did-not-answer", "busy", "customer-busy", "voicemail", "machine_end_silence", "machine_end_other", "silence-timed-out"]);
+                        // Fonte canônica — idêntica à usada no menu Lista de Leads (leads/page.tsx)
+                        const ANSWERED = new Set([
+                          "customer-ended-call",
+                          "assistant-ended-call",
+                          "exceeded-max-duration",
+                        ]);
+                        const NO_ANSWER = new Set([
+                          // Vapi v1
+                          "no-answer", "busy", "voicemail",
+                          "machine_end_silence", "machine_end_other",
+                          // Vapi v2
+                          "customer-did-not-answer", "customer-busy", "silence-timed-out",
+                          // Erros técnicos
+                          "pipeline-error", "transport-error",
+                        ]);
                         const outcome = lead.last_outcome ?? "";
                         if (ANSWERED.has(outcome)) return <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />;
-                        if (NO_ANSWER.has(outcome)) return <XCircle className="w-4 h-4 text-gray-300 inline-block" />;
+                        if (NO_ANSWER.has(outcome) || outcome.startsWith("sip-") || outcome.startsWith("pipeline-error")) return <XCircle className="w-4 h-4 text-gray-300 inline-block" />;
                         return <span className="text-gray-200">—</span>;
                       })()}
                     </td>

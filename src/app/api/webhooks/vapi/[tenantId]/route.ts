@@ -108,7 +108,17 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   // ── end-of-call-report ──
   if (msgType === "end-of-call-report") {
-    await handleEndOfCallReport(tenantId, message, service);
+    try {
+      await handleEndOfCallReport(tenantId, message, service);
+    } catch (err) {
+      // Retornar 200 mesmo em erro interno para evitar loop de retry do Vapi.
+      // O erro é logado para diagnóstico — o lead pode precisar de reconciliação manual.
+      console.error(
+        `[webhook] ✗ Erro ao processar end-of-call-report | tenant=${tenantId}` +
+        ` | erro=${err instanceof Error ? err.message : String(err)}` +
+        ` | payload=${JSON.stringify(message).slice(0, 300)}`
+      );
+    }
     return NextResponse.json({ ok: true });
   }
 
@@ -355,6 +365,7 @@ async function updateLeadAfterCall(
   // códigos numéricos puros ("503"). Nota: endedReason null é tratado separado (abaixo).
   const isProviderFault = endedReason != null && (
     endedReason.includes("error-providerfault") ||
+    endedReason.includes("error-vapifault") ||      // falha de infra Vapi (ex: Deepgram indisponível)
     endedReason.includes("sip-503") ||
     endedReason.includes("sip-408") ||
     endedReason.includes("sip-500") ||
@@ -362,7 +373,7 @@ async function updateLeadAfterCall(
     endedReason.includes("sip-504") ||
     /^(503|408|500|502|504)$/.test(endedReason) ||
     endedReason.startsWith("pipeline-error") ||
-    endedReason === "transport-error"
+    endedReason.startsWith("transport-error")       // cobre subtipos futuros (ex: transport-error-dtls-failed)
   );
 
   if (isProviderFault) {
@@ -387,22 +398,31 @@ async function updateLeadAfterCall(
     return;
   }
 
-  // Inclui razões do Vapi v1 e v2
-  const noAnswerReasons = [
-    "no-answer",                  // Vapi v1
-    "customer-did-not-answer",    // Vapi v2
-    "busy",                       // Vapi v1
-    "customer-busy",              // Vapi v2
-    "voicemail",
-    "machine_end_silence",
-    "machine_end_other",
-    "silence-timed-out",          // Vapi v2: silêncio = caixa postal / não atendeu
-  ];
-  // endedReason null = chamada encerrada sem razão conhecida (ex: 503 sem diagnóstico) —
-  // tratar como no-answer para respeitar max_attempts e nunca marcar como "concluído"
-  const isNoAnswer = !endedReason || noAnswerReasons.some((r) => endedReason.includes(r));
+  // Razões que CONFIRMAM que a chamada foi realmente atendida.
+  // Apenas estas devem marcar o lead como "concluído".
+  // Qualquer outra razão (inclusive desconhecidas) cai no fluxo de não-atendido
+  // para respeitar max_attempts e nunca marcar como concluído por engano.
+  const ANSWERED_REASONS = new Set([
+    "customer-ended-call",     // cliente desligou normalmente
+    "assistant-ended-call",    // assistente encerrou intencionalmente
+    "exceeded-max-duration",   // ligação chegou ao limite de tempo (estava em curso)
+  ]);
 
-  if (isNoAnswer) {
+  const isAnswered = endedReason != null && ANSWERED_REASONS.has(endedReason);
+
+  if (isAnswered) {
+    // ── Chamada realmente atendida → concluído ──
+    await service
+      .from("leads")
+      .update({ status: "completed", last_outcome: endedReason })
+      .eq("id", leadId);
+    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "completed", service, callData);
+  } else {
+    // ── Não atendido, sem resposta, erro desconhecido, etc.
+    // endedReason null também cai aqui — tratado como não-atendido.
+    // Inclui razões do Vapi v1 e v2: no-answer, busy, voicemail,
+    // customer-did-not-answer, customer-busy, silence-timed-out,
+    // e qualquer razão nova/desconhecida que não seja atendimento confirmado.
     const { data: lead } = await service
       .from("leads")
       .select("attempt_count, last_attempt_at")
@@ -411,16 +431,17 @@ async function updateLeadAfterCall(
 
     const { data: queueInfo } = await service
       .from("dial_queues")
-      .select("max_attempts, retry_delay_minutes, allowed_days, allowed_time_window")
+      .select("max_attempts, retry_delay_minutes, allowed_days, allowed_time_window, max_daily_attempts")
       .eq("id", queueId)
       .eq("tenant_id", tenantId)
       .single();
 
-    const attempts    = lead?.attempt_count            ?? 0;
-    const maxAttempts = queueInfo?.max_attempts        ?? 3;
-    const retryDelay  = queueInfo?.retry_delay_minutes ?? 30;
-    const allowedDays = Array.isArray(queueInfo?.allowed_days) ? (queueInfo.allowed_days as number[]) : [];
-    const tw          = queueInfo?.allowed_time_window as TW | null ?? null;
+    const attempts        = lead?.attempt_count            ?? 0;
+    const maxAttempts     = queueInfo?.max_attempts        ?? 3;
+    const retryDelay      = queueInfo?.retry_delay_minutes ?? 30;
+    const allowedDays     = Array.isArray(queueInfo?.allowed_days) ? (queueInfo.allowed_days as number[]) : [];
+    const tw              = queueInfo?.allowed_time_window as TW | null ?? null;
+    const maxDailyAttempts = (queueInfo?.max_daily_attempts as number | null | undefined) ?? 0;
 
     if (attempts >= maxAttempts) {
       await service
@@ -429,7 +450,44 @@ async function updateLeadAfterCall(
         .eq("id", leadId);
       await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
-      const nextAt = scheduleNextAttempt(new Date(), retryDelay, allowedDays, tw);
+      // Verificar se o limite diário foi atingido (contar call_records de hoje para este lead)
+      let nextAt: string;
+      if (maxDailyAttempts > 0) {
+        // Calcular meia-noite de hoje no timezone da fila (corrigido para UTC-)
+        const tzForDay = tw?.timezone ?? "America/Sao_Paulo";
+        const dfFmt  = new Intl.DateTimeFormat("sv-SE", { timeZone: tzForDay, dateStyle: "short" });
+        const hFmtD  = new Intl.DateTimeFormat("en-US", { timeZone: tzForDay, hour: "2-digit", hour12: false });
+        const mFmtD  = new Intl.DateTimeFormat("en-US", { timeZone: tzForDay, minute: "2-digit" });
+        const approxDay = new Date(`${dfFmt.format(new Date())}T00:00:00Z`);
+        const hD = parseInt(hFmtD.format(approxDay));
+        const mD = parseInt(mFmtD.format(approxDay));
+        let deltaDayMin = -(hD * 60 + mD);
+        if (deltaDayMin < -(12 * 60)) deltaDayMin += 24 * 60;
+        const todayStartForWebhook = new Date(approxDay.getTime() + deltaDayMin * 60_000).toISOString();
+
+        const { count: todayCount } = await service
+          .from("call_records")
+          .select("id", { count: "exact", head: true })
+          .eq("lead_id", leadId)
+          .gte("created_at", todayStartForWebhook);
+
+        if ((todayCount ?? 0) >= maxDailyAttempts) {
+          // Limite diário atingido → reagendar para amanhã (início da janela permitida)
+          const days = Array.isArray(allowedDays) ? allowedDays : [];
+          if (tw && days.length > 0) {
+            const nextDay = _nextStart(new Date(), days, tw);
+            const jitterMs = Math.floor(Math.random() * 61) * 60_000;
+            nextAt = new Date(nextDay.getTime() + jitterMs).toISOString();
+          } else {
+            nextAt = new Date(Date.now() + 24 * 60 * 60_000).toISOString(); // +24h fallback
+          }
+        } else {
+          nextAt = scheduleNextAttempt(new Date(), retryDelay, allowedDays, tw);
+        }
+      } else {
+        nextAt = scheduleNextAttempt(new Date(), retryDelay, allowedDays, tw);
+      }
+
       await service
         .from("leads")
         .update({
@@ -440,12 +498,6 @@ async function updateLeadAfterCall(
         .eq("id", leadId);
       await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "queued", service, callData);
     }
-  } else {
-    await service
-      .from("leads")
-      .update({ status: "completed", last_outcome: endedReason })
-      .eq("id", leadId);
-    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "completed", service, callData);
   }
 }
 
