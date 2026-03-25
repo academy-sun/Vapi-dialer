@@ -14,6 +14,10 @@ interface Connection {
   created_at: string;
   concurrency_limit: number | null;
   has_public_key?: boolean;
+  contracted_minutes: number | null;
+  minutes_used_cache: number;
+  minutes_cache_month: string | null;
+  minutes_blocked: boolean;
 }
 
 interface Assistant { id: string; name: string }
@@ -48,7 +52,7 @@ function useToast() {
   return { toasts, show };
 }
 
-export default function VapiConnectionClient() {
+export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: boolean }) {
   const { tenantId } = useParams<{ tenantId: string }>();
   const { toasts, show: showToast } = useToast();
 
@@ -66,6 +70,13 @@ export default function VapiConnectionClient() {
   // ── Section 1.5: Concurrency limit ──
   const [concurrencyLimit, setConcurrencyLimit] = useState<number>(10);
   const [savingConcurrency, setSavingConcurrency] = useState(false);
+
+  // ── Section 1.8: Minutos contratados (admin only) ──
+  const [contractedMinutes, setContractedMinutes] = useState<number | null>(null);
+  const [contractedMinutesInput, setContractedMinutesInput] = useState<string>("");
+  const [minutesBlocked, setMinutesBlocked] = useState(false);
+  const [savingContracted, setSavingContracted] = useState(false);
+  const [savingUnblock, setSavingUnblock] = useState(false);
 
   // ── Section 1.6: Chave Pública Vapi ──
   const [publicKeyInput, setPublicKeyInput] = useState("");
@@ -117,6 +128,11 @@ export default function VapiConnectionClient() {
     const conn = data.connection as Connection | null;
     setConnection(conn);
     if (conn?.concurrency_limit != null) setConcurrencyLimit(conn.concurrency_limit);
+    if (conn != null) {
+      setContractedMinutes(conn.contracted_minutes);
+      setContractedMinutesInput(conn.contracted_minutes != null ? String(conn.contracted_minutes) : "");
+      setMinutesBlocked(conn.minutes_blocked ?? false);
+    }
     setFetchingConn(false);
 
     if (conn) {
@@ -239,6 +255,41 @@ export default function VapiConnectionClient() {
       showToast(d.error ?? "Erro ao salvar", "error");
     }
     setSavingConcurrency(false);
+  }
+
+  async function handleSaveContracted() {
+    setSavingContracted(true);
+    const parsed = contractedMinutesInput.trim() === "" ? null : Math.max(1, parseInt(contractedMinutesInput) || 1);
+    const res = await fetch(`/api/tenants/${tenantId}/vapi-connection`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contractedMinutes: parsed }),
+    });
+    if (res.ok) {
+      setContractedMinutes(parsed);
+      showToast("Minutos contratados salvos!");
+    } else {
+      const d = await res.json();
+      showToast(d.error ?? "Erro ao salvar", "error");
+    }
+    setSavingContracted(false);
+  }
+
+  async function handleUnblockAccount() {
+    setSavingUnblock(true);
+    const res = await fetch(`/api/tenants/${tenantId}/vapi-connection`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ minutesBlocked: false }),
+    });
+    if (res.ok) {
+      setMinutesBlocked(false);
+      showToast("Conta desbloqueada com sucesso!");
+    } else {
+      const d = await res.json();
+      showToast(d.error ?? "Erro ao desbloquear", "error");
+    }
+    setSavingUnblock(false);
   }
 
   async function handleSavePublicKey() {
@@ -499,6 +550,74 @@ export default function VapiConnectionClient() {
         )}
 
       </div>{/* end grid linha 1 */}
+
+      {/* Section 1.8: Minutos Contratados — visível apenas para admins */}
+      {isAdmin && connection && (
+        <div className="card mb-5" style={{ borderLeft: "3px solid #FF1A1A" }}>
+          <div className="card-header flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+              <Zap className="w-4 h-4 text-red-500" />
+              Minutos contratados por mês
+              <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-red-100 text-red-700">Admin</span>
+            </h2>
+            {minutesBlocked && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-700 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                Conta bloqueada
+              </span>
+            )}
+          </div>
+          <div className="card-body space-y-4">
+            {minutesBlocked && (
+              <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 border border-red-200">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-red-800">Conta bloqueada por consumo de minutos</p>
+                  <p className="text-xs text-red-600 mt-0.5">
+                    Todas as campanhas foram pausadas automaticamente. Aumente os minutos contratados e clique em desbloquear.
+                  </p>
+                </div>
+                <button
+                  onClick={handleUnblockAccount}
+                  disabled={savingUnblock}
+                  className="btn-primary shrink-0 text-xs"
+                  style={{ background: "#dc2626" }}
+                >
+                  {savingUnblock ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                  Desbloquear
+                </button>
+              </div>
+            )}
+            <div className="flex items-end gap-4">
+              <div className="flex-1">
+                <label className="form-label">Minutos contratados por mês</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  min={1}
+                  value={contractedMinutesInput}
+                  onChange={(e) => setContractedMinutesInput(e.target.value)}
+                  placeholder="Ex: 500 (deixe vazio para desativar o controle)"
+                />
+                <p className="text-xs text-gray-400 mt-1.5">
+                  Quando o cliente atingir 100%, as campanhas são pausadas automaticamente.
+                  {contractedMinutes != null && connection.minutes_used_cache != null && (
+                    <> Uso atual: <span className="font-medium text-gray-600">{Math.ceil(connection.minutes_used_cache / 60)} min</span> de <span className="font-medium text-gray-600">{contractedMinutes} min</span> ({connection.minutes_cache_month ?? "—"}).</>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={handleSaveContracted}
+                disabled={savingContracted}
+                className="btn-primary shrink-0"
+              >
+                {savingContracted ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Chave Pública Vapi (para Testar Assistente) */}
       {connection && (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireTenantAccess } from "@/lib/auth-helper";
+import { isAdminEmail } from "@/lib/admin-helper";
 import { createServiceClient } from "@/lib/supabase/service";
 import { encrypt, decrypt } from "@/lib/crypto";
 
@@ -14,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const service = createServiceClient();
   const { data, error } = await service
     .from("vapi_connections")
-    .select("id, label, is_active, created_at, updated_at, assistant_id, success_field, success_value, concurrency_limit, encrypted_public_key")
+    .select("id, label, is_active, created_at, updated_at, assistant_id, success_field, success_value, concurrency_limit, encrypted_public_key, contracted_minutes, minutes_used_cache, minutes_cache_month, minutes_blocked")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .single();
@@ -68,13 +69,14 @@ export async function POST(req: NextRequest, { params }: Params) {
 }
 
 // PATCH — atualiza assistant_id, success_field, success_value, publicKey sem alterar a API key privada
+// contractedMinutes e minutesBlocked (false = desbloquear) são restritos a admins globais
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { tenantId } = await params;
-  const { response } = await requireTenantAccess(tenantId);
+  const { user, response } = await requireTenantAccess(tenantId);
   if (response) return response;
 
   const body = await req.json();
-  const { assistantId, successField, successValue, concurrencyLimit, publicKey } = body;
+  const { assistantId, successField, successValue, concurrencyLimit, publicKey, contractedMinutes, minutesBlocked } = body;
 
   const updates: Record<string, unknown> = {
     assistant_id: assistantId ?? null,
@@ -86,6 +88,20 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   if (publicKey !== undefined) {
     updates.encrypted_public_key = publicKey ? encrypt(publicKey) : null;
+  }
+
+  // contractedMinutes e minutesBlocked (desbloquear) só podem ser alterados por admins globais
+  if (contractedMinutes !== undefined || minutesBlocked !== undefined) {
+    if (!isAdminEmail(user?.email)) {
+      return NextResponse.json({ error: "Acesso restrito a administradores" }, { status: 403 });
+    }
+    if (contractedMinutes !== undefined) {
+      updates.contracted_minutes = contractedMinutes === null ? null : Math.max(1, Number(contractedMinutes));
+    }
+    // Só permite desbloquear (false); bloquear é responsabilidade do worker
+    if (minutesBlocked === false) {
+      updates.minutes_blocked = false;
+    }
   }
 
   const service = createServiceClient();

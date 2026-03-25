@@ -776,6 +776,79 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Controle de minutos contratados
+// Atualiza o cache de uso mensal e bloqueia o tenant se atingir 100%.
+// Chamado a cada ~60s independente do POLL_INTERVAL_MS.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function updateMinutesCache(supabase: SupabaseClient): Promise<void> {
+  const now = new Date();
+  const firstOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+
+  const { data: connections, error } = await supabase
+    .from("vapi_connections")
+    .select("id, tenant_id, contracted_minutes, minutes_blocked")
+    .eq("is_active", true)
+    .not("contracted_minutes", "is", null);
+
+  if (error) {
+    console.error("[worker] updateMinutesCache: erro ao buscar conexões:", error.message);
+    return;
+  }
+  if (!connections || connections.length === 0) return;
+
+  for (const conn of connections as Array<{
+    id: string;
+    tenant_id: string;
+    contracted_minutes: number;
+    minutes_blocked: boolean;
+  }>) {
+    try {
+      const { data: totalSeconds, error: rpcErr } = await supabase
+        .rpc("get_monthly_call_seconds", {
+          p_tenant_id:      conn.tenant_id,
+          p_first_of_month: firstOfMonth,
+        });
+
+      if (rpcErr) {
+        console.error(`[worker] updateMinutesCache: RPC erro tenant ${conn.tenant_id}:`, rpcErr.message);
+        continue;
+      }
+
+      const usedSeconds: number = (totalSeconds as number) ?? 0;
+      const usedMinutes = Math.ceil(usedSeconds / 60);
+
+      const updates: Record<string, unknown> = {
+        minutes_used_cache:  usedSeconds,
+        minutes_cache_month: currentMonth,
+      };
+
+      if (!conn.minutes_blocked && usedMinutes >= conn.contracted_minutes) {
+        updates.minutes_blocked = true;
+        console.warn(
+          `[worker] ⛔ Tenant ${conn.tenant_id} atingiu limite de minutos` +
+          ` (${usedMinutes}/${conn.contracted_minutes} min) — bloqueando e pausando campanhas`
+        );
+        await supabase
+          .from("dial_queues")
+          .update({ status: "paused" })
+          .eq("tenant_id", conn.tenant_id)
+          .eq("status", "running");
+      }
+
+      await supabase
+        .from("vapi_connections")
+        .update(updates)
+        .eq("id", conn.id);
+
+    } catch (err) {
+      console.error(`[worker] updateMinutesCache: erro tenant ${conn.tenant_id}:`, err);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Recovery: libera leads travados em "calling" há mais de STALE_CALLING_MINUTES
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -919,10 +992,17 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
       // Buscar limite configurado da org Vapi
       const { data: conn } = await supabase
         .from("vapi_connections")
-        .select("concurrency_limit")
+        .select("concurrency_limit, minutes_blocked, contracted_minutes")
         .eq("tenant_id", tenantId)
         .eq("is_active", true)
         .single();
+
+      // Se o tenant está bloqueado por consumo de minutos, não disparar nenhuma chamada
+      if ((conn as { minutes_blocked?: boolean } | null)?.minutes_blocked) {
+        console.log(`[worker] Tenant ${tenantId} bloqueado por limite de minutos — todas as filas ignoradas`);
+        for (const q of tenantQueues) queueSlotBudgets.set(q.id, 0);
+        return;
+      }
 
       const tenantLimit: number = (conn as { concurrency_limit?: number } | null)?.concurrency_limit ?? 10;
 
@@ -1042,6 +1122,8 @@ async function main(): Promise<void> {
 
   // Frequência do recovery de stale calls: a cada ~60s (independente do POLL_INTERVAL_MS)
   const STALE_RECOVERY_EVERY_N_CYCLES = Math.max(1, Math.round(60_000 / POLL_INTERVAL_MS));
+  // Frequência da atualização de cache de minutos: a cada ~60s
+  const MINUTES_CACHE_EVERY_N_CYCLES  = Math.max(1, Math.round(60_000 / POLL_INTERVAL_MS));
 
   // Loop principal
   let cycleCount = 0;
@@ -1061,6 +1143,15 @@ async function main(): Promise<void> {
         await recoverStaleCalls(supabase);
       } catch (err) {
         console.error("[worker] Erro no recoverStaleCalls:", err);
+      }
+    }
+
+    // Atualização periódica do cache de minutos contratados
+    if (cycleCount % MINUTES_CACHE_EVERY_N_CYCLES === 0) {
+      try {
+        await updateMinutesCache(supabase);
+      } catch (err) {
+        console.error("[worker] Erro no updateMinutesCache:", err);
       }
     }
 

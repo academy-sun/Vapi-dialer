@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { isAdminEmail } from "@/lib/admin-helper";
 import { redirect } from "next/navigation";
 import VapiConnectionClient from "./VapiConnectionClient";
 
@@ -24,5 +25,7 @@ export default async function VapiPage({ params }: Params) {
     redirect(`/app/tenants/${tenantId}/queues`);
   }
 
-  return <VapiConnectionClient />;
+  const isAdmin = isAdminEmail(user.email);
+
+  return <VapiConnectionClient isAdmin={isAdmin} />;
 }

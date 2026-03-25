@@ -4,7 +4,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   RefreshCw, Phone, PhoneOff, PhoneCall, DollarSign, Clock,
   Timer, Users, CheckCircle2, BarChart3, Loader2, Bot, Filter,
-  Flame, Activity, TrendingUp,
+  Flame, Activity, TrendingUp, AlertTriangle,
 } from "lucide-react";
 
 interface Campaign { id: string; name: string; assistantId: string }
@@ -405,6 +405,13 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [assistantNames, setAssistantNames] = useState<Record<string, string>>({});
+  const [minutesData, setMinutesData] = useState<{
+    contracted: number;
+    usedSeconds: number;
+    blocked: boolean;
+    month: string | null;
+  } | null>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
 
   const selectedAssistant = searchParams.get("assistantId") ?? "";
   const selectedQueue = searchParams.get("queueId") ?? "";
@@ -421,6 +428,23 @@ export default function AnalyticsPage() {
           if (a.id && a.name) names[a.id] = a.name;
         }
         setAssistantNames(names);
+      })
+      .catch(() => {});
+  }, [tenantId]);
+
+  // Buscar status de minutos contratados (leitura do cache, sem custo adicional)
+  useEffect(() => {
+    fetch(`/api/tenants/${tenantId}/vapi-connection`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        const conn = d?.connection;
+        if (!conn || conn.contracted_minutes == null) { setMinutesData(null); return; }
+        setMinutesData({
+          contracted:  conn.contracted_minutes,
+          usedSeconds: conn.minutes_used_cache ?? 0,
+          blocked:     conn.minutes_blocked ?? false,
+          month:       conn.minutes_cache_month ?? null,
+        });
       })
       .catch(() => {});
   }, [tenantId]);
@@ -475,6 +499,20 @@ export default function AnalyticsPage() {
   const hasFilters = selectedAssistant || selectedQueue;
   const isMember = !data || data.userRole === "member";
 
+  // Minutes progress bar derived values
+  const usedMinutes  = minutesData ? Math.ceil(minutesData.usedSeconds / 60) : 0;
+  const minutesPct   = minutesData?.contracted ? Math.round((usedMinutes / minutesData.contracted) * 100) : 0;
+  const barColor     = minutesData?.blocked || minutesPct >= 100 ? "#dc2626"
+    : minutesPct >= 80 ? "#f97316"
+    : "#10b981";
+
+  async function handleRequestMinutes() {
+    setSendingEmail(true);
+    const res = await fetch(`/api/tenants/${tenantId}/request-minutes`, { method: "POST" });
+    if (!res.ok) console.error("Erro ao enviar solicitação");
+    setSendingEmail(false);
+  }
+
   return (
     <div>
       {/* Header */}
@@ -490,6 +528,58 @@ export default function AnalyticsPage() {
           </button>
         </div>
       </div>
+
+      {/* Barra de minutos contratados */}
+      {minutesData && (
+        <div className={`card p-4 mb-6 ${minutesData.blocked ? "border-red-300" : minutesPct >= 80 ? "border-orange-300" : ""}`}
+          style={minutesData.blocked ? { borderColor: "#fca5a5", background: "#fff7f7" } : minutesPct >= 80 ? { borderColor: "#fdba74", background: "#fffbf5" } : {}}>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                {(minutesData.blocked || minutesPct >= 80) && (
+                  <AlertTriangle className={`w-4 h-4 shrink-0 ${minutesData.blocked ? "text-red-500" : "text-orange-500"}`} />
+                )}
+                <span className="text-sm font-semibold text-gray-800">
+                  Minutos contratados — {minutesData.month ?? new Date().toISOString().slice(0, 7)}
+                </span>
+                {minutesData.blocked && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Conta bloqueada</span>
+                )}
+              </div>
+              <span className="text-sm font-bold" style={{ color: barColor }}>
+                {usedMinutes} / {minutesData.contracted} min ({minutesPct}%)
+              </span>
+            </div>
+
+            {/* Progress bar */}
+            <div className="h-3 rounded-full overflow-hidden bg-gray-100">
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${Math.min(100, minutesPct)}%`, background: barColor }}
+              />
+            </div>
+
+            {/* Aviso e botão */}
+            {(minutesPct >= 80) && (
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <p className="text-sm" style={{ color: minutesData.blocked ? "#dc2626" : "#92400e" }}>
+                  {minutesData.blocked
+                    ? "Limite atingido. Todas as campanhas foram pausadas. Entre em contato para contratar mais minutos."
+                    : `Você já consumiu ${minutesPct}% dos minutos contratados deste mês.`}
+                </p>
+                <button
+                  onClick={handleRequestMinutes}
+                  disabled={sendingEmail}
+                  className="shrink-0 text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                  style={{ background: "#FF1A1A", color: "white" }}
+                >
+                  {sendingEmail ? "Enviando..." : "Contratar mais minutos"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="card p-4 mb-6">
