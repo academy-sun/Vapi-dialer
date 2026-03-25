@@ -267,7 +267,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       const batch = uniqueLeads.slice(i, i + 100);
       const { error: insertError } = await service
         .from("leads")
-        .upsert(batch, { onConflict: "leads_phone_list_unique", ignoreDuplicates: true });
+        .upsert(batch, { onConflict: "phone_e164,lead_list_id", ignoreDuplicates: true });
         
       if (insertError) {
         return NextResponse.json({ error: insertError.message }, { status: 500 });
