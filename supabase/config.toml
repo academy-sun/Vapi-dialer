@@ -1,0 +1,3 @@
+[auth.email.template.recovery]
+subject = "Redefina sua senha — MX3 Call X"
+content_path = "./supabase/templates/recovery.html"

@@ -544,8 +544,32 @@ async function processLead(
       ` | erro: ${errorLabel}`,
     );
 
-    // Log extra para erros de payload (400) — indica configuração inválida
+    // ── Número inválido detectado pelo Vapi (HTTP 400 com mensagem de E.164) ──
+    // O Vapi retorna 400 (não 422) quando customer.number não é E.164 válido.
+    // Retentar não resolve — o número em si é inválido. Marcar como falha permanente.
     if (httpStatus === 400 && !isConcurrencyLimit) {
+      const bodyLower = (errorBody ?? "").toLowerCase();
+      const isInvalidPhone =
+        bodyLower.includes("e.164") ||
+        bodyLower.includes("customer.number") ||
+        bodyLower.includes("valid phone number");
+
+      if (isInvalidPhone) {
+        console.error(
+          `[worker] ✗ Número inválido (E.164) para lead ${lead.id} (${lead.phone_e164}) — falha permanente` +
+          ` | fila=${queue.name} | resposta Vapi: ${errorBody}`
+        );
+        await supabase
+          .from("leads")
+          .update({
+            status:        "failed",
+            attempt_count: newAttemptCount,
+            last_outcome:  "invalid-phone",
+          })
+          .eq("id", lead.id);
+        return false;
+      }
+
       console.error(
         `[worker] ⚠ Payload rejeitado pelo Vapi (HTTP 400) — verifique assistantId e phoneNumberId` +
         ` | assistantId=${queue.assistant_id} | phoneNumberId=${queue.phone_number_id}` +

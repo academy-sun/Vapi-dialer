@@ -217,12 +217,23 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   }
 
-  // ── Deduplicação: buscar phones já existentes nesta lista ──────────────────
+  // ── Deduplicação IN-MEMORY (para resolver duplicatas no próprio CSV/XLSX) ────
   let duplicateCount = 0;
-  let uniqueLeads = toInsert;
+  const seenInCSV = new Set<string>();
+  const deduplicatedToInsert = toInsert.filter((l) => {
+    const p = (l as { phone_e164: string }).phone_e164;
+    if (seenInCSV.has(p)) {
+      duplicateCount++;
+      return false;
+    }
+    seenInCSV.add(p);
+    return true;
+  });
 
-  if (toInsert.length > 0) {
-    // Buscar todos os phones já cadastrados na lista (sem limite — lista pode ser grande)
+  let uniqueLeads = deduplicatedToInsert;
+
+  if (uniqueLeads.length > 0) {
+    // Buscar todos os phones já cadastrados na lista
     const existingPhones = new Set<string>();
     let offset = 0;
     const FETCH_BATCH = 1000;
@@ -240,25 +251,25 @@ export async function POST(req: NextRequest, { params }: Params) {
       offset += FETCH_BATCH;
     }
 
-    // Separar novos dos duplicados
-    const before = toInsert.length;
-    uniqueLeads = toInsert.filter(
+    // Separar novos dos duplicados no banco
+    const before = uniqueLeads.length;
+    uniqueLeads = uniqueLeads.filter(
       (l) => !existingPhones.has((l as { phone_e164: string }).phone_e164)
     );
-    duplicateCount = before - uniqueLeads.length;
+    duplicateCount += (before - uniqueLeads.length);
   }
 
   let inserted = 0;
   if (uniqueLeads.length > 0) {
-    // Inserir em lotes de 100
+    // Inserir em lotes de 100 usando UPSERT ignoreDuplicates (Bullet-Proof)
+    // Se ainda assim cair numa duplicata (race condition), ele simplesmente pula a linha problemática e insere o resto do lote!
     for (let i = 0; i < uniqueLeads.length; i += 100) {
       const batch = uniqueLeads.slice(i, i + 100);
-      const { error: insertError } = await service.from("leads").insert(batch);
+      const { error: insertError } = await service
+        .from("leads")
+        .upsert(batch, { onConflict: "leads_phone_list_unique", ignoreDuplicates: true });
+        
       if (insertError) {
-        // Violação de constraint única (race condition) — ignorar lote e continuar
-        if (insertError.code === "23505") {
-          continue;
-        }
         return NextResponse.json({ error: insertError.message }, { status: 500 });
       }
       inserted += batch.length;
