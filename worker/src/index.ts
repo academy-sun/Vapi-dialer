@@ -94,6 +94,29 @@ function tName(id: string): string {
   return tenantNameCache.get(id) ?? id;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Cooldown de concorrência por tenant (em memória)
+// Quando Vapi retorna "Over Concurrency Limit", bloqueamos o tenant por
+// CONCURRENCY_COOLDOWN_MS para evitar o loop de tentativas repetidas enquanto
+// os slots continuam ocupados. O cooldown expira automaticamente.
+// ─────────────────────────────────────────────────────────────────────────────
+const CONCURRENCY_COOLDOWN_MS = 60_000; // 60 segundos
+const tenantConcurrencyCooldown = new Map<string, number>(); // tenantId → unblockAt (epoch ms)
+
+function setTenantConcurrencyCooldown(tenantId: string): void {
+  tenantConcurrencyCooldown.set(tenantId, Date.now() + CONCURRENCY_COOLDOWN_MS);
+}
+
+function isTenantInConcurrencyCooldown(tenantId: string): boolean {
+  const unblockAt = tenantConcurrencyCooldown.get(tenantId);
+  if (!unblockAt) return false;
+  if (Date.now() >= unblockAt) {
+    tenantConcurrencyCooldown.delete(tenantId); // expirou — limpar
+    return false;
+  }
+  return true;
+}
+
 async function refreshTenantNames(supabase: SupabaseClient): Promise<void> {
   const { data } = await supabase.from("tenants").select("id, name");
   if (data) data.forEach((t: { id: string; name: string }) => tenantNameCache.set(t.id, t.name));
@@ -482,16 +505,19 @@ async function processLead(
       errMessage.toLowerCase().includes("over concurrency limit");
 
     if (isConcurrencyLimit) {
+      // Ativar cooldown de tenant em memória: bloqueia novas tentativas por 60s
+      setTenantConcurrencyCooldown(queue.tenant_id);
       console.warn(
         `[worker] ⚠ Over Concurrency Limit — revertendo lead ${lead.id} sem contar tentativa` +
-        ` | fila=${queue.name} | tenant=${tName(queue.tenant_id)}`
+        ` | fila=${queue.name} | tenant=${tName(queue.tenant_id)}` +
+        ` | cooldown ativo por ${CONCURRENCY_COOLDOWN_MS / 1000}s`
       );
       await supabase
         .from("leads")
         .update({
           status:          lead.status,
           attempt_count:   lead.attempt_count,
-          next_attempt_at: new Date(Date.now() + 10_000).toISOString(),
+          next_attempt_at: new Date(Date.now() + CONCURRENCY_COOLDOWN_MS).toISOString(),
           last_outcome:    "concurrency-limited",
         })
         .eq("id", lead.id);
@@ -1019,6 +1045,14 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
       // Se o tenant está bloqueado por consumo de minutos, não disparar nenhuma chamada
       if ((conn as { minutes_blocked?: boolean } | null)?.minutes_blocked) {
         console.log(`[worker] Tenant ${tName(tenantId)} bloqueado por limite de minutos — todas as filas ignoradas`);
+        for (const q of tenantQueues) queueSlotBudgets.set(q.id, 0);
+        return;
+      }
+
+      // Se o tenant está em cooldown de concorrência (Over Concurrency Limit recente),
+      // aguardar antes de tentar novamente — evita o loop de tentativas rejeitadas
+      if (isTenantInConcurrencyCooldown(tenantId)) {
+        console.log(`[worker] Tenant ${tName(tenantId)} em cooldown de concorrência — aguardando antes de retomar`);
         for (const q of tenantQueues) queueSlotBudgets.set(q.id, 0);
         return;
       }
