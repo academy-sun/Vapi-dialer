@@ -439,7 +439,7 @@ async function updateLeadAfterCall(
       );
       await service
         .from("leads")
-        .update({ status: "failed", last_outcome: endedReason })
+        .update({ status: "failed", last_outcome: endedReason, next_attempt_at: null })
         .eq("id", leadId);
       await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
@@ -485,7 +485,7 @@ async function updateLeadAfterCall(
     // ── Chamada realmente atendida → concluído ──
     await service
       .from("leads")
-      .update({ status: "completed", last_outcome: endedReason })
+      .update({ status: "completed", last_outcome: endedReason, next_attempt_at: null })
       .eq("id", leadId);
     await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "completed", service, callData);
   } else {
@@ -517,7 +517,7 @@ async function updateLeadAfterCall(
     if (attempts >= maxAttempts) {
       await service
         .from("leads")
-        .update({ status: "failed", last_outcome: endedReason })
+        .update({ status: "failed", last_outcome: endedReason, next_attempt_at: null })
         .eq("id", leadId);
       await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
