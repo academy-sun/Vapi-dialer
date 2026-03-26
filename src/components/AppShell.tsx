@@ -566,7 +566,7 @@ export default function AppShell({
       </aside>
 
       {/* ── Main content ── */}
-      <main className="flex-1 ml-64 min-h-screen overflow-auto">
+      <main className="flex-1 ml-64 min-h-screen">
         {/* ── Top bar (sempre visível) ── */}
         <header
           className="sticky top-0 z-20 flex items-center justify-end px-8"
