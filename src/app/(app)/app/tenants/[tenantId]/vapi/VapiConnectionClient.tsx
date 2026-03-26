@@ -601,10 +601,26 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                 />
                 <p className="text-xs text-gray-400 mt-1.5">
                   Quando o cliente atingir 100%, as campanhas são pausadas automaticamente.
-                  {contractedMinutes != null && connection.minutes_used_cache != null && (
-                    <> Uso atual: <span className="font-medium text-gray-600">{Math.ceil(connection.minutes_used_cache / 60)} min</span> de <span className="font-medium text-gray-600">{contractedMinutes} min</span> ({connection.minutes_cache_month ?? "—"}).</>
-                  )}
                 </p>
+                {contractedMinutes != null && connection.minutes_used_cache != null && (() => {
+                  const usedMin = Math.ceil(connection.minutes_used_cache / 60);
+                  const pct = Math.min(100, Math.round((usedMin / contractedMinutes) * 100));
+                  const barColor = pct >= 100 ? "#dc2626" : pct >= 90 ? "#f97316" : pct >= 80 ? "#f59e0b" : "#22c55e";
+                  return (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span className="font-medium">{usedMin} min usados</span>
+                        <span>{contractedMinutes} min contratados · {connection.minutes_cache_month ?? "—"} · <span style={{ color: barColor, fontWeight: 600 }}>{pct}%</span></span>
+                      </div>
+                      <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${pct}%`, background: barColor }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               <button
                 onClick={handleSaveContracted}
