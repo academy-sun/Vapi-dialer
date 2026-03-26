@@ -67,7 +67,8 @@
       "Bash(find \"C:\\\\Users\\\\henrique.silvatte\\\\Desktop\\\\Projetos Fabricio\\\\Vapi-dialer\\\\Vapi-dialer-master\\\\src\\\\app\\\\\\(app\\)\\\\app\\\\tenants\\\\[tenantId]\" -type f -name \"*.tsx\" -o -name \"*.ts\")",
       "Bash(find \"C:\\\\Users\\\\henrique.silvatte\\\\Desktop\\\\Projetos Fabricio\\\\Vapi-dialer\\\\Vapi-dialer-master\\\\src\\\\app\\\\\\(app\\)\\\\app\\\\tenants\\\\[tenantId]\\\\queues\" -type f)",
       "Bash(npm install:*)",
-      "Bash(npm i:*)"
+      "Bash(npm i:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

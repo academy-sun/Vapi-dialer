@@ -21,6 +21,8 @@ import {
   LayoutDashboard,
   BarChart2,
   Bot,
+  Bell,
+  AlertTriangle,
 } from "lucide-react";
 
 interface Tenant {
@@ -52,6 +54,19 @@ export default function AppShell({
   const [showTenantDropdown, setShowTenantDropdown] = useState(false);
   const [newTenantName, setNewTenantName] = useState("");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  // ── Bell de notificações de minutos ──
+  const [minutesStatus, setMinutesStatus] = useState<{
+    contracted: number | null;
+    usedSeconds: number;
+    blocked: boolean;
+    month: string | null;
+  } | null>(null);
+  const [showBellDropdown, setShowBellDropdown] = useState(false);
+  const [bellDismissed, setBellDismissed] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const pathname = usePathname();
@@ -59,6 +74,42 @@ export default function AppShell({
 
   useEffect(() => {
     loadTenants();
+  }, []);
+
+  // Fetch minutes status when active tenant changes
+  useEffect(() => {
+    if (!activeTenantId) return;
+    fetch(`/api/tenants/${activeTenantId}/vapi-connection`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        const conn = d?.connection;
+        if (!conn || conn.contracted_minutes == null) {
+          setMinutesStatus(null);
+          return;
+        }
+        setMinutesStatus({
+          contracted:   conn.contracted_minutes,
+          usedSeconds:  conn.minutes_used_cache ?? 0,
+          blocked:      conn.minutes_blocked ?? false,
+          month:        conn.minutes_cache_month ?? null,
+        });
+        // Check if dismissed for this tenant+month combo
+        const month = conn.minutes_cache_month ?? new Date().toISOString().slice(0, 7);
+        const dismissKey = `callx_notif_dismissed_${activeTenantId}_${month}`;
+        setBellDismissed(localStorage.getItem(dismissKey) === "true");
+      })
+      .catch(() => setMinutesStatus(null));
+  }, [activeTenantId]);
+
+  // Close bell dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+        setShowBellDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -173,6 +224,32 @@ export default function AppShell({
     await supabase.auth.signOut();
     router.push("/login");
   }
+
+  async function handleRequestMinutes() {
+    if (!activeTenantId) return;
+    setSendingEmail(true);
+    const res = await fetch(`/api/tenants/${activeTenantId}/request-minutes`, { method: "POST" });
+    if (res.ok) {
+      showToast("Solicitação enviada! Entraremos em contato em breve.");
+      setShowBellDropdown(false);
+    } else {
+      showToast("Erro ao enviar solicitação. Tente novamente.", "error");
+    }
+    setSendingEmail(false);
+  }
+
+  function dismissBellNotification() {
+    if (!minutesStatus?.month || !activeTenantId) return;
+    const dismissKey = `callx_notif_dismissed_${activeTenantId}_${minutesStatus.month}`;
+    localStorage.setItem(dismissKey, "true");
+    setBellDismissed(true);
+    setShowBellDropdown(false);
+  }
+
+  // Bell notification derived state
+  const usedMinutes = minutesStatus ? Math.ceil(minutesStatus.usedSeconds / 60) : 0;
+  const minutesPct  = minutesStatus?.contracted ? Math.round((usedMinutes / minutesStatus.contracted) * 100) : 0;
+  const showBellBadge = minutesStatus != null && minutesPct >= 80 && (!bellDismissed || minutesStatus.blocked);
 
   const activeTenant = tenants.find((t) => t.id === activeTenantId);
 
@@ -467,6 +544,81 @@ export default function AppShell({
                 Conta ativa
               </p>
             </div>
+            {/* Bell notification */}
+            {showBellBadge && activeTenantId && (
+              <div className="relative" ref={bellRef}>
+                <button
+                  onClick={() => setShowBellDropdown(!showBellDropdown)}
+                  title="Notificações"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 relative"
+                  style={{ color: minutesStatus?.blocked ? "#dc2626" : "#d97706", background: minutesStatus?.blocked ? "#1a0000" : "#1a1500" }}
+                >
+                  <Bell className="w-4 h-4" />
+                  <span
+                    className="absolute top-1 right-1 w-2 h-2 rounded-full border border-gray-900"
+                    style={{ background: minutesStatus?.blocked ? "#dc2626" : "#f59e0b" }}
+                  />
+                </button>
+
+                {showBellDropdown && (
+                  <div
+                    className="absolute bottom-full mb-2 right-0 w-72 rounded-xl shadow-2xl z-50 overflow-hidden"
+                    style={{ background: "#111111", border: "1px solid #2a2a2a" }}
+                  >
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #222222" }}>
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className={`w-4 h-4 ${minutesStatus?.blocked ? "text-red-500" : "text-amber-400"}`} />
+                        <span className="text-sm font-semibold text-white">
+                          {minutesStatus?.blocked ? "Conta bloqueada" : "Aviso de consumo"}
+                        </span>
+                      </div>
+                      {!minutesStatus?.blocked && (
+                        <button onClick={dismissBellNotification} className="text-gray-500 hover:text-gray-300 transition-colors">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Body */}
+                    <div className="px-4 py-3 space-y-3">
+                      <p className="text-sm text-gray-300 leading-relaxed">
+                        {minutesStatus?.blocked
+                          ? "Você atingiu 100% dos minutos contratados. Todas as campanhas foram pausadas automaticamente."
+                          : `Você já consumiu ${minutesPct}% dos minutos contratados deste mês.`}
+                      </p>
+
+                      {/* Progress bar */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-xs text-gray-400">
+                          <span>{usedMinutes} min usados</span>
+                          <span>{minutesStatus?.contracted} min contratados</span>
+                        </div>
+                        <div className="h-2 rounded-full overflow-hidden" style={{ background: "#2a2a2a" }}>
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${Math.min(100, minutesPct)}%`,
+                              background: minutesStatus?.blocked ? "#dc2626" : minutesPct >= 90 ? "#f97316" : "#f59e0b",
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleRequestMinutes}
+                        disabled={sendingEmail}
+                        className="w-full py-2 text-sm font-semibold rounded-lg transition-colors"
+                        style={{ background: "#FF1A1A", color: "white" }}
+                      >
+                        {sendingEmail ? "Enviando..." : "Contratar mais minutos"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               onClick={handleLogout}
               title="Sair"

@@ -81,10 +81,11 @@ const DAYS_CONFIG = [
 
 // ── Advanced config fields (shared between wizard step 1 and edit modal) ───────
 function AdvancedConfigFields({
-  form, update,
+  form, update, isAdmin = false,
 }: {
   form: Record<string, string>;
   update: (k: string, v: string) => void;
+  isAdmin?: boolean;
 }) {
   const selectedDays: number[] = form.allowed_days
     ? form.allowed_days.split(",").map(Number).filter(Boolean)
@@ -195,20 +196,37 @@ function AdvancedConfigFields({
         )}
       </div>
 
-      {/* Webhook */}
-      <div>
-        <label className="form-label flex items-center gap-1">
-          <Link2 className="w-3.5 h-3.5 text-gray-400" />
-          Webhook de saída (opcional)
-        </label>
-        <input className="form-input font-mono text-sm"
-          placeholder="https://seu-n8n.com/webhook/xxx"
-          value={form.webhook_url ?? ""}
-          onChange={(e) => update("webhook_url", e.target.value)} />
-        <p className="text-xs text-gray-400 mt-1">
-          POST automático com resultado de cada chamada (n8n, Zapier, Make…)
-        </p>
-      </div>
+      {/* Webhook — visível e editável apenas para SuperAdmin */}
+      {isAdmin ? (
+        <div>
+          <label className="form-label flex items-center gap-1">
+            <Link2 className="w-3.5 h-3.5 text-gray-400" />
+            Webhook de saída (opcional)
+            <span className="ml-1 text-xs font-normal px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Admin</span>
+          </label>
+          <input className="form-input font-mono text-sm"
+            placeholder="https://seu-n8n.com/webhook/xxx"
+            value={form.webhook_url ?? ""}
+            onChange={(e) => update("webhook_url", e.target.value)} />
+          <p className="text-xs text-gray-400 mt-1">
+            POST automático com resultado de cada chamada (n8n, Zapier, Make…)
+          </p>
+        </div>
+      ) : (
+        <div>
+          <label className="form-label flex items-center gap-1">
+            <Link2 className="w-3.5 h-3.5 text-gray-400" />
+            Webhook de saída
+          </label>
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-500">
+            <AlertCircle className="w-4 h-4 text-gray-400 shrink-0" />
+            {form.webhook_url
+              ? <span className="font-mono truncate">{form.webhook_url}</span>
+              : <span>Campanha sem Webhook de Saída configurado — solicite ao Admin</span>
+            }
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -216,7 +234,7 @@ function AdvancedConfigFields({
 // ── Campaign Creation Wizard (3 steps) ─────────────────────────────────────────
 // IMPORTANT: NO backdrop click to close — only X button or Cancelar
 function CampaignWizard({
-  leadLists, tenantId, onClose, onCreated, vapiResources, vapiLoading,
+  leadLists, tenantId, onClose, onCreated, vapiResources, vapiLoading, isAdmin = false,
 }: {
   leadLists: LeadList[];
   tenantId: string;
@@ -224,6 +242,7 @@ function CampaignWizard({
   onCreated: () => void;
   vapiResources?: VapiResources;
   vapiLoading?: boolean;
+  isAdmin?: boolean;
 }) {
   const [step, setStep] = useState(1);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -425,7 +444,7 @@ function CampaignWizard({
                 {showAdvanced && (
                   <div className="px-4 pb-4 border-t border-gray-100">
                     <div className="pt-4">
-                      <AdvancedConfigFields form={form} update={updateForm} />
+                      <AdvancedConfigFields form={form} update={updateForm} isAdmin={isAdmin} />
                     </div>
                   </div>
                 )}
@@ -543,7 +562,7 @@ function CampaignWizard({
 
 // ── Edit Campaign Modal (NO backdrop click to close) ───────────────────────────
 function EditCampaignModal({
-  queue, leadLists, onClose, onSave, vapiResources, vapiLoading,
+  queue, leadLists, onClose, onSave, vapiResources, vapiLoading, isAdmin = false,
 }: {
   queue: Queue;
   leadLists: LeadList[];
@@ -551,6 +570,7 @@ function EditCampaignModal({
   onSave: (id: string, form: Record<string, string>) => Promise<void>;
   vapiResources?: VapiResources;
   vapiLoading?: boolean;
+  isAdmin?: boolean;
 }) {
   const existingDays = Array.isArray(queue.allowed_days)
     ? (queue.allowed_days as unknown as number[]).join(",")
@@ -653,7 +673,7 @@ function EditCampaignModal({
               </div>
             </div>
 
-            <AdvancedConfigFields form={form} update={update} />
+            <AdvancedConfigFields form={form} update={update} isAdmin={isAdmin} />
           </div>
 
           <div className="flex gap-3 justify-end px-6 py-4 border-t border-gray-100 shrink-0">
@@ -952,7 +972,12 @@ export default function CampaignsPage() {
   const [diagnoseResults,  setDiagnoseResults]  = useState<Record<string, { ok: boolean; issues: string[]; leads: { by_status: Record<string, number>; ready_to_call: number }; time_window: { status: string; now_in_tz?: string; window_start?: string; window_end?: string; timezone?: string }; vapi_key_configured: boolean } | null>>({});
   const [vapiResources, setVapiResources] = useState<VapiResources | undefined>(undefined);
   const [vapiLoading,   setVapiLoading]   = useState(false);
+  const [isAdmin,       setIsAdmin]       = useState(false);
   const { toasts, show: showToast } = useToast();
+
+  useEffect(() => {
+    fetch("/api/me").then((r) => r.json()).then((d) => setIsAdmin(d.isAdmin ?? false)).catch(() => {});
+  }, []);
 
   const loadQueues = useCallback(async () => {
     const res  = await fetch(`/api/tenants/${tenantId}/queues`);
@@ -1236,7 +1261,7 @@ export default function CampaignsPage() {
                             }
                             return null;
                           })()}
-                          {q.webhook_url && (
+                          {isAdmin && q.webhook_url && (
                             <>
                               <span className="text-gray-200">·</span>
                               <span className="text-emerald-600 flex items-center gap-1">
@@ -1413,8 +1438,8 @@ export default function CampaignsPage() {
                           </div>
                         </div>
 
-                        {/* Webhook */}
-                        {q.webhook_url && (
+                        {/* Webhook — visível apenas para SuperAdmin */}
+                        {isAdmin && q.webhook_url && (
                           <div className="space-y-1.5">
                             <div className="flex items-center gap-2">
                               <Zap className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -1486,7 +1511,7 @@ export default function CampaignsPage() {
                         })()}
 
                         {/* Empty overview */}
-                        {!q.webhook_url && !diagnoseResults[q.id] && (
+                        {!(isAdmin && q.webhook_url) && !diagnoseResults[q.id] && (
                           <p className="text-sm text-gray-400 text-center py-4">
                             Use o botão <strong>Diagnosticar</strong> para verificar o estado desta campanha.
                           </p>
@@ -1520,6 +1545,7 @@ export default function CampaignsPage() {
           }}
           vapiResources={vapiResources}
           vapiLoading={vapiLoading}
+          isAdmin={isAdmin}
         />
       )}
 
@@ -1532,6 +1558,7 @@ export default function CampaignsPage() {
           onSave={saveQueue}
           vapiResources={vapiResources}
           vapiLoading={vapiLoading}
+          isAdmin={isAdmin}
         />
       )}
 
