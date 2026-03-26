@@ -593,15 +593,18 @@ async function processLead(
       );
     }
 
-    // ── Erros de provedor SIP (503 / 408) ── reagendar SEM contar tentativa
-    // Erros de infra do provedor não devem consumir attempt_count do lead.
-    // Revertemos ao status original e ao attempt_count anterior (mesmo padrão do Over Concurrency Limit).
-    const isProviderFault = httpStatus === 503 || httpStatus === 408;
-    if (isProviderFault) {
+    // ── Erros SIP no DISPATCH (503/408 ao chamar POST /call/phone) ──
+    // Ocorre ANTES da chamada ser criada — nenhum call_record foi gerado.
+    // Causa: SIP provider sobrecarregado no momento do disparo (transitório).
+    // → Reverter sem contar tentativa; retry em 60s.
+    // Nota: se o 503 vier DEPOIS da criação (via webhook), é tratado como SIP ambíguo
+    // no webhook handler — nesse caso conta como tentativa para evitar loop em número inválido.
+    const isDispatchSipFault = httpStatus === 503 || httpStatus === 408;
+    if (isDispatchSipFault) {
       const nextAt = new Date(Date.now() + 60_000).toISOString();
       console.warn(
-        `[worker] ⚠ Provedor SIP indisponível (HTTP ${httpStatus}) — ` +
-        `revertendo lead ${lead.id} para "${lead.status}" sem contar tentativa`
+        `[worker] ⚠ SIP indisponível no dispatch (HTTP ${httpStatus}) | lead=${lead.id} (${lead.phone_e164})` +
+        ` | fila="${queue.name}" | tenant=${tName(queue.tenant_id)} — retry em 60s sem contar tentativa`
       );
       await supabase
         .from("leads")

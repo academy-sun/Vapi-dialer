@@ -371,41 +371,93 @@ async function updateLeadAfterCall(
     return;
   }
 
-  // Erros do provedor SIP / rede — re-queuar sem contar como tentativa
-  // Cobre: Vapi v1 (sip-5xx), Vapi v2 (pipeline-error, transport-error) e
-  // códigos numéricos puros ("503"). Nota: endedReason null é tratado separado (abaixo).
-  const isProviderFault = endedReason != null && (
-    endedReason.includes("error-providerfault") ||
-    endedReason.includes("error-vapifault") ||      // falha de infra Vapi (ex: Deepgram indisponível)
-    endedReason.includes("sip-503") ||
-    endedReason.includes("sip-408") ||
-    endedReason.includes("sip-500") ||
-    endedReason.includes("sip-502") ||
-    endedReason.includes("sip-504") ||
-    /^(503|408|500|502|504)$/.test(endedReason) ||
-    endedReason.startsWith("pipeline-error") ||
-    endedReason.startsWith("transport-error")       // cobre subtipos futuros (ex: transport-error-dtls-failed)
+  // ── Falhas de infra REAIS do Vapi (pipeline de IA, transcrição, LLM, rede Vapi) ──
+  // Claramente culpa do Vapi, não do número de destino.
+  // → Retry sem contar tentativa (desfaz o increment do worker).
+  const isTrueVapiFault = endedReason != null && (
+    endedReason.includes("error-vapifault") ||   // falha de serviço Vapi (Deepgram, LLM, etc.)
+    endedReason.startsWith("pipeline-error") ||  // erro no pipeline de processamento Vapi
+    endedReason.startsWith("transport-error")    // falha DTLS/WebRTC no Vapi (ex: transport-error-dtls-failed)
   );
 
-  if (isProviderFault) {
-    console.log(`[webhook] Provider fault detectado (${endedReason}) — re-queue sem contar tentativa`);
+  if (isTrueVapiFault) {
+    console.warn(`[webhook] ⚠ VapiFault (${endedReason}) | lead=${leadId} — retry em 3min sem contar tentativa`);
     const { data: currentLead } = await service
       .from("leads")
       .select("attempt_count")
       .eq("id", leadId)
       .single();
     const prevAttempts = Math.max(0, (currentLead?.attempt_count ?? 1) - 1);
-    const retryAt = new Date(Date.now() + 3 * 60 * 1000).toISOString(); // retry em 3 min
+    const retryAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
     await service
       .from("leads")
       .update({
         status:          "queued",
         last_outcome:    endedReason,
         next_attempt_at: retryAt,
-        attempt_count:   prevAttempts, // desfaz o incremento do worker
+        attempt_count:   prevAttempts,
       })
       .eq("id", leadId);
-    // Não disparar webhook externo para provider faults — é ruído
+    return;
+  }
+
+  // ── Erros SIP ambíguos (503/408/500 do provedor) ──
+  // Podem ser: SIP provider sobrecarregado (transitório) OU número inválido/indisponível (permanente).
+  // → Conta como tentativa para evitar loop infinito em números inválidos.
+  // → Retry rápido (3 min) para cobrir indisponibilidade transitória.
+  // → Após max_attempts: failed (igual a qualquer outro não-atendimento).
+  const isAmbiguousSip = endedReason != null && (
+    endedReason.includes("error-providerfault") ||
+    endedReason.includes("sip-503") ||
+    endedReason.includes("sip-408") ||
+    endedReason.includes("sip-500") ||
+    endedReason.includes("sip-502") ||
+    endedReason.includes("sip-504") ||
+    /^(503|408|500|502|504)$/.test(endedReason)
+  );
+
+  if (isAmbiguousSip) {
+    const { data: currentLead } = await service
+      .from("leads")
+      .select("attempt_count")
+      .eq("id", leadId)
+      .single();
+    const { data: queueForSip } = await service
+      .from("dial_queues")
+      .select("max_attempts")
+      .eq("id", queueId)
+      .eq("tenant_id", tenantId)
+      .single();
+    const attempts    = currentLead?.attempt_count ?? 0;
+    const maxAttempts = (queueForSip?.max_attempts as number | null | undefined) ?? 3;
+
+    if (attempts >= maxAttempts) {
+      console.warn(
+        `[webhook] ⛔ SIP ambíguo (${endedReason}) | lead=${leadId}` +
+        ` — tentativas esgotadas (${attempts}/${maxAttempts}) → failed` +
+        ` (número possivelmente inválido/indisponível)`
+      );
+      await service
+        .from("leads")
+        .update({ status: "failed", last_outcome: endedReason })
+        .eq("id", leadId);
+      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
+    } else {
+      const retryAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
+      console.warn(
+        `[webhook] ⚠ SIP ambíguo (${endedReason}) | lead=${leadId}` +
+        ` — tentativa ${attempts}/${maxAttempts} | retry em 3min (contando tentativa)`
+      );
+      // NÃO alterar attempt_count — manter o incremento feito pelo worker
+      await service
+        .from("leads")
+        .update({
+          status:          "queued",
+          last_outcome:    endedReason,
+          next_attempt_at: retryAt,
+        })
+        .eq("id", leadId);
+    }
     return;
   }
 
