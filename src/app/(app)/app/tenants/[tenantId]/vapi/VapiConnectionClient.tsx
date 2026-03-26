@@ -267,7 +267,14 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
     });
     if (res.ok) {
       setContractedMinutes(parsed);
-      showToast("Minutos contratados salvos!");
+      // Verifica se o novo limite desbloqueou a conta
+      const currentUsedMin = connection ? Math.ceil(connection.minutes_used_cache / 60) : 0;
+      if (parsed !== null && minutesBlocked && currentUsedMin < parsed) {
+        setMinutesBlocked(false);
+        showToast("Minutos contratados salvos — conta desbloqueada!");
+      } else {
+        showToast("Minutos contratados salvos!");
+      }
     } else {
       const d = await res.json();
       showToast(d.error ?? "Erro ao salvar", "error");
@@ -574,18 +581,10 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-red-800">Conta bloqueada por consumo de minutos</p>
                   <p className="text-xs text-red-600 mt-0.5">
-                    Todas as campanhas foram pausadas automaticamente. Aumente os minutos contratados e clique em desbloquear.
+                    Todas as campanhas foram pausadas. Para desbloquear, defina um limite acima de{" "}
+                    <strong>{connection ? Math.ceil(connection.minutes_used_cache / 60) : "—"} min</strong> (uso atual) e clique em Salvar.
                   </p>
                 </div>
-                <button
-                  onClick={handleUnblockAccount}
-                  disabled={savingUnblock}
-                  className="btn-primary shrink-0 text-xs"
-                  style={{ background: "#dc2626" }}
-                >
-                  {savingUnblock ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                  Desbloquear
-                </button>
               </div>
             )}
             <div className="flex items-end gap-4">
@@ -602,6 +601,19 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                 <p className="text-xs text-gray-400 mt-1.5">
                   Quando o cliente atingir 100%, as campanhas são pausadas automaticamente.
                 </p>
+                {(() => {
+                  const typed = parseInt(contractedMinutesInput);
+                  const usedMin = connection ? Math.ceil(connection.minutes_used_cache / 60) : 0;
+                  if (contractedMinutesInput.trim() !== "" && !isNaN(typed) && usedMin > 0 && typed <= usedMin) {
+                    return (
+                      <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        Uso atual ({usedMin} min) já supera este limite — a conta será bloqueada imediatamente.
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
                 {contractedMinutes != null && connection.minutes_used_cache != null && (() => {
                   const usedMin = Math.ceil(connection.minutes_used_cache / 60);
                   const pct = Math.min(100, Math.round((usedMin / contractedMinutes) * 100));

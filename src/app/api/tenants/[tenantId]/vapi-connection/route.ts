@@ -78,6 +78,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const body = await req.json();
   const { assistantId, successField, successValue, concurrencyLimit, publicKey, contractedMinutes, minutesBlocked } = body;
 
+  const service = createServiceClient();
+
   const updates: Record<string, unknown> = {
     assistant_id: assistantId ?? null,
     success_field: successField ?? null,
@@ -96,15 +98,26 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Acesso restrito a administradores" }, { status: 403 });
     }
     if (contractedMinutes !== undefined) {
-      updates.contracted_minutes = contractedMinutes === null ? null : Math.max(1, Number(contractedMinutes));
+      const newLimit = contractedMinutes === null ? null : Math.max(1, Number(contractedMinutes));
+      updates.contracted_minutes = newLimit;
+      // Auto-desbloqueia se o novo limite for maior que o uso atual
+      if (newLimit !== null) {
+        const { data: current } = await service
+          .from("vapi_connections")
+          .select("minutes_used_cache, minutes_blocked")
+          .eq("tenant_id", tenantId)
+          .eq("is_active", true)
+          .single();
+        if (current?.minutes_blocked && Math.ceil((current.minutes_used_cache ?? 0) / 60) < newLimit) {
+          updates.minutes_blocked = false;
+        }
+      }
     }
-    // Só permite desbloquear (false); bloquear é responsabilidade do worker
+    // Desbloquear explicitamente (false); bloquear é responsabilidade do worker
     if (minutesBlocked === false) {
       updates.minutes_blocked = false;
     }
   }
-
-  const service = createServiceClient();
   const { error } = await service
     .from("vapi_connections")
     .update(updates)

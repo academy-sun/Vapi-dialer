@@ -84,6 +84,22 @@ async function resolveMyTenants(supabase: SupabaseClient): Promise<string[] | nu
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Cache de nomes de tenants — substitui UUIDs nos logs por nomes legíveis
+// ─────────────────────────────────────────────────────────────────────────────
+
+const tenantNameCache = new Map<string, string>();
+
+/** Retorna o nome do tenant para logs, ou o UUID se ainda não estiver no cache. */
+function tName(id: string): string {
+  return tenantNameCache.get(id) ?? id;
+}
+
+async function refreshTenantNames(supabase: SupabaseClient): Promise<void> {
+  const { data } = await supabase.from("tenants").select("id, name");
+  if (data) data.forEach((t: { id: string; name: string }) => tenantNameCache.set(t.id, t.name));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tipos
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -445,7 +461,7 @@ async function processLead(
     }
 
     console.log(
-      `[worker] ✓ Chamada iniciada | tenant=${queue.tenant_id} | lead=${lead.id}` +
+      `[worker] ✓ Chamada iniciada | tenant=${tName(queue.tenant_id)} | lead=${lead.id}` +
       ` | phone=${lead.phone_e164} | vapi_call=${vapiCall.id}`,
     );
   } catch (err) {
@@ -468,7 +484,7 @@ async function processLead(
     if (isConcurrencyLimit) {
       console.warn(
         `[worker] ⚠ Over Concurrency Limit — revertendo lead ${lead.id} sem contar tentativa` +
-        ` | fila=${queue.name} | tenant=${queue.tenant_id}`
+        ` | fila=${queue.name} | tenant=${tName(queue.tenant_id)}`
       );
       await supabase
         .from("leads")
@@ -491,7 +507,7 @@ async function processLead(
         `telefone ainda existem no painel Vapi. ` +
         `assistantId=${queue.assistant_id} | phoneNumberId=${queue.phone_number_id}`;
       console.error(
-        `[worker] ✗ 404 Vapi — pausando fila "${queue.name}" | tenant=${queue.tenant_id} | ${errMsg}`
+        `[worker] ✗ 404 Vapi — pausando fila "${queue.name}" | tenant=${tName(queue.tenant_id)} | ${errMsg}`
       );
       // Reverter lead sem contar tentativa
       await supabase
@@ -540,7 +556,7 @@ async function processLead(
     console.error(
       `[worker] ✗ Falha ao ligar para ${lead.phone_e164}` +
       ` | tentativa ${newAttemptCount}/${queue.max_attempts}` +
-      ` | fila=${queue.name} | tenant=${queue.tenant_id}` +
+      ` | fila=${queue.name} | tenant=${tName(queue.tenant_id)}` +
       ` | erro: ${errorLabel}`,
     );
 
@@ -577,15 +593,18 @@ async function processLead(
       );
     }
 
-    // ── Erros de provedor SIP (503 / 408) ── reagendar SEM contar tentativa
-    // Erros de infra do provedor não devem consumir attempt_count do lead.
-    // Revertemos ao status original e ao attempt_count anterior (mesmo padrão do Over Concurrency Limit).
-    const isProviderFault = httpStatus === 503 || httpStatus === 408;
-    if (isProviderFault) {
+    // ── Erros SIP no DISPATCH (503/408 ao chamar POST /call/phone) ──
+    // Ocorre ANTES da chamada ser criada — nenhum call_record foi gerado.
+    // Causa: SIP provider sobrecarregado no momento do disparo (transitório).
+    // → Reverter sem contar tentativa; retry em 60s.
+    // Nota: se o 503 vier DEPOIS da criação (via webhook), é tratado como SIP ambíguo
+    // no webhook handler — nesse caso conta como tentativa para evitar loop em número inválido.
+    const isDispatchSipFault = httpStatus === 503 || httpStatus === 408;
+    if (isDispatchSipFault) {
       const nextAt = new Date(Date.now() + 60_000).toISOString();
       console.warn(
-        `[worker] ⚠ Provedor SIP indisponível (HTTP ${httpStatus}) — ` +
-        `revertendo lead ${lead.id} para "${lead.status}" sem contar tentativa`
+        `[worker] ⚠ SIP indisponível no dispatch (HTTP ${httpStatus}) | lead=${lead.id} (${lead.phone_e164})` +
+        ` | fila="${queue.name}" | tenant=${tName(queue.tenant_id)} — retry em 60s sem contar tentativa`
       );
       await supabase
         .from("leads")
@@ -760,7 +779,7 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
   // ── Buscar chave Vapi do tenant ──
   const vapiKey = await getVapiKey(supabase, queue.tenant_id);
   if (!vapiKey) {
-    console.warn(`[worker] Tenant ${queue.tenant_id} sem chave Vapi ativa — fila ${queue.name} ignorada`);
+    console.warn(`[worker] Tenant ${tName(queue.tenant_id)} sem chave Vapi ativa — fila ${queue.name} ignorada`);
     return;
   }
 
@@ -812,7 +831,7 @@ async function updateMinutesCache(supabase: SupabaseClient): Promise<void> {
         });
 
       if (rpcErr) {
-        console.error(`[worker] updateMinutesCache: RPC erro tenant ${conn.tenant_id}:`, rpcErr.message);
+        console.error(`[worker] updateMinutesCache: RPC erro tenant ${tName(conn.tenant_id)}:`, rpcErr.message);
         continue;
       }
 
@@ -827,7 +846,7 @@ async function updateMinutesCache(supabase: SupabaseClient): Promise<void> {
       if (!conn.minutes_blocked && usedMinutes >= conn.contracted_minutes) {
         updates.minutes_blocked = true;
         console.warn(
-          `[worker] ⛔ Tenant ${conn.tenant_id} atingiu limite de minutos` +
+          `[worker] ⛔ Tenant ${tName(conn.tenant_id)} atingiu limite de minutos` +
           ` (${usedMinutes}/${conn.contracted_minutes} min) — bloqueando e pausando campanhas`
         );
         await supabase
@@ -843,7 +862,7 @@ async function updateMinutesCache(supabase: SupabaseClient): Promise<void> {
         .eq("id", conn.id);
 
     } catch (err) {
-      console.error(`[worker] updateMinutesCache: erro tenant ${conn.tenant_id}:`, err);
+      console.error(`[worker] updateMinutesCache: erro tenant ${tName(conn.tenant_id)}:`, err);
     }
   }
 }
@@ -999,7 +1018,7 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
 
       // Se o tenant está bloqueado por consumo de minutos, não disparar nenhuma chamada
       if ((conn as { minutes_blocked?: boolean } | null)?.minutes_blocked) {
-        console.log(`[worker] Tenant ${tenantId} bloqueado por limite de minutos — todas as filas ignoradas`);
+        console.log(`[worker] Tenant ${tName(tenantId)} bloqueado por limite de minutos — todas as filas ignoradas`);
         for (const q of tenantQueues) queueSlotBudgets.set(q.id, 0);
         return;
       }
@@ -1023,7 +1042,7 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
 
       if (freeSlots === 0) {
         console.log(
-          `[worker] Tenant ${tenantId} sem slots livres (call_records_ativos=${tenantActiveCalls}, limite=${tenantLimit}) — todas as filas aguardam`
+          `[worker] Tenant ${tName(tenantId)} sem slots livres (call_records_ativos=${tenantActiveCalls}, limite=${tenantLimit}) — todas as filas aguardam`
         );
         for (const q of tenantQueues) queueSlotBudgets.set(q.id, 0);
         return;
@@ -1042,7 +1061,7 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
 
       if (numQueues > 1) {
         console.log(
-          `[worker] Tenant ${tenantId} | limite=${tenantLimit} | call_records_ativos=${tenantActiveCalls ?? 0} | ` +
+          `[worker] Tenant ${tName(tenantId)} | limite=${tenantLimit} | call_records_ativos=${tenantActiveCalls ?? 0} | ` +
           `livres=${freeSlots} | distribuídos entre ${numQueues} filas: ` +
           tenantQueues.map((q, i) => `"${q.name}"=${queueSlotBudgets.get(q.id)}`).join(", ")
         );
@@ -1110,6 +1129,8 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   console.log("[worker] ✓ Conexão com Supabase OK");
+  await refreshTenantNames(supabase).catch(() => {});
+  console.log(`[worker] ✓ Cache de nomes carregado (${tenantNameCache.size} tenant(s))`);
 
   // Graceful shutdown
   let running = true;
@@ -1121,9 +1142,11 @@ async function main(): Promise<void> {
   process.on("SIGINT",  () => shutdown("SIGINT"));
 
   // Frequência do recovery de stale calls: a cada ~60s (independente do POLL_INTERVAL_MS)
-  const STALE_RECOVERY_EVERY_N_CYCLES = Math.max(1, Math.round(60_000 / POLL_INTERVAL_MS));
+  const STALE_RECOVERY_EVERY_N_CYCLES  = Math.max(1, Math.round(60_000  / POLL_INTERVAL_MS));
   // Frequência da atualização de cache de minutos: a cada ~60s
-  const MINUTES_CACHE_EVERY_N_CYCLES  = Math.max(1, Math.round(60_000 / POLL_INTERVAL_MS));
+  const MINUTES_CACHE_EVERY_N_CYCLES   = Math.max(1, Math.round(60_000  / POLL_INTERVAL_MS));
+  // Frequência do refresh do cache de nomes de tenants: a cada ~5min
+  const TENANT_NAMES_EVERY_N_CYCLES    = Math.max(1, Math.round(300_000 / POLL_INTERVAL_MS));
 
   // Loop principal
   let cycleCount = 0;
@@ -1155,8 +1178,13 @@ async function main(): Promise<void> {
       }
     }
 
+    // Refresh periódico do cache de nomes de tenants (~5min)
+    if (cycleCount % TENANT_NAMES_EVERY_N_CYCLES === 0) {
+      refreshTenantNames(supabase).catch(() => {});
+    }
+
     // Heartbeat simples no console a cada ~5 minutos (para monitoramento de logs)
-    if (cycleCount % Math.max(1, Math.round(300_000 / POLL_INTERVAL_MS)) === 0) {
+    if (cycleCount % TENANT_NAMES_EVERY_N_CYCLES === 0) {
       console.log(`[worker] ♥ heartbeat | ciclo #${cycleCount} | ${new Date().toISOString()}`);
     }
 

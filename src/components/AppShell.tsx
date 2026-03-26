@@ -544,80 +544,6 @@ export default function AppShell({
                 Conta ativa
               </p>
             </div>
-            {/* Bell notification */}
-            {showBellBadge && activeTenantId && (
-              <div className="relative" ref={bellRef}>
-                <button
-                  onClick={() => setShowBellDropdown(!showBellDropdown)}
-                  title="Notificações"
-                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 relative"
-                  style={{ color: minutesStatus?.blocked ? "#dc2626" : "#d97706", background: minutesStatus?.blocked ? "#1a0000" : "#1a1500" }}
-                >
-                  <Bell className="w-4 h-4" />
-                  <span
-                    className="absolute top-1 right-1 w-2 h-2 rounded-full border border-gray-900"
-                    style={{ background: minutesStatus?.blocked ? "#dc2626" : "#f59e0b" }}
-                  />
-                </button>
-
-                {showBellDropdown && (
-                  <div
-                    className="absolute bottom-full mb-2 right-0 w-72 rounded-xl shadow-2xl z-50 overflow-hidden"
-                    style={{ background: "#111111", border: "1px solid #2a2a2a" }}
-                  >
-                    {/* Header */}
-                    <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #222222" }}>
-                      <div className="flex items-center gap-2">
-                        <AlertTriangle className={`w-4 h-4 ${minutesStatus?.blocked ? "text-red-500" : "text-amber-400"}`} />
-                        <span className="text-sm font-semibold text-white">
-                          {minutesStatus?.blocked ? "Conta bloqueada" : "Aviso de consumo"}
-                        </span>
-                      </div>
-                      {!minutesStatus?.blocked && (
-                        <button onClick={dismissBellNotification} className="text-gray-500 hover:text-gray-300 transition-colors">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Body */}
-                    <div className="px-4 py-3 space-y-3">
-                      <p className="text-sm text-gray-300 leading-relaxed">
-                        {minutesStatus?.blocked
-                          ? "Você atingiu 100% dos minutos contratados. Todas as campanhas foram pausadas automaticamente."
-                          : `Você já consumiu ${minutesPct}% dos minutos contratados deste mês.`}
-                      </p>
-
-                      {/* Progress bar */}
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs text-gray-400">
-                          <span>{usedMinutes} min usados</span>
-                          <span>{minutesStatus?.contracted} min contratados</span>
-                        </div>
-                        <div className="h-2 rounded-full overflow-hidden" style={{ background: "#2a2a2a" }}>
-                          <div
-                            className="h-full rounded-full transition-all"
-                            style={{
-                              width: `${Math.min(100, minutesPct)}%`,
-                              background: minutesStatus?.blocked ? "#dc2626" : minutesPct >= 90 ? "#f97316" : "#f59e0b",
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={handleRequestMinutes}
-                        disabled={sendingEmail}
-                        className="w-full py-2 text-sm font-semibold rounded-lg transition-colors"
-                        style={{ background: "#FF1A1A", color: "white" }}
-                      >
-                        {sendingEmail ? "Enviando..." : "Contratar mais minutos"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
 
             <button
               onClick={handleLogout}
@@ -640,7 +566,95 @@ export default function AppShell({
       </aside>
 
       {/* ── Main content ── */}
-      <main className="flex-1 ml-64 min-h-screen overflow-auto">
+      <main className="flex-1 ml-64 min-h-screen">
+        {/* ── Top bar (sempre visível) ── */}
+        <header
+          className="sticky top-0 z-20 flex items-center justify-end px-8"
+          style={{ height: "52px", background: "#ffffff", borderBottom: "1px solid #f0f0f0" }}
+        >
+          {activeTenantId && (
+            <div className="relative" ref={bellRef}>
+              <button
+                onClick={() => setShowBellDropdown(!showBellDropdown)}
+                title="Notificações"
+                className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors relative"
+                style={{ color: "#888888", background: "transparent" }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#f5f5f5"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+              >
+                <Bell className="w-4 h-4" />
+                {showBellBadge && (
+                  <span
+                    className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full border-2 border-white"
+                    style={{ background: minutesStatus?.blocked ? "#dc2626" : "#f59e0b" }}
+                  />
+                )}
+              </button>
+
+              {showBellDropdown && (
+                <div
+                  className="absolute top-full mt-2 right-0 w-72 rounded-xl shadow-2xl z-50 overflow-hidden"
+                  style={{ background: "#111111", border: "1px solid #2a2a2a" }}
+                >
+                  {showBellBadge ? (
+                    <>
+                      {/* Header */}
+                      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #222222" }}>
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className={`w-4 h-4 ${minutesStatus?.blocked ? "text-red-500" : "text-amber-400"}`} />
+                          <span className="text-sm font-semibold text-white">
+                            {minutesStatus?.blocked ? "Conta bloqueada" : "Aviso de consumo"}
+                          </span>
+                        </div>
+                        {!minutesStatus?.blocked && (
+                          <button onClick={dismissBellNotification} className="text-gray-500 hover:text-gray-300 transition-colors">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      {/* Body */}
+                      <div className="px-4 py-3 space-y-3">
+                        <p className="text-sm text-gray-300 leading-relaxed">
+                          {minutesStatus?.blocked
+                            ? "Você atingiu 100% dos minutos contratados. Todas as campanhas foram pausadas automaticamente."
+                            : `Você já consumiu ${minutesPct}% dos minutos contratados deste mês.`}
+                        </p>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs text-gray-400">
+                            <span>{usedMinutes} min usados</span>
+                            <span>{minutesStatus?.contracted} min contratados</span>
+                          </div>
+                          <div className="h-2 rounded-full overflow-hidden" style={{ background: "#2a2a2a" }}>
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${Math.min(100, minutesPct)}%`,
+                                background: minutesStatus?.blocked ? "#dc2626" : minutesPct >= 90 ? "#f97316" : "#f59e0b",
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleRequestMinutes}
+                          disabled={sendingEmail}
+                          className="w-full py-2 text-sm font-semibold rounded-lg transition-colors"
+                          style={{ background: "#FF1A1A", color: "white" }}
+                        >
+                          {sendingEmail ? "Enviando..." : "Contratar mais minutos"}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="px-4 py-4 text-sm text-gray-400 text-center">
+                      Sem notificações no momento.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </header>
+
         <div style={{ maxWidth: "100%", padding: "32px 40px" }}>{children}</div>
       </main>
 
