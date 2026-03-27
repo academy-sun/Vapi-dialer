@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     .from("call_records")
     .select(
       `id, vapi_call_id, status, ended_reason, cost, summary, duration_seconds, structured_outputs, created_at,
-       leads!inner(phone_e164, data_json)`,
+       leads!inner(phone_e164, data_json, next_attempt_at)`,
       { count: "exact" }
     )
     .eq("tenant_id", tenantId)
