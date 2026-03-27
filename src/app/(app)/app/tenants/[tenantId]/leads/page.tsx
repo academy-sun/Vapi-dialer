@@ -1020,6 +1020,7 @@ export default function LeadsPage() {
   const [showAddLead, setShowAddLead]       = useState(false);
   const [resettingStuck, setResettingStuck] = useState(false);
   const [searchLead, setSearchLead]         = useState("");
+  const [leadsTotal, setLeadsTotal]         = useState<number | null>(null);
   const [pageError, setPageError]           = useState<string | null>(null);
   // Edição inline de nome da lista
   const [editingListId, setEditingListId]   = useState<string | null>(null);
@@ -1034,7 +1035,14 @@ export default function LeadsPage() {
   }
 
   useEffect(() => { loadLists(); loadQueues(); }, [tenantId]);
-  useEffect(() => { if (selectedListId) loadLeads(); }, [selectedListId]);
+  useEffect(() => { if (selectedListId) loadLeads(searchLead); }, [selectedListId]);
+
+  // Debounce: busca server-side 400ms após parar de digitar
+  useEffect(() => {
+    if (!selectedListId) return;
+    const timer = setTimeout(() => loadLeads(searchLead), 400);
+    return () => clearTimeout(timer);
+  }, [searchLead]);
 
   async function loadLists() {
     setPageError(null);
@@ -1058,11 +1066,15 @@ export default function LeadsPage() {
     } catch { /* silencioso — funcionalidade opcional */ }
   }
 
-  async function loadLeads() {
+  async function loadLeads(search = "") {
     setLoadingLeads(true);
-    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${selectedListId}/leads`);
+    const params = new URLSearchParams({ limit: "50" });
+    if (search.trim()) params.set("search", search.trim());
+    const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${selectedListId}/leads?${params}`);
     const data = await res.json();
     setLeads(data.leads ?? []);
+    // Manter o total sem busca — só atualiza quando não há search ativo
+    if (!search.trim()) setLeadsTotal(data.total ?? null);
     setLoadingLeads(false);
   }
 
@@ -1122,7 +1134,7 @@ export default function LeadsPage() {
           : "Nenhum lead travado encontrado",
         data.reset > 0 ? "success" : "success"
       );
-      loadLeads();
+      loadLeads(searchLead);
     } else {
       showToast(data.error ?? "Erro ao resetar leads", "error");
     }
@@ -1141,7 +1153,7 @@ export default function LeadsPage() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Erro ao adicionar lead");
     showToast(`Lead ${fields.phone} adicionado com sucesso!`);
-    loadLeads();
+    loadLeads(searchLead);
   }
 
   async function deleteLead(leadId: string, phone: string) {
@@ -1161,22 +1173,14 @@ export default function LeadsPage() {
       `✓ ${imported} leads importados${skipped > 0 ? `, ${skipped} ignorados` : ""}`,
       "success"
     );
-    loadLeads();
+    loadLeads(searchLead);
   }
 
   const activeList  = lists.find((l) => l.id === selectedListId);
   const stuckCount  = leads.filter((l) => l.status === "calling").length;
 
-  const filteredLeads = searchLead.trim()
-    ? leads.filter((lead) => {
-        const q = searchLead.trim().toLowerCase().replace(/\D/g, "") || searchLead.trim().toLowerCase();
-        const phoneMatch = lead.phone_e164.replace(/\D/g, "").includes(q);
-        const nameMatch  = Object.values(lead.data_json ?? {}).some((v) =>
-          String(v).toLowerCase().includes(searchLead.trim().toLowerCase())
-        );
-        return phoneMatch || nameMatch;
-      })
-    : leads;
+  // Busca é server-side — leads já vêm filtrados da API
+  const filteredLeads = leads;
 
   return (
     <div>
@@ -1372,13 +1376,15 @@ export default function LeadsPage() {
               <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
                 <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide shrink-0">
                   Leads da Lista{" "}
-                  {leads.length > 0 && (
+                  {leadsTotal !== null && leadsTotal > 0 && (
                     <span className="text-gray-400 font-normal normal-case">
-                      ({filteredLeads.length}{filteredLeads.length !== leads.length ? ` de ${leads.length}` : ""})
+                      {searchLead.trim()
+                        ? `(${leads.length} resultado${leads.length !== 1 ? "s" : ""} de ${leadsTotal.toLocaleString("pt-BR")})`
+                        : `(${leadsTotal.toLocaleString("pt-BR")})`}
                     </span>
                   )}
                 </h3>
-                {leads.length > 0 && (
+                {selectedListId && (
                   <div className="relative flex-1 max-w-xs">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                     <input
@@ -1436,7 +1442,7 @@ export default function LeadsPage() {
                     ))}
                   </div>
                 </div>
-              ) : leads.length > 0 ? (
+              ) : leads.length > 0 || searchLead.trim() ? (
                 <div className="table-wrapper">
                   <table className="table">
                     <thead>
@@ -1459,7 +1465,9 @@ export default function LeadsPage() {
                       {filteredLeads.length === 0 ? (
                         <tr>
                           <td colSpan={6} className="text-center py-8 text-gray-400 text-sm">
-                            Nenhum lead encontrado para "{searchLead}"
+                            {loadingLeads
+                              ? "Buscando..."
+                              : `Nenhum lead encontrado para "${searchLead}"`}
                           </td>
                         </tr>
                       ) : filteredLeads.map((lead) => {

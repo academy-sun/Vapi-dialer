@@ -236,79 +236,94 @@ export async function GET(req: NextRequest, { params }: Params) {
     ? (campaignsRaw ?? []).filter((q) => q.assistant_id === assistantId).map((q) => q.id)
     : null;
 
-  // ── 2. Call records ──
-  // structured_outputs (JSONB pesado) vem em query separada abaixo — evita transferir
-  // dados grandes desnecessariamente para chamadas que não têm outputs.
-  let callQuery = service
-    .from("call_records")
-    .select("id, cost, duration_seconds, ended_reason, created_at, dial_queue_id")
-    .eq("tenant_id", tenantId)
-    .gte("created_at", since)
-    .limit(10000);
+  // ── 2. Call records — batch pagination (lotes de 1000, respeita max-rows do PostgREST) ──
+  if (filteredQueueIds && filteredQueueIds.length === 0) {
+    // No queues match this assistant — short-circuit with zero data
+    return NextResponse.json({
+      campaigns,
+      assistants: assistantsList,
+      selectedQueueId: queueId,
+      selectedAssistantId: assistantId,
+      totalCalls: 0,
+      totalLeads: 0,
+      totalCost: 0,
+      totalDurationSec: 0,
+      totalDurationAnsweredSec: 0,
+      avgDurationSec: 0,
+      avgDurationAllSec: 0,
+      maxDurationSec: 0,
+      durationBuckets: { "0-10s": 0, "10-60s": 0, "1-3min": 0, "3-5min": 0, "5min+": 0 },
+      answeredCalls: 0,
+      notAnsweredCalls: 0,
+      statusBreakdown: { answered: 0, voicemail: 0, busy: 0, "no-answer": 0, failed: 0, other: 0 },
+      endedReasonRaw: {},
+      structuredWithOutput: 0,
+      structuredSuccessCalls: 0,
+      structuredOutputsConfigured: false,
+      costPerConversion: null,
+      successField: contextSuccessField,
+      successValue: contextSuccessValue,
+      engagement: { under10s: 0, tenTo60s: 0, over60s: 0 },
+      engagementRate: 0,
+      byHour: {},
+      byHourAnswerRate: {},
+      byWeekday: {},
+      byDayHour: {},
+      byDayHourAnswered: {},
+      leadsHealth: { remaining: 0, failed: 0, neverAnswered: 0 },
+    });
+  }
 
-  if (queueId) {
-    callQuery = callQuery.eq("dial_queue_id", queueId);
-  } else if (filteredQueueIds) {
-    if (filteredQueueIds.length === 0) {
-      // No queues match this assistant — short-circuit with zero data
-      return NextResponse.json({
-        campaigns,
-        assistants: assistantsList,
-        selectedQueueId: queueId,
-        selectedAssistantId: assistantId,
-        totalCalls: 0,
-        totalLeads: 0,
-        totalCost: 0,
-        totalDurationSec: 0,
-        totalDurationAnsweredSec: 0,
-        avgDurationSec: 0,
-        avgDurationAllSec: 0,
-        maxDurationSec: 0,
-        durationBuckets: { "0-10s": 0, "10-60s": 0, "1-3min": 0, "3-5min": 0, "5min+": 0 },
-        answeredCalls: 0,
-        notAnsweredCalls: 0,
-        statusBreakdown: { answered: 0, voicemail: 0, busy: 0, "no-answer": 0, failed: 0, other: 0 },
-        endedReasonRaw: {},
-        structuredWithOutput: 0,
-        structuredSuccessCalls: 0,
-        structuredOutputsConfigured: false,
-        costPerConversion: null,
-        successField: contextSuccessField,
-        successValue: contextSuccessValue,
-        engagement: { under10s: 0, tenTo60s: 0, over60s: 0 },
-        engagementRate: 0,
-        byHour: {},
-        byHourAnswerRate: {},
-        byWeekday: {},
-        byDayHour: {},
-        byDayHourAnswered: {},
-        leadsHealth: { remaining: 0, failed: 0, neverAnswered: 0 },
-      });
+  const BATCH = 1000;
+  type CallRow = { id: string; cost: number | null; duration_seconds: number | null; ended_reason: string | null; created_at: string; dial_queue_id: string };
+  const callData: CallRow[] = [];
+  {
+    let from = 0;
+    while (true) {
+      let q = service
+        .from("call_records")
+        .select("id, cost, duration_seconds, ended_reason, created_at, dial_queue_id")
+        .eq("tenant_id", tenantId)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .range(from, from + BATCH - 1);
+      if (queueId)                                        q = q.eq("dial_queue_id", queueId);
+      else if (filteredQueueIds && filteredQueueIds.length > 0) q = q.in("dial_queue_id", filteredQueueIds);
+      const { data: batch, error } = await q;
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (!batch || batch.length === 0) break;
+      callData.push(...(batch as CallRow[]));
+      if (batch.length < BATCH) break;
+      from += BATCH;
     }
-    callQuery = callQuery.in("dial_queue_id", filteredQueueIds);
   }
 
-  const { data: callData, error: callError } = await callQuery;
-  if (callError) return NextResponse.json({ error: callError.message }, { status: 500 });
-
-  // ── 2b. Structured outputs — query separada, só registros não-nulos ──
-  // Muito mais leve: só transfere JSONB para o subconjunto de chamadas que têm outputs.
-  let soQuery = service
-    .from("call_records")
-    .select("id, structured_outputs, dial_queue_id")
-    .eq("tenant_id", tenantId)
-    .gte("created_at", since)
-    .not("structured_outputs", "is", null)
-    .limit(10000);
-  if (queueId) {
-    soQuery = soQuery.eq("dial_queue_id", queueId);
-  } else if (filteredQueueIds && filteredQueueIds.length > 0) {
-    soQuery = soQuery.in("dial_queue_id", filteredQueueIds);
+  // ── 2b. Structured outputs — batch separado, só registros não-nulos ──
+  type SoRow = { id: string; structured_outputs: unknown; dial_queue_id: string };
+  const soData: SoRow[] = [];
+  {
+    let from = 0;
+    while (true) {
+      let q = service
+        .from("call_records")
+        .select("id, structured_outputs, dial_queue_id")
+        .eq("tenant_id", tenantId)
+        .gte("created_at", since)
+        .not("structured_outputs", "is", null)
+        .order("created_at", { ascending: false })
+        .range(from, from + BATCH - 1);
+      if (queueId)                                        q = q.eq("dial_queue_id", queueId);
+      else if (filteredQueueIds && filteredQueueIds.length > 0) q = q.in("dial_queue_id", filteredQueueIds);
+      const { data: batch } = await q;
+      if (!batch || batch.length === 0) break;
+      soData.push(...(batch as SoRow[]));
+      if (batch.length < BATCH) break;
+      from += BATCH;
+    }
   }
-  const { data: soData } = await soQuery;
   // Mapa callId → structured_outputs para lookup O(1) nos cálculos de conversão
   const soMap = new Map<string, unknown>();
-  for (const r of (soData ?? [])) soMap.set(r.id, r.structured_outputs);
+  for (const r of soData) soMap.set(r.id, r.structured_outputs);
 
   // ── 3. Leads health — usar COUNT-only queries (evita buscar milhares de rows) ──
   // Mesmo padrão da rota /progress, que não travou o Supabase.
