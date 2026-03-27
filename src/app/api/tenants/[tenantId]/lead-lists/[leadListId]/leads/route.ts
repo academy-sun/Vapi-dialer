@@ -18,28 +18,30 @@ export async function GET(req: NextRequest, { params }: Params) {
   const offset = (page - 1) * limit;
 
   const service = createServiceClient();
-  // count=exact só quando não há busca (caro em tabelas grandes).
-  // Com busca, o frontend exibe apenas o número de linhas retornadas.
-  const needCount = !search;
-  let query = service
+
+  if (search) {
+    // Usa RPC para busca em data_json (JSONB cast ::text não é confiável via PostgREST .or())
+    const { data, error } = await service.rpc("search_leads", {
+      p_tenant_id:    tenantId,
+      p_lead_list_id: leadListId,
+      p_search:       search,
+      p_limit:        limit,
+      p_offset:       offset,
+    });
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({ leads: data ?? [], total: null, page, limit });
+  }
+
+  // Sem busca: query normal com count exato
+  const { data, error, count } = await service
     .from("leads")
-    .select("*", needCount ? { count: "exact" } : undefined)
+    .select("*", { count: "exact" })
     .eq("tenant_id", tenantId)
     .eq("lead_list_id", leadListId)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
-
-  if (search) {
-    // PostgREST usa * como wildcard em filter strings (não %). Escapar * e _ literais.
-    const escapedSearch = search.replace(/[*_\\]/g, "\\$&");
-    const phoneClean    = escapedSearch.replace(/[\s\-\(\)\+]/g, "");
-    // data_json::text faz cast do JSONB para texto permitindo busca em todos os campos (nomes, etc.)
-    query = query.or(
-      `phone_e164.ilike.*${escapedSearch}*,phone_e164.ilike.*${phoneClean}*,data_json::text.ilike.*${escapedSearch}*`
-    );
-  }
-
-  const { data, error, count } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

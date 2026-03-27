@@ -247,6 +247,7 @@ async function handleEndOfCallReport(
     await service
       .from("call_records")
       .update({
+        status:               "completed",
         ended_reason:         endedReason,
         cost,
         transcript,
