@@ -244,7 +244,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     .select("id, cost, duration_seconds, ended_reason, created_at, dial_queue_id")
     .eq("tenant_id", tenantId)
     .gte("created_at", since)
-    .limit(10000);
+    .limit(50000);
 
   if (queueId) {
     callQuery = callQuery.eq("dial_queue_id", queueId);
@@ -299,7 +299,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     .eq("tenant_id", tenantId)
     .gte("created_at", since)
     .not("structured_outputs", "is", null)
-    .limit(10000);
+    .limit(50000);
   if (queueId) {
     soQuery = soQuery.eq("dial_queue_id", queueId);
   } else if (filteredQueueIds && filteredQueueIds.length > 0) {

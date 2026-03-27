@@ -23,6 +23,8 @@ import {
   Bot,
   Bell,
   AlertTriangle,
+  Search,
+  FileBarChart2,
 } from "lucide-react";
 
 interface Tenant {
@@ -53,6 +55,7 @@ export default function AppShell({
   const [showCreateTenant, setShowCreateTenant] = useState(false);
   const [showTenantDropdown, setShowTenantDropdown] = useState(false);
   const [newTenantName, setNewTenantName] = useState("");
+  const [tenantSearch, setTenantSearch] = useState("");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   // ── Bell de notificações de minutos ──
@@ -140,20 +143,23 @@ export default function AppShell({
     const res = await fetch("/api/tenants");
     const data = await res.json();
     if (data.tenants) {
-      setTenants(data.tenants);
+      const sorted = [...data.tenants].sort((a: Tenant, b: Tenant) =>
+        a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })
+      );
+      setTenants(sorted);
 
       // 1. Popular roles ANTES de definir o tenant ativo — elimina race condition
       const roles: Record<string, string> = {};
-      data.tenants.forEach((t: Tenant & { role?: string }) => {
+      sorted.forEach((t: Tenant & { role?: string }) => {
         if (t.id && t.role) roles[t.id] = t.role;
       });
       setTenantRoles(roles);
 
       // 2. Só depois definir o tenant ativo, validando contra a lista real
       const saved = localStorage.getItem("activeTenantId");
-      const validId = (saved && data.tenants.find((t: Tenant) => t.id === saved))
+      const validId = (saved && sorted.find((t: Tenant) => t.id === saved))
         ? saved
-        : data.tenants[0]?.id;
+        : sorted[0]?.id;
       if (validId) {
         setActiveTenantId(validId);
         localStorage.setItem("activeTenantId", validId);
@@ -168,6 +174,7 @@ export default function AppShell({
     setActiveTenantId(id);
     localStorage.setItem("activeTenantId", id);
     setShowTenantDropdown(false);
+    setTenantSearch("");
     if (navigate) {
       // Usar snapshot passado ou tenantRoles atual — evita ler state stale
       const resolvedRoles = rolesSnapshot ?? tenantRoles;
@@ -176,8 +183,11 @@ export default function AppShell({
 
       // Preservar a seção atual (ex: /queues, /leads, /calls…) ao trocar de tenant
       const knownSections = ["queues", "leads", "calls", "assistants", "analytics", "members", "vapi"];
+      // Normalizar sub-rotas de analytics para "analytics" ao trocar de tenant
+      const normalizeSection = (s: string) => s === "dossie" ? "analytics" : s;
       const sectionMatch = pathname.match(/\/app\/tenants\/[^/]+\/([^/]+)/);
-      const currentSection = sectionMatch?.[1] ?? null;
+      const rawSection = sectionMatch?.[1] ?? null;
+      const currentSection = rawSection ? normalizeSection(rawSection) : null;
       const keepSection = currentSection && knownSections.includes(currentSection)
         // Garante que member não caia em seção restrita ao trocar de tenant
         && (canAccessAll || !["vapi", "assistants", "analytics", "members"].includes(currentSection))
@@ -212,7 +222,11 @@ export default function AppShell({
       // Novo tenant sempre tem role "owner" para quem criou
       const newRoles = { ...tenantRoles, [data.tenant.id]: "owner" };
       setTenantRoles(newRoles);
-      setTenants((prev) => [...prev, data.tenant]);
+      setTenants((prev) =>
+        [...prev, data.tenant].sort((a: Tenant, b: Tenant) =>
+          a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })
+        )
+      );
       selectTenant(data.tenant.id, false, newRoles);
       setNewTenantName("");
       setShowCreateTenant(false);
@@ -290,11 +304,18 @@ export default function AppShell({
           href: `/app/tenants/${activeTenantId}/members`,
           icon: UserCheck,
         },
-        ...(isAdminOrOwner ? [{
-          label: "Configuração Vapi",
-          href: `/app/tenants/${activeTenantId}/vapi`,
-          icon: Settings2,
-        }] : []),
+        ...(isAdminOrOwner ? [
+          {
+            label: "Dossiê Comercial",
+            href: `/app/tenants/${activeTenantId}/analytics/dossie`,
+            icon: FileBarChart2,
+          },
+          {
+            label: "Configurações",
+            href: `/app/tenants/${activeTenantId}/vapi`,
+            icon: Settings2,
+          },
+        ] : []),
       ]
     : [];
 
@@ -377,7 +398,34 @@ export default function AppShell({
                   border: "1px solid #2a2a2a",
                 }}
               >
-                {tenants.map((t) => (
+                {/* Campo de busca */}
+                <div className="px-2 pt-2 pb-1" style={{ borderBottom: "1px solid #1e1e1e" }}>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "hsl(220, 9%, 40%)" }} />
+                    <input
+                      type="text"
+                      placeholder="Buscar organização..."
+                      value={tenantSearch}
+                      onChange={(e) => setTenantSearch(e.target.value)}
+                      className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md"
+                      style={{
+                        background: "#1a1a1a",
+                        border: "1px solid #2a2a2a",
+                        color: "hsl(220, 14%, 80%)",
+                        outline: "none",
+                      }}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+                {/* Lista filtrada com scroll */}
+                <div style={{ maxHeight: "240px", overflowY: "auto" }}>
+                {tenants
+                  .filter((t) =>
+                    !tenantSearch.trim() ||
+                    t.name.toLowerCase().includes(tenantSearch.trim().toLowerCase())
+                  )
+                  .map((t) => (
                   <button
                     key={t.id}
                     onClick={() => selectTenant(t.id, true)}
@@ -403,6 +451,7 @@ export default function AppShell({
                     {t.id === activeTenantId && <Check className="w-3.5 h-3.5" />}
                   </button>
                 ))}
+                </div>
 
                 <div style={{ borderTop: "1px solid #222222" }}>
                   {isAdmin && !showCreateTenant ? (
