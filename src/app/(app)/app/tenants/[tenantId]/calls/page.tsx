@@ -39,7 +39,7 @@ interface Call {
   duration_seconds: number | null;
   structured_outputs: Record<string, unknown> | null;
   created_at: string;
-  leads: { phone_e164: string; data_json: Record<string, string> } | null;
+  leads: { phone_e164: string; data_json: Record<string, string>; next_attempt_at: string | null } | null;
 }
 
 interface CallDetail extends Call {
@@ -727,6 +727,7 @@ export default function CallsPage() {
                 <th>Interesse</th>
                 <th><span className="flex items-center gap-1.5"><Star className="w-3.5 h-3.5" />Score</span></th>
                 {isAdminOrOwner && <th><span className="flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" />Custo</span></th>}
+                <th>Próx. Tentativa</th>
                 <th><span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Data</span></th>
               </tr>
             </thead>
@@ -766,6 +767,19 @@ export default function CallsPage() {
                         {call.cost != null ? `$${call.cost.toFixed(4)}` : "—"}
                       </td>
                     )}
+                    <td>
+                      {(() => {
+                        const nextAt = call.leads?.next_attempt_at ? new Date(call.leads.next_attempt_at) : null;
+                        if (!nextAt) return <span className="text-gray-300 text-xs">—</span>;
+                        const isPast = nextAt < new Date();
+                        if (isPast) return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600">Imediato</span>;
+                        return (
+                          <span title={nextAt.toLocaleString("pt-BR")} className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-600 cursor-help">
+                            {nextAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td>
                       <span title={full} className="text-gray-500 cursor-help">
                         {relative}
