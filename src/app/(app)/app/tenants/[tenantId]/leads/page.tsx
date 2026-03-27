@@ -1073,7 +1073,8 @@ export default function LeadsPage() {
     const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${selectedListId}/leads?${params}`);
     const data = await res.json();
     setLeads(data.leads ?? []);
-    setLeadsTotal(data.total ?? null);
+    // Manter o total sem busca — só atualiza quando não há search ativo
+    if (!search.trim()) setLeadsTotal(data.total ?? null);
     setLoadingLeads(false);
   }
 
@@ -1377,13 +1378,13 @@ export default function LeadsPage() {
                   Leads da Lista{" "}
                   {leadsTotal !== null && leadsTotal > 0 && (
                     <span className="text-gray-400 font-normal normal-case">
-                      ({searchLead.trim()
-                        ? `${leads.length} resultado${leads.length !== 1 ? "s" : ""} de ${leadsTotal.toLocaleString("pt-BR")}`
-                        : leadsTotal.toLocaleString("pt-BR")})
+                      {searchLead.trim()
+                        ? `(${leads.length} resultado${leads.length !== 1 ? "s" : ""} de ${leadsTotal.toLocaleString("pt-BR")})`
+                        : `(${leadsTotal.toLocaleString("pt-BR")})`}
                     </span>
                   )}
                 </h3>
-                {leads.length > 0 && (
+                {selectedListId && (
                   <div className="relative flex-1 max-w-xs">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                     <input

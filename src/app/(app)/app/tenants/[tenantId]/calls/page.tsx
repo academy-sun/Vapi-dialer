@@ -361,11 +361,17 @@ export default function CallsPage() {
     else setLoading(true);
 
     try {
-      const params = new URLSearchParams({ limit: "1500" });
+      const params = new URLSearchParams();
       if (filterQueue !== "all") params.set("queueId", filterQueue);
       if (shortDurationMode) {
         params.set("answered_only", "true");
         params.set("max_duration", maxDuration);
+      }
+      // Server-side sort for everything except score (score requires client-side JSONB parsing)
+      if (sortBy !== "score") {
+        const colMap: Record<string, string> = { created_at: "created_at", cost: "cost", duration: "duration_seconds" };
+        params.set("sort_by", colMap[sortBy] ?? "created_at");
+        params.set("sort_dir", sortDir);
       }
 
       const res = await fetch(`/api/tenants/${tenantId}/calls?${params}`);
@@ -380,7 +386,7 @@ export default function CallsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tenantId, filterQueue, shortDurationMode, maxDuration, showToast]);
+  }, [tenantId, filterQueue, shortDurationMode, maxDuration, sortBy, sortDir, showToast]);
 
   useEffect(() => { loadCalls(); }, [loadCalls]);
 
@@ -436,29 +442,20 @@ export default function CallsPage() {
     return matchReason && matchPhone && matchCallId && matchInteresse;
   });
 
-  const sortedCalls = [...filteredCalls].sort((a, b) => {
-    let va = 0, vb = 0;
-    if (sortBy === "created_at") {
-      va = new Date(a.created_at).getTime();
-      vb = new Date(b.created_at).getTime();
-    } else if (sortBy === "cost") {
-      va = a.cost ?? 0;
-      vb = b.cost ?? 0;
-    } else if (sortBy === "duration") {
-      va = a.duration_seconds ?? 0;
-      vb = b.duration_seconds ?? 0;
-    } else if (sortBy === "score") {
-      const getScore = (c: Call) => {
-        if (!c.structured_outputs) return -1;
-        const r = extractResult(c.structured_outputs);
-        const s = r?.["Performance Global Score"];
-        return s != null ? parseFloat(String(s)) : -1;
-      };
-      va = getScore(a);
-      vb = getScore(b);
-    }
-    return sortDir === "desc" ? vb - va : va - vb;
-  });
+  // Server already sorts by created_at/cost/duration_seconds.
+  // Client-side sort only needed for score (requires JSONB parsing).
+  const sortedCalls = sortBy === "score"
+    ? [...filteredCalls].sort((a, b) => {
+        const getScore = (c: Call) => {
+          if (!c.structured_outputs) return -1;
+          const r = extractResult(c.structured_outputs);
+          const s = r?.["Performance Global Score"];
+          return s != null ? parseFloat(String(s)) : -1;
+        };
+        const diff = getScore(b) - getScore(a);
+        return sortDir === "desc" ? diff : -diff;
+      })
+    : filteredCalls;
 
   const totalPages   = Math.max(1, Math.ceil(sortedCalls.length / pageSize));
   const safePage     = Math.min(currentPage, totalPages);
@@ -493,7 +490,7 @@ export default function CallsPage() {
           <p className="page-subtitle">
             {totalCalls > 0 && (
               <>
-                {totalCalls} chamadas {calls.length < totalCalls ? `(exibindo últimas ${calls.length})` : ""}
+                {totalCalls.toLocaleString("pt-BR")} chamadas
                 {isAdminOrOwner && ` · Custo: $${totalCost.toFixed(4)}`}
                 {totalDurSec > 0 && ` · Tempo total: ${formatDuration(totalDurSec)}`}
               </>

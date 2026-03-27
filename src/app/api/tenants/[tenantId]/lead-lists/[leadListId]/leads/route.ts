@@ -18,21 +18,24 @@ export async function GET(req: NextRequest, { params }: Params) {
   const offset = (page - 1) * limit;
 
   const service = createServiceClient();
+  // count=exact só quando não há busca (caro em tabelas grandes).
+  // Com busca, o frontend exibe apenas o número de linhas retornadas.
+  const needCount = !search;
   let query = service
     .from("leads")
-    .select("*", { count: "exact" })
+    .select("*", needCount ? { count: "exact" } : undefined)
     .eq("tenant_id", tenantId)
     .eq("lead_list_id", leadListId)
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
   if (search) {
-    // Escapar wildcards SQL especiais (%, _) para evitar table scan abusivo ou injeção de padrão
-    const escapedSearch = search.replace(/[%_\\]/g, "\\$&");
+    // PostgREST usa * como wildcard em filter strings (não %). Escapar * e _ literais.
+    const escapedSearch = search.replace(/[*_\\]/g, "\\$&");
     const phoneClean    = escapedSearch.replace(/[\s\-\(\)\+]/g, "");
-    // data_json::text casts the JSONB to text so ilike can search across all fields (names, etc.)
+    // data_json::text faz cast do JSONB para texto permitindo busca em todos os campos (nomes, etc.)
     query = query.or(
-      `phone_e164.ilike.%${escapedSearch}%,phone_e164.ilike.%${phoneClean}%,data_json::text.ilike.%${escapedSearch}%`
+      `phone_e164.ilike.*${escapedSearch}*,phone_e164.ilike.*${phoneClean}*,data_json::text.ilike.*${escapedSearch}*`
     );
   }
 

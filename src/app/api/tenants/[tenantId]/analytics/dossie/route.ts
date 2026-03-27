@@ -212,16 +212,34 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const campaign = campaigns.find((c) => c.id === queueId);
 
-  // ── Call records da campanha ──
-  const { data: callsRaw } = await service
-    .from("call_records")
-    .select("id, cost, duration_seconds, ended_reason, created_at, structured_outputs")
-    .eq("tenant_id", tenantId)
-    .eq("dial_queue_id", queueId)
-    .gte("created_at", since)
-    .limit(50000);
-
-  const calls = callsRaw ?? [];
+  // ── Call records da campanha — batch pagination (lotes de 1000) ──
+  // Respeita max-rows=1000 do PostgREST sem precisar aumentar o limite global.
+  const calls: {
+    id: string;
+    cost: number | null;
+    duration_seconds: number | null;
+    ended_reason: string | null;
+    created_at: string;
+    structured_outputs: unknown;
+  }[] = [];
+  {
+    const BATCH = 1000;
+    let from = 0;
+    while (true) {
+      const { data: batch } = await service
+        .from("call_records")
+        .select("id, cost, duration_seconds, ended_reason, created_at, structured_outputs")
+        .eq("tenant_id", tenantId)
+        .eq("dial_queue_id", queueId)
+        .gte("created_at", since)
+        .order("created_at", { ascending: false })
+        .range(from, from + BATCH - 1);
+      if (!batch || batch.length === 0) break;
+      calls.push(...batch);
+      if (batch.length < BATCH) break;
+      from += BATCH;
+    }
+  }
   const totalCalls    = calls.length;
   const totalCost     = calls.reduce((s, c) => s + (c.cost ?? 0), 0);
   const answeredCalls = calls.filter((c) =>
