@@ -1441,7 +1441,7 @@ export default function LeadsPage() {
                     ))}
                   </div>
                 </div>
-              ) : leads.length > 0 ? (
+              ) : leads.length > 0 || searchLead.trim() ? (
                 <div className="table-wrapper">
                   <table className="table">
                     <thead>

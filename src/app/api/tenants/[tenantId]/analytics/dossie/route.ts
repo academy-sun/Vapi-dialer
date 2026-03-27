@@ -122,11 +122,21 @@ function analyzeFields(rows: Record<string, unknown>[]): FieldAnalysis[] {
   return results;
 }
 
-/** Análise de duração: quando as pessoas desligam */
+const VOICEMAIL_REASONS = new Set([
+  "voicemail", "machine_end_silence", "machine_end_other", "silence-timed-out",
+]);
+
+/** Análise de duração: separando conversas reais de caixa postal */
 function analyzeDuration(calls: { duration_seconds: number | null; ended_reason: string | null }[]) {
+  // Conversas reais = cliente ou assistente encerraram (inclui possível caixa postal curta)
   const answered = calls.filter((c) =>
     c.ended_reason === "customer-ended-call" || c.ended_reason === "assistant-ended-call"
   );
+  // Caixa postal detectada explicitamente pelo Vapi
+  const voicemailCount = calls.filter((c) =>
+    c.ended_reason != null && VOICEMAIL_REASONS.has(c.ended_reason)
+  ).length;
+
   const buckets: Record<string, number> = {
     "0–10s":  0,
     "10–30s": 0,
@@ -146,7 +156,7 @@ function analyzeDuration(calls: { duration_seconds: number | null; ended_reason:
   }
   const nums = answered.map((c) => c.duration_seconds ?? 0);
   const avg  = nums.length > 0 ? nums.reduce((s, n) => s + n, 0) / nums.length : 0;
-  return { buckets, avg: Math.round(avg), total: answered.length };
+  return { buckets, avg: Math.round(avg), total: answered.length, voicemailCount };
 }
 
 /** Correlação entre um campo de engajamento e duração média */
