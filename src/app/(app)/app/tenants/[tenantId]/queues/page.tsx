@@ -30,6 +30,7 @@ interface Queue {
   allowed_days?: unknown;
   allowed_time_window?: unknown;
   last_error?: string | null;
+  avg_deal_value?: number | null;
 }
 interface Progress {
   queueStatus: string; total: number; done: number;
@@ -143,6 +144,29 @@ function AdvancedConfigFields({
         </div>
       </div>
 
+      {/* Ticket médio para cálculo de ROI no Dossiê */}
+      <div>
+        <label className="form-label flex items-center gap-1">
+          Ticket Médio de Conversão
+          <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+        </label>
+        <div className="relative w-48">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">R$</span>
+          <input
+            className="form-input pl-8"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0,00"
+            value={form.avg_deal_value ?? ""}
+            onChange={(e) => update("avg_deal_value", e.target.value)}
+          />
+        </div>
+        <p className="text-xs text-gray-400 mt-1">
+          Usado no Dossiê para calcular oportunidades não trabalhadas
+        </p>
+      </div>
+
       {/* Time window */}
       <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50/50">
         <div className="flex items-center justify-between">
@@ -252,7 +276,7 @@ function CampaignWizard({
     name: "", assistant_id: "", phone_number_id: "",
     concurrency: "3", max_attempts: "3", retry_delay_minutes: "30",
     max_daily_attempts: "3",
-    webhook_url: "", allowed_days: "1,2,3,4,5",
+    webhook_url: "", avg_deal_value: "", allowed_days: "1,2,3,4,5",
     time_start: "09:00", time_end: "18:00", timezone: "America/Sao_Paulo",
   });
 
@@ -293,6 +317,7 @@ function CampaignWizard({
       retry_delay_minutes: parseInt(form.retry_delay_minutes ?? "30"),
       max_daily_attempts: parseInt(form.max_daily_attempts ?? "0") || 0,
       webhook_url: form.webhook_url?.trim() || null,
+      avg_deal_value: form.avg_deal_value ? parseFloat(form.avg_deal_value) || null : null,
       allowed_days: allowedDays,
       allowed_time_window: allowedTimeWindow,
     };
@@ -586,6 +611,7 @@ function EditCampaignModal({
     retry_delay_minutes: String(queue.retry_delay_minutes ?? 30),
     max_daily_attempts:  String(Math.min(10, Math.max(1, queue.max_daily_attempts ?? 3))),
     webhook_url:         queue.webhook_url ?? "",
+    avg_deal_value:      queue.avg_deal_value != null ? String(queue.avg_deal_value) : "",
     allowed_days:        existingDays,
     time_start:          existingWindow?.start ?? "09:00",
     time_end:            existingWindow?.end   ?? "18:00",
@@ -1042,6 +1068,7 @@ export default function CampaignsPage() {
       retry_delay_minutes: parseInt(form.retry_delay_minutes ?? "30"),
       max_daily_attempts:  parseInt(form.max_daily_attempts ?? "0") || 0,
       webhook_url:         form.webhook_url?.trim() || null,
+      avg_deal_value:      form.avg_deal_value ? parseFloat(form.avg_deal_value) || null : null,
       allowed_days:        allowedDays,
       allowed_time_window: allowedTimeWindow,
     };

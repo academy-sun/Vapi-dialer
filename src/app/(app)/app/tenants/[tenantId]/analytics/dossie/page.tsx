@@ -17,6 +17,10 @@ import {
   CheckCircle2,
   XCircle,
   Info,
+  Zap,
+  TrendingUp,
+  ArrowRight,
+  Settings2,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -36,9 +40,26 @@ interface FieldAnalysis {
   samples?: string[];
 }
 
+interface FunnelStage {
+  label: string;
+  cumulative: number;
+  stopped: number;
+  pct: number;
+  dropoff: number | null;
+}
+
+interface OpportunitiesCard {
+  techIssueCount: number;
+  techIssuePct: number;
+  avgDealValue: number | null;
+  potentialValue: number | null;
+  hasConfig: boolean;
+}
+
 interface DossieData {
   campaign: { id: string; name: string } | undefined;
   period: { days: number; since: string };
+  avgDealValue: number | null;
   overview: {
     totalCalls: number;
     answeredCalls: number;
@@ -54,6 +75,12 @@ interface DossieData {
     total: number;
     voicemailCount: number;
   };
+  funnelAnalysis: {
+    stages: FunnelStage[];
+    totalWithData: number;
+    hasData: boolean;
+  };
+  opportunitiesCard: OpportunitiesCard;
   fieldAnalysis: FieldAnalysis[];
   correlations: Record<string, Record<string, { count: number; avgDuration: number }>>;
   endedReasonBreakdown: Record<string, number>;
@@ -70,6 +97,10 @@ function fmtDuration(seconds: number): string {
 
 function fmtCurrency(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
+}
+
+function fmtBRL(value: number): string {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 function getEngagementLabel(seconds: number): string {
@@ -223,15 +254,170 @@ function FieldCard({ field }: { field: FieldAnalysis }) {
   return <TextCard field={field} />;
 }
 
+// ─── Funil de Abandono por Etapa ──────────────────────────────────────────────
+
+function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
+  if (!funnel.hasData || funnel.stages.length === 0) return null;
+
+  const STAGE_COLORS = ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ddd6fe"];
+
+  return (
+    <section>
+      <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
+        <TrendingDown className="w-4 h-4 text-violet-500" />
+        Funil de Abandono — onde a conversa para
+      </h2>
+      <p className="text-xs text-gray-400 mb-3">
+        Baseado em {funnel.totalWithData.toLocaleString("pt-BR")} chamadas com dados de etapa.
+      </p>
+      <div className="card p-4">
+        <div className="space-y-2.5">
+          {funnel.stages.map((stage, i) => (
+            <div key={stage.label}>
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                    style={{ background: STAGE_COLORS[i] }}
+                  >
+                    {i + 1}
+                  </span>
+                  <span className="text-sm font-medium text-gray-800 truncate">{stage.label}</span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0 ml-3">
+                  {stage.dropoff !== null && stage.dropoff > 0 && (
+                    <span className="text-xs text-red-500 font-medium">
+                      −{stage.dropoff}% na entrada
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-500">{stage.cumulative} calls</span>
+                  <span className="text-xs font-bold text-gray-700 w-10 text-right">{stage.pct}%</span>
+                </div>
+              </div>
+              <div className="h-3 rounded-full overflow-hidden bg-gray-100">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${stage.pct}%`,
+                    background: STAGE_COLORS[i],
+                    opacity: 0.85,
+                  }}
+                />
+              </div>
+              {stage.stopped > 0 && (
+                <p className="text-xs text-gray-400 mt-1">
+                  {stage.stopped} {stage.stopped === 1 ? "ligação encerrou" : "ligações encerraram"} nesta etapa
+                  {stage.label !== "Agendamento/Fechamento" ? " (não avançaram)" : " (objetivo atingido ✓)"}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Insight diagnóstico */}
+        {(() => {
+          const worstDropoff = funnel.stages.reduce((worst, s) =>
+            s.dropoff !== null && s.dropoff > (worst?.dropoff ?? 0) ? s : worst,
+            null as FunnelStage | null
+          );
+          if (!worstDropoff || worstDropoff.dropoff === null) return null;
+          return (
+            <div className="mt-4 flex items-start gap-2 rounded-lg bg-violet-50 border border-violet-100 px-3 py-2.5">
+              <AlertCircle className="w-3.5 h-3.5 text-violet-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-violet-700">
+                <strong>Maior gargalo:</strong> a etapa "{worstDropoff.label}" perde{" "}
+                <strong>{worstDropoff.dropoff}%</strong> das conversas que chegaram até ela.
+                Revise o script neste ponto específico.
+              </p>
+            </div>
+          );
+        })()}
+      </div>
+    </section>
+  );
+}
+
+// ─── Card de Oportunidades Não Trabalhadas ────────────────────────────────────
+
+function OpportunitiesSection({
+  card,
+  tenantId,
+  campaignId,
+}: {
+  card: OpportunitiesCard;
+  tenantId: string;
+  campaignId: string | undefined;
+}) {
+  if (card.techIssueCount === 0) return null;
+
+  return (
+    <section>
+      <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <Zap className="w-4 h-4 text-amber-500" />
+        Oportunidades Não Trabalhadas
+      </h2>
+      <div className="card p-4 border-l-4 border-amber-400">
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Métrica principal */}
+          <div className="flex-1">
+            <p className="text-xs text-gray-500 mb-1">Chamadas com falha técnica</p>
+            <p className="text-3xl font-bold text-amber-600">{card.techIssueCount}</p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {card.techIssuePct}% do total · erro de infraestrutura, não rejeição de conteúdo
+            </p>
+            <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+              Estas ligações falharam por problemas técnicos (pipeline, transporte ou latência),
+              não por falta de interesse do lead. São elegíveis para nova tentativa.
+            </p>
+          </div>
+
+          {/* Impacto financeiro ou CTA para configurar */}
+          <div className="md:w-56 shrink-0">
+            {card.hasConfig && card.potentialValue != null ? (
+              <div className="rounded-xl p-4 text-center h-full flex flex-col items-center justify-center" style={{ background: "#f59e0b18" }}>
+                <TrendingUp className="w-5 h-5 text-amber-600 mb-1.5" />
+                <p className="text-xs text-amber-700 font-medium mb-1">Oportunidade estimada</p>
+                <p className="text-2xl font-bold text-amber-700">{fmtBRL(card.potentialValue)}</p>
+                <p className="text-xs text-amber-600 mt-1">
+                  {card.techIssueCount} × {fmtBRL(card.avgDealValue!)} ticket médio
+                </p>
+                <p className="text-xs text-amber-500 mt-2 leading-tight">
+                  Não são vendas perdidas — são leads que merecem nova tentativa
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-xl p-4 text-center h-full flex flex-col items-center justify-center border border-dashed border-gray-200 bg-gray-50">
+                <Settings2 className="w-5 h-5 text-gray-400 mb-1.5" />
+                <p className="text-xs text-gray-500 font-medium mb-1">Configure o ticket médio</p>
+                <p className="text-xs text-gray-400 leading-tight mb-3">
+                  Defina o valor de conversão da campanha para calcular o impacto financeiro
+                </p>
+                {campaignId && (
+                  <a
+                    href={`/app/tenants/${tenantId}/queues`}
+                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                  >
+                    Ir para Campanhas <ArrowRight className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function DossiePage() {
   const { tenantId } = useParams<{ tenantId: string }>();
-  const [campaigns, setCampaigns]     = useState<Campaign[]>([]);
+  const [campaigns, setCampaigns]         = useState<Campaign[]>([]);
   const [selectedQueue, setSelectedQueue] = useState("");
-  const [days, setDays]               = useState(90);
-  const [loading, setLoading]         = useState(false);
-  const [data, setData]               = useState<DossieData | null>(null);
+  const [days, setDays]                   = useState(90);
+  const [loading, setLoading]             = useState(false);
+  const [data, setData]                   = useState<DossieData | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async (queueId: string, d: number) => {
@@ -244,7 +430,6 @@ export default function DossiePage() {
     setLoading(false);
   }, [tenantId]);
 
-  // Carrega campanhas ao entrar
   useEffect(() => {
     fetch(`/api/tenants/${tenantId}/analytics/dossie`)
       .then((r) => r.json())
@@ -258,11 +443,9 @@ export default function DossiePage() {
       });
   }, [tenantId, load]);
 
-  function handlePrint() {
-    window.print();
-  }
+  function handlePrint() { window.print(); }
 
-  const BUCKET_ORDER = ["0–10s", "10–30s", "30–60s", "1–3min", "3–5min", "5min+"];
+  const BUCKET_ORDER  = ["0–10s", "10–30s", "30–60s", "1–3min", "3–5min", "5min+"];
   const BUCKET_COLORS = ["#ef4444", "#f97316", "#f59e0b", "#84cc16", "#10b981", "#6366f1"];
 
   const durationBuckets = data
@@ -272,7 +455,6 @@ export default function DossiePage() {
 
   return (
     <div>
-      {/* Print styles injetados via JSX */}
       <style>{`
         @media print {
           nav, header, aside, .no-print { display: none !important; }
@@ -305,17 +487,13 @@ export default function DossiePage() {
       {/* Filtros */}
       <div className="card p-4 mb-6 no-print">
         <div className="flex flex-wrap gap-3 items-end">
-          {/* Campanha */}
           <div className="flex-1 min-w-48">
             <label className="form-label">Campanha</label>
             <div className="relative">
               <select
                 className="form-input pr-8 appearance-none"
                 value={selectedQueue}
-                onChange={(e) => {
-                  setSelectedQueue(e.target.value);
-                  load(e.target.value, days);
-                }}
+                onChange={(e) => { setSelectedQueue(e.target.value); load(e.target.value, days); }}
               >
                 {campaigns.length === 0 && <option value="">Nenhuma campanha</option>}
                 {campaigns.map((c) => (
@@ -326,7 +504,6 @@ export default function DossiePage() {
             </div>
           </div>
 
-          {/* Período */}
           <div>
             <label className="form-label">Período</label>
             <div className="flex gap-1.5">
@@ -423,7 +600,7 @@ export default function DossiePage() {
                 color="#8b5cf6"
               />
               <StatCard
-                icon={TrendingDown}
+                icon={TrendingUp}
                 label="Com inteligência"
                 value={`${data.overview.structuredOutputsRate}%`}
                 sub={`${data.overview.structuredOutputsCount.toLocaleString("pt-BR")} com dados`}
@@ -432,7 +609,14 @@ export default function DossiePage() {
             </div>
           </section>
 
-          {/* 2. Mapa de Engajamento — quando desligam */}
+          {/* 2. Oportunidades Não Trabalhadas */}
+          <OpportunitiesSection
+            card={data.opportunitiesCard}
+            tenantId={tenantId}
+            campaignId={data.campaign?.id}
+          />
+
+          {/* 3. Mapa de Abandono — quando desligam */}
           <section>
             <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <TrendingDown className="w-4 h-4 text-red-500" />
@@ -443,18 +627,15 @@ export default function DossiePage() {
                 <p className="text-sm text-gray-400 text-center py-4">Nenhuma chamada atendida no período.</p>
               ) : (
                 <>
-                  {/* Aviso de caixa postal se relevante */}
                   {data.durationAnalysis.voicemailCount > 0 && (
                     <div className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
                       <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-700">
                         <strong>{data.durationAnalysis.voicemailCount} chamadas</strong> foram para caixa postal (detectadas pelo Vapi) e estão excluídas do mapa abaixo.
-                        Chamadas curtas restantes são conversas reais curtas ou caixas postais não detectadas.
                       </p>
                     </div>
                   )}
 
-                  {/* Gráfico de barras — altura em px (não %) para funcionar em flex */}
                   <div className="flex items-end gap-2" style={{ height: "120px" }}>
                     {durationBuckets.map((b, i) => {
                       const barH   = maxBucket > 0 ? Math.max(Math.round((b.value / maxBucket) * 100), b.value > 0 ? 4 : 0) : 0;
@@ -482,7 +663,6 @@ export default function DossiePage() {
                     })}
                   </div>
 
-                  {/* Diagnóstico */}
                   <p className="text-xs mt-3 text-center" style={{ color: "#6b7280" }}>
                     {(() => {
                       const early = (data.durationAnalysis.buckets["0–10s"] ?? 0) +
@@ -502,7 +682,10 @@ export default function DossiePage() {
             </div>
           </section>
 
-          {/* 3. Análise de Campos (Structured Outputs) */}
+          {/* 4. Funil de Abandono por Etapa */}
+          <FunnelSection funnel={data.funnelAnalysis} />
+
+          {/* 5. Análise de Campos (Structured Outputs) */}
           {data.fieldAnalysis.length > 0 && (
             <section>
               <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
@@ -520,7 +703,7 @@ export default function DossiePage() {
             </section>
           )}
 
-          {/* 4. Correlações: campo × duração */}
+          {/* 6. Correlações: campo × duração */}
           {Object.keys(data.correlations).length > 0 && (
             <section>
               <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -565,7 +748,7 @@ export default function DossiePage() {
             </section>
           )}
 
-          {/* 5. Sem structured outputs */}
+          {/* Sem structured outputs */}
           {data.fieldAnalysis.length === 0 && (
             <div className="card p-6 text-center">
               <Info className="w-8 h-8 text-gray-300 mx-auto mb-2" />
