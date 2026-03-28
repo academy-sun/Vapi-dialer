@@ -1314,16 +1314,63 @@ export default function CampaignsPage() {
                     </div>
                   </div>
 
-                  {/* Banner de erro de configuração (ex: assistente/número deletado no Vapi) */}
-                  {q.last_error && (
-                    <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 mb-4">
-                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-semibold text-amber-800">Campanha pausada automaticamente por erro de configuração</p>
-                        <p className="text-xs text-amber-700 mt-0.5">{q.last_error}</p>
+                  {/* Banner de last_error — circuit breaker ou erro de configuração */}
+                  {q.last_error && (() => {
+                    // Tenta interpretar como circuit breaker (JSON com circuit_open_until)
+                    let circuitUntil: Date | null = null;
+                    let minutesLeft = 0;
+                    try {
+                      const cb = JSON.parse(q.last_error) as { circuit_open_until?: string };
+                      if (cb.circuit_open_until) {
+                        circuitUntil = new Date(cb.circuit_open_until);
+                        minutesLeft = Math.max(0, Math.ceil((circuitUntil.getTime() - Date.now()) / 60_000));
+                      }
+                    } catch { /* não é JSON — erro de configuração normal */ }
+
+                    if (circuitUntil && minutesLeft > 0) {
+                      // Circuit breaker ativo: mensagem amigável, sem expor detalhes internos
+                      return (
+                        <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 mb-4">
+                          <AlertTriangle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-semibold text-blue-800">
+                              Proteção automática ativada — retomando em {minutesLeft} min
+                            </p>
+                            <p className="text-xs text-blue-700 mt-0.5">
+                              O sistema detectou instabilidade temporária na rede e pausou os disparos automaticamente
+                              para proteger os números de telefone. A campanha retomará sozinha em aproximadamente {minutesLeft} {minutesLeft === 1 ? "minuto" : "minutos"} — nenhuma ação necessária.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    if (circuitUntil && minutesLeft === 0) {
+                      // Circuit breaker expirado mas last_error ainda não foi limpo pelo worker
+                      return (
+                        <div className="flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 mb-4">
+                          <AlertTriangle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-semibold text-emerald-800">Proteção automática concluída — retomando disparos</p>
+                            <p className="text-xs text-emerald-700 mt-0.5">
+                              O período de proteção encerrou. Os disparos serão retomados no próximo ciclo do sistema.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Erro de configuração real (assistente/número deletado no Vapi, etc.)
+                    return (
+                      <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 mb-4">
+                        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-xs font-semibold text-amber-800">Campanha pausada automaticamente por erro de configuração</p>
+                          <p className="text-xs text-amber-700 mt-0.5">{q.last_error}</p>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Progress bar */}
                   {prog && (
