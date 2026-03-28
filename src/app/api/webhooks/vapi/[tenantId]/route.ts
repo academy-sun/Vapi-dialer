@@ -323,6 +323,7 @@ async function handleEndOfCallReport(
       service,
       callData,
     );
+    await maybeOpenCircuitBreaker(existing.dial_queue_id, tenantId, endedReason, service);
     return;
   }
 
@@ -382,6 +383,7 @@ async function handleEndOfCallReport(
   });
 
   await updateLeadAfterCall(lead.id, queue.id, tenantId, endedReason, durationSeconds, service, callData);
+  await maybeOpenCircuitBreaker(queue.id, tenantId, endedReason, service);
 }
 
 interface CallData {
@@ -631,6 +633,86 @@ async function updateLeadAfterCall(
       await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "queued", service, callData);
     }
   }
+}
+
+// ── Circuit Breaker: protege contra cascata de erros SIP ─────────────────────
+// Quando detectar >= THRESHOLD erros SIP para uma fila nos últimos 2 minutos,
+// grava um circuit_open_until no campo last_error para que o worker pause os
+// disparos automaticamente pelo período de cooldown.
+const CB_THRESHOLD_COUNT  = 5;     // erros em 2 min para abrir o circuito
+const CB_WINDOW_MS        = 2 * 60_000;  // janela de detecção: 2 min
+const CB_COOLDOWN_MS      = 10 * 60_000; // duração do bloqueio: 10 min
+
+async function maybeOpenCircuitBreaker(
+  queueId:     string,
+  tenantId:    string,
+  endedReason: string | null,
+  service:     ReturnType<typeof createServiceClient>
+) {
+  if (!endedReason) return;
+
+  // Só monitorar erros do provedor SIP (não erros de infra Vapi ou chamadas normais)
+  const isSipError =
+    endedReason.includes("error-sip") ||
+    endedReason.includes("error-providerfault") ||
+    endedReason.includes("failed-to-connect") ||
+    endedReason.includes("sip-403") ||
+    endedReason.includes("sip-503") ||
+    endedReason.includes("sip-500") ||
+    endedReason.includes("sip-408");
+
+  if (!isSipError) return;
+
+  // Contagem de erros SIP recentes para esta fila
+  const windowStart = new Date(Date.now() - CB_WINDOW_MS).toISOString();
+  const { count } = await service
+    .from("call_records")
+    .select("id", { count: "exact", head: true })
+    .eq("dial_queue_id", queueId)
+    .gte("created_at", windowStart)
+    .or(
+      "ended_reason.ilike.%error-sip%," +
+      "ended_reason.ilike.%error-providerfault%," +
+      "ended_reason.ilike.%failed-to-connect%," +
+      "ended_reason.ilike.%sip-403%," +
+      "ended_reason.ilike.%sip-503%," +
+      "ended_reason.ilike.%sip-500%"
+    );
+
+  if ((count ?? 0) < CB_THRESHOLD_COUNT) return;
+
+  // Verificar se já há um circuit breaker ativo (evita updates redundantes)
+  const { data: queueRow } = await service
+    .from("dial_queues")
+    .select("last_error")
+    .eq("id", queueId)
+    .single();
+
+  if (queueRow?.last_error) {
+    try {
+      const cb = JSON.parse(queueRow.last_error) as { circuit_open_until?: string };
+      if (cb.circuit_open_until && new Date(cb.circuit_open_until) > new Date()) return; // já ativo
+    } catch { /* não é JSON do circuit breaker, continuar */ }
+  }
+
+  const circuitOpenUntil = new Date(Date.now() + CB_COOLDOWN_MS).toISOString();
+  const lastError = JSON.stringify({
+    circuit_open_until: circuitOpenUntil,
+    reason:             endedReason,
+    error_count:        count,
+    triggered_at:       new Date().toISOString(),
+  });
+
+  await service
+    .from("dial_queues")
+    .update({ last_error: lastError })
+    .eq("id",        queueId)
+    .eq("tenant_id", tenantId);
+
+  console.warn(
+    `[webhook] ⚡ Circuit breaker ativado | fila=${queueId} | tenant=${tenantId}` +
+    ` | ${count} erros SIP em 2min | bloqueado até ${circuitOpenUntil}`
+  );
 }
 
 // ── Outbound webhook: envia resultado rico da chamada para URL externa (n8n, Zapier, etc.) ──

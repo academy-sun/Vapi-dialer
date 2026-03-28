@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import {
@@ -27,7 +27,13 @@ import {
   Loader2,
 } from "lucide-react";
 
-interface Queue { id: string; name: string }
+interface Queue { id: string; name: string; assistant_id: string | null }
+
+interface AssistantConfig {
+  assistant_id: string;
+  success_field: string | null;
+  success_value: string | null;
+}
 
 interface Call {
   id: string;
@@ -310,6 +316,7 @@ export default function CallsPage() {
   const [calls, setCalls] = useState<Call[]>([]);
   const [totalCalls, setTotalCalls] = useState(0);
   const [queues, setQueues] = useState<Queue[]>([]);
+  const [assistantConfigs, setAssistantConfigs] = useState<AssistantConfig[]>([]);
   const [selected, setSelected] = useState<CallDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -349,9 +356,14 @@ export default function CallsPage() {
   }, [tenantId]);
 
   useEffect(() => {
-    fetch(`/api/tenants/${tenantId}/queues`)
-      .then((r) => r.json())
-      .then((d) => setQueues(d.queues ?? []))
+    Promise.all([
+      fetch(`/api/tenants/${tenantId}/queues`).then((r) => r.json()),
+      fetch(`/api/tenants/${tenantId}/assistant-configs`).then((r) => r.json()),
+    ])
+      .then(([queueData, configData]) => {
+        setQueues(queueData.queues ?? []);
+        setAssistantConfigs(configData.configs ?? []);
+      })
       .catch(() => setPageError("Falha ao carregar filas."));
   }, [tenantId]);
 
@@ -470,6 +482,25 @@ export default function CallsPage() {
     new Set(calls.map((c) => c.ended_reason).filter(Boolean) as string[])
   ).sort();
 
+  // Label dinâmico do critério de sucesso baseado na config do assistente da campanha selecionada
+  const successLabel = useMemo(() => {
+    if (filterQueue !== "all") {
+      const queue = queues.find((q) => q.id === filterQueue);
+      const config = queue?.assistant_id
+        ? assistantConfigs.find((c) => c.assistant_id === queue.assistant_id)
+        : null;
+      if (config?.success_value) return config.success_value;
+    } else {
+      // Todas as campanhas: coleta valores únicos configurados
+      const values = [
+        ...new Set(assistantConfigs.map((c) => c.success_value).filter(Boolean) as string[]),
+      ];
+      if (values.length === 1) return values[0];
+      if (values.length > 1)   return values.join(" / ");
+    }
+    return "Sucesso";
+  }, [filterQueue, queues, assistantConfigs]);
+
   return (
     <div>
       {/* Error banner */}
@@ -566,7 +597,7 @@ export default function CallsPage() {
             onChange={(e) => setFilterInteresse(e.target.value as typeof filterInteresse)}
           >
             <option value="all">Qualquer critério de sucesso</option>
-            <option value="sucesso">✅ Sucesso</option>
+            <option value="sucesso">✅ {successLabel}</option>
             <option value="fracasso">❌ Fracasso</option>
             <option value="none">— Sem avaliação</option>
           </select>

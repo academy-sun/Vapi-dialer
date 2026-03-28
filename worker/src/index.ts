@@ -145,6 +145,7 @@ interface DialQueue {
   max_daily_attempts:   number;      // 1–10 tentativas por lead por dia
   allowed_days:         number[];    // ISO weekday: 1=Seg … 7=Dom
   allowed_time_window:  TimeWindow;
+  last_error:           string | null; // circuit breaker: JSON com circuit_open_until
 }
 
 interface Lead {
@@ -679,6 +680,20 @@ async function processLead(
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSlotBudget?: number): Promise<void> {
+  // ── Circuit Breaker: verificar se o provedor SIP está em cooldown ──
+  if (queue.last_error) {
+    try {
+      const cb = JSON.parse(queue.last_error) as { circuit_open_until?: string };
+      if (cb.circuit_open_until && new Date(cb.circuit_open_until) > new Date()) {
+        const remainingMin = Math.ceil((new Date(cb.circuit_open_until).getTime() - Date.now()) / 60_000);
+        console.warn(
+          `[worker] ⚡ Fila "${queue.name}" com circuit breaker ativo (${remainingMin}min restantes) — aguardando recuperação do SIP`
+        );
+        return;
+      }
+    } catch { /* last_error não é JSON do circuit breaker — ignorar e continuar */ }
+  }
+
   // ── Verificar janela de horário ──
   // allowed_days vem como JSONB do Supabase; garantir array numérico antes de verificar
   const allowedDays = Array.isArray(queue.allowed_days) ? (queue.allowed_days as unknown as number[]) : [];
@@ -1034,7 +1049,7 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
     .select(`
       id, tenant_id, name, assistant_id, phone_number_id, lead_list_id,
       concurrency, max_attempts, retry_delay_minutes, max_daily_attempts,
-      allowed_days, allowed_time_window
+      allowed_days, allowed_time_window, last_error
     `)
     .eq("status", "running");
 
