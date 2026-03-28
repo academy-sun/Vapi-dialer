@@ -25,11 +25,11 @@ import crypto from "crypto";
 const SUPABASE_URL        = (process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL)!;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const ENCRYPTION_KEY_B64  = process.env.ENCRYPTION_KEY_BASE64!;
-const POLL_INTERVAL_MS    = Number(process.env.POLL_INTERVAL_MS   ?? 5_000);
+const POLL_INTERVAL_MS    = Number(process.env.POLL_INTERVAL_MS   ?? 15_000);
 const VAPI_TIMEOUT_MS     = Number(process.env.VAPI_TIMEOUT_MS    ?? 15_000);
 const VAPI_BASE_URL       = process.env.VAPI_BASE_URL ?? "https://api.vapi.ai";
 // Delay entre cada disparo de chamada dentro de um ciclo (evita 503/408 do provedor SIP)
-const DISPATCH_DELAY_MS   = Number(process.env.DISPATCH_DELAY_MS  ?? 3_000);
+const DISPATCH_DELAY_MS   = Number(process.env.DISPATCH_DELAY_MS  ?? 5_000);
 // Bypass de horário para testes — NUNCA ativar em produção
 const BYPASS_TIME_WINDOW  = process.env.BYPASS_TIME_WINDOW === "true";
 // URL base do app (ex: https://meuapp.vercel.app) — usado para construir o serverUrl do Vapi
@@ -910,7 +910,7 @@ async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
 
   let staleQuery = supabase
     .from("leads")
-    .select("id, phone_e164, lead_list_id, tenant_id")
+    .select("id, phone_e164, lead_list_id, tenant_id, attempt_count")
     .eq("status", "calling")
     .not("last_attempt_at", "is", null)
     .lt("last_attempt_at", staleThreshold);
@@ -950,39 +950,75 @@ async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
   );
 
   // 3. Filtrar apenas leads cujas filas estão ativas ou pausadas
-  const recoverableIds = stale
-    .filter((l: { id: string; lead_list_id: string }) => recoverableListIds.has(l.lead_list_id))
-    .map((l: { id: string }) => l.id);
+  const recoverableLeads = stale.filter(
+    (l: { id: string; lead_list_id: string }) => recoverableListIds.has(l.lead_list_id)
+  );
 
-  const skippedCount = stale.length - recoverableIds.length;
+  const skippedCount = stale.length - recoverableLeads.length;
   if (skippedCount > 0) {
     console.log(
       `[worker] recoverStaleCalls: ${skippedCount} lead(s) ignorados (fila stopped/inexistente)`
     );
   }
 
-  if (recoverableIds.length === 0) return;
+  if (recoverableLeads.length === 0) return;
 
   console.warn(
-    `[worker] ⚠ ${recoverableIds.length} lead(s) presos em "calling" há >${STALE_CALLING_MINUTES}min — resetando para "queued"`
+    `[worker] ⚠ ${recoverableLeads.length} lead(s) presos em "calling" há >${STALE_CALLING_MINUTES}min — processando com contagem de tentativas`
+  );
+
+  // Buscar max_attempts das filas envolvidas
+  const recoverableListIdsList = [...new Set(recoverableLeads.map((l: { lead_list_id: string }) => l.lead_list_id))];
+  const { data: queueConfigs } = await supabase
+    .from("dial_queues")
+    .select("lead_list_id, max_attempts")
+    .in("lead_list_id", recoverableListIdsList);
+
+  const maxAttemptsMap = new Map<string, number>(
+    (queueConfigs ?? []).map((q: { lead_list_id: string; max_attempts: number | null }) => [
+      q.lead_list_id,
+      q.max_attempts ?? 3,
+    ])
   );
 
   const retryAt = new Date(Date.now() + 2 * 60 * 1000).toISOString(); // retry em 2 min
+  let failedCount = 0;
+  let requeuedCount = 0;
 
-  const { error: updateError } = await supabase
-    .from("leads")
-    .update({
-      status:          "queued",
-      last_outcome:    "stale-calling-reset",
-      next_attempt_at: retryAt,
-    })
-    .in("id", recoverableIds);
+  for (const lead of recoverableLeads as Array<{ id: string; lead_list_id: string; attempt_count: number }>) {
+    const maxAttempts    = maxAttemptsMap.get(lead.lead_list_id) ?? 3;
+    const newAttemptCount = (lead.attempt_count ?? 0) + 1;
 
-  if (updateError) {
-    console.error("[worker] recoverStaleCalls: erro ao resetar leads:", updateError.message);
-  } else {
-    console.log(`[worker] ✓ ${recoverableIds.length} lead(s) resetados para "queued"`);
+    if (newAttemptCount >= maxAttempts) {
+      // Tentativas esgotadas → falhou definitivamente
+      await supabase
+        .from("leads")
+        .update({
+          status:          "failed",
+          last_outcome:    "stale-calling-reset",
+          next_attempt_at: null,
+          attempt_count:   newAttemptCount,
+        })
+        .eq("id", lead.id);
+      failedCount++;
+    } else {
+      // Ainda tem tentativas → volta para fila contando esta como tentativa
+      await supabase
+        .from("leads")
+        .update({
+          status:          "queued",
+          last_outcome:    "stale-calling-reset",
+          next_attempt_at: retryAt,
+          attempt_count:   newAttemptCount,
+        })
+        .eq("id", lead.id);
+      requeuedCount++;
+    }
   }
+
+  console.log(
+    `[worker] ✓ stale recovery: ${requeuedCount} recolocado(s) em fila, ${failedCount} marcado(s) como failed (tentativas esgotadas)`
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
