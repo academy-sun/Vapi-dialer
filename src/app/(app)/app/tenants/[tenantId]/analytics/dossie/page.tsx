@@ -21,6 +21,7 @@ import {
   TrendingUp,
   ArrowRight,
   Settings2,
+  ShieldCheck,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -112,28 +113,322 @@ function getEngagementLabel(seconds: number): string {
   return "Conversa longa";
 }
 
-// ─── Sub-componentes ──────────────────────────────────────────────────────────
+// ─── 1. Hero Metrics ──────────────────────────────────────────────────────────
 
-function StatCard({ icon: Icon, label, value, sub, color = "#6366f1" }: {
-  icon: React.ElementType;
-  label: string;
-  value: string;
-  sub?: string;
-  color?: string;
+function HeroMetrics({ overview, durationAvg }: {
+  overview: DossieData["overview"];
+  durationAvg: number;
 }) {
+  const notAnsweredPct = 100 - overview.answerRate;
+  const notAnsweredCount = overview.totalCalls - overview.answeredCalls;
+
   return (
-    <div className="card p-4 flex items-start gap-3">
-      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + "18" }}>
-        <Icon className="w-4 h-4" style={{ color }} />
+    <section>
+      <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <PhoneCall className="w-4 h-4 text-indigo-500" />
+        Visão Geral
+      </h2>
+
+      {/* Hero row — métricas críticas em destaque */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        {/* Atenderam */}
+        <div className="rounded-2xl p-5 flex flex-col justify-between" style={{ background: "linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)", border: "1px solid #6ee7b7" }}>
+          <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">Atenderam</p>
+          <p className="text-5xl font-black text-emerald-700 leading-none">{overview.answerRate}%</p>
+          <p className="text-sm text-emerald-600 mt-2 font-medium">
+            {overview.answeredCalls.toLocaleString("pt-BR")} de {overview.totalCalls.toLocaleString("pt-BR")} chamadas
+          </p>
+        </div>
+
+        {/* Não atenderam */}
+        <div className="rounded-2xl p-5 flex flex-col justify-between" style={{ background: "linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)", border: "1px solid #fca5a5" }}>
+          <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">Não atenderam</p>
+          <p className="text-5xl font-black text-red-600 leading-none">{notAnsweredPct}%</p>
+          <p className="text-sm text-red-500 mt-2 font-medium">
+            {notAnsweredCount.toLocaleString("pt-BR")} de {overview.totalCalls.toLocaleString("pt-BR")} chamadas
+          </p>
+        </div>
       </div>
-      <div className="min-w-0">
-        <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-        <p className="text-xl font-bold text-gray-900 leading-tight">{value}</p>
-        {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+
+      {/* Supporting metrics row */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        {[
+          { label: "Total", value: overview.totalCalls.toLocaleString("pt-BR"), icon: PhoneCall, color: "#6366f1" },
+          { label: "Duração média", value: fmtDuration(durationAvg), icon: Clock, color: "#f59e0b" },
+          { label: "Custo total", value: fmtCurrency(overview.totalCost), icon: DollarSign, color: "#8b5cf6" },
+          { label: "Custo / call", value: fmtCurrency(overview.avgCostPerCall), icon: DollarSign, color: "#8b5cf6" },
+          { label: "Com inteligência", value: `${overview.structuredOutputsRate}%`, icon: BarChart3, color: "#14b8a6" },
+        ].map(({ label, value, icon: Icon, color }) => (
+          <div key={label} className="card p-3 flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + "18" }}>
+              <Icon className="w-3.5 h-3.5" style={{ color }} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-400 leading-tight">{label}</p>
+              <p className="text-sm font-bold text-gray-900 leading-tight">{value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ─── 2. Gráfico de Abandono com pico anotado ──────────────────────────────────
+
+function AbandonmentChart({ durationAnalysis }: { durationAnalysis: DossieData["durationAnalysis"] }) {
+  const BUCKET_ORDER  = ["0–10s", "10–30s", "30–60s", "1–3min", "3–5min", "5min+"];
+  const BUCKET_COLORS = ["#ef4444", "#f97316", "#f59e0b", "#84cc16", "#10b981", "#6366f1"];
+
+  const buckets = BUCKET_ORDER.map((k, i) => ({
+    label: k,
+    value: durationAnalysis.buckets[k] ?? 0,
+    color: BUCKET_COLORS[i],
+  }));
+
+  const maxValue = Math.max(...buckets.map((b) => b.value), 1);
+  const peakIdx  = buckets.reduce((best, b, i) => b.value > buckets[best].value ? i : best, 0);
+  const total    = durationAnalysis.total;
+
+  const earlyCount = (durationAnalysis.buckets["0–10s"] ?? 0) + (durationAnalysis.buckets["10–30s"] ?? 0);
+  const earlyPct   = total > 0 ? Math.round((earlyCount / total) * 100) : 0;
+
+  return (
+    <section>
+      <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
+        <TrendingDown className="w-4 h-4 text-red-500" />
+        Mapa de Abandono — quando os leads desligam
+      </h2>
+      <p className="text-xs text-gray-400 mb-3">
+        Distribuição de {total.toLocaleString("pt-BR")} chamadas atendidas por duração.
+      </p>
+      <div className="card p-5">
+        {total === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">Nenhuma chamada atendida no período.</p>
+        ) : (
+          <>
+            {durationAnalysis.voicemailCount > 0 && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
+                <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-700">
+                  <strong>{durationAnalysis.voicemailCount} chamadas</strong> foram para caixa postal e estão excluídas deste gráfico.
+                </p>
+              </div>
+            )}
+
+            {/* Barras verticais com pico anotado */}
+            <div className="flex items-end gap-2" style={{ height: "180px" }}>
+              {buckets.map((b, i) => {
+                const barH   = maxValue > 0 ? Math.max(Math.round((b.value / maxValue) * 150), b.value > 0 ? 6 : 0) : 0;
+                const callPct = total > 0 ? Math.round((b.value / total) * 100) : 0;
+                const isPeak  = i === peakIdx && b.value > 0;
+
+                return (
+                  <div key={b.label} className="flex-1 flex flex-col items-center justify-end" style={{ height: "180px" }}>
+                    {/* Anotação do pico */}
+                    {isPeak ? (
+                      <div className="mb-1 flex flex-col items-center">
+                        <span
+                          className="text-xs font-bold text-white px-2 py-0.5 rounded-full"
+                          style={{ background: b.color }}
+                        >
+                          {callPct}% ▲ pico
+                        </span>
+                      </div>
+                    ) : (
+                      b.value > 0 && (
+                        <span className="text-xs font-semibold text-gray-600 mb-1">{callPct}%</span>
+                      )
+                    )}
+
+                    {/* Barra */}
+                    <div
+                      className="w-full rounded-t-lg transition-all"
+                      style={{
+                        height: `${barH}px`,
+                        background: isPeak ? b.color : b.color + "99",
+                        minHeight: b.value > 0 ? "6px" : "0",
+                        boxShadow: isPeak ? `0 0 0 2px ${b.color}40` : "none",
+                      }}
+                    />
+
+                    {/* Label + count */}
+                    <div className="mt-1.5 text-center">
+                      <p className="text-xs text-gray-600 font-medium leading-tight">{b.label}</p>
+                      <p className="text-xs text-gray-400">{b.value}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Diagnóstico automático */}
+            <div className={`mt-4 flex items-start gap-2 rounded-lg px-3 py-2.5 ${
+              earlyPct > 40
+                ? "bg-red-50 border border-red-100"
+                : earlyPct > 20
+                  ? "bg-amber-50 border border-amber-100"
+                  : "bg-emerald-50 border border-emerald-100"
+            }`}>
+              <AlertCircle className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
+                earlyPct > 40 ? "text-red-500" : earlyPct > 20 ? "text-amber-500" : "text-emerald-500"
+              }`} />
+              <p className={`text-xs ${
+                earlyPct > 40 ? "text-red-700" : earlyPct > 20 ? "text-amber-700" : "text-emerald-700"
+              }`}>
+                {earlyPct > 40
+                  ? <><strong>{earlyPct}% das conversas duram menos de 30s</strong> — avalie o script de abertura e a primeira mensagem do assistente.</>
+                  : earlyPct > 20
+                    ? <><strong>{earlyPct}% das conversas encerram antes de 30s</strong> — considere revisar a abordagem inicial.</>
+                    : <>Perfil de engajamento saudável — maioria das conversas passa de 30s.</>
+                }
+              </p>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─── 3. Funil com forma visual real ───────────────────────────────────────────
+
+function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
+  if (!funnel.hasData || funnel.stages.length === 0) return null;
+
+  const STAGE_COLORS = ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ddd6fe"];
+
+  const worstDropoff = funnel.stages.reduce((worst, s) =>
+    s.dropoff !== null && s.dropoff > (worst?.dropoff ?? 0) ? s : worst,
+    null as FunnelStage | null
+  );
+
+  return (
+    <section>
+      <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
+        <TrendingDown className="w-4 h-4 text-violet-500" />
+        Funil de Abandono — onde a conversa para
+      </h2>
+      <p className="text-xs text-gray-400 mb-3">
+        Baseado em {funnel.totalWithData.toLocaleString("pt-BR")} chamadas com dados de etapa.
+      </p>
+      <div className="card p-5">
+        <div className="flex flex-col items-center gap-0">
+          {funnel.stages.map((stage, i) => {
+            const barWidth = Math.max(stage.pct, 4);
+            const isLast   = i === funnel.stages.length - 1;
+            const color    = STAGE_COLORS[i] ?? "#6366f1";
+
+            return (
+              <div key={stage.label} className="w-full flex flex-col items-center">
+                {/* Barra do funil — largura proporcional ao pct */}
+                <div className="w-full flex items-center justify-center">
+                  <div
+                    className="relative flex items-center justify-center rounded-lg transition-all"
+                    style={{
+                      width: `${barWidth}%`,
+                      minWidth: "120px",
+                      height: "44px",
+                      background: color,
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-white font-black text-lg leading-none">{stage.pct}%</span>
+                      <div className="hidden md:block">
+                        <p className="text-white text-xs font-semibold leading-tight opacity-90">{stage.label}</p>
+                        <p className="text-white text-xs opacity-70">{stage.cumulative.toLocaleString("pt-BR")} calls</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Label em mobile */}
+                <div className="md:hidden mt-1 text-center">
+                  <p className="text-xs font-medium text-gray-700">{stage.label}</p>
+                  <p className="text-xs text-gray-400">{stage.cumulative.toLocaleString("pt-BR")} calls</p>
+                </div>
+
+                {/* Seta de perda entre etapas */}
+                {!isLast && stage.dropoff !== null && stage.dropoff > 0 && (
+                  <div className="flex items-center gap-2 py-1.5">
+                    <div className="h-px w-8 bg-red-200" />
+                    <span className="text-xs text-red-500 font-semibold">−{stage.dropoff}% perdidos aqui</span>
+                    <div className="h-px w-8 bg-red-200" />
+                  </div>
+                )}
+                {!isLast && (stage.dropoff === null || stage.dropoff === 0) && (
+                  <div className="h-4" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {worstDropoff && worstDropoff.dropoff !== null && worstDropoff.dropoff > 0 && (
+          <div className="mt-5 flex items-start gap-2 rounded-lg bg-violet-50 border border-violet-100 px-3 py-2.5">
+            <AlertCircle className="w-3.5 h-3.5 text-violet-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-violet-700">
+              <strong>Maior gargalo:</strong> a etapa "{worstDropoff.label}" perde{" "}
+              <strong>{worstDropoff.dropoff}%</strong> das conversas que chegaram até ela. Revise o script neste ponto.
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ─── 4. Painel de Saúde — booleans como scorecard ─────────────────────────────
+
+function QualityScorecard({ fields }: { fields: FieldAnalysis[] }) {
+  if (fields.length === 0) return null;
+
+  return (
+    <div className="card p-4">
+      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+        <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
+        Painel de Saúde da Ligação
+        <span className="ml-auto text-gray-300 font-normal normal-case">{fields[0]?.count ?? 0} registros</span>
+      </h4>
+
+      <div className="space-y-3">
+        {fields.map((field) => {
+          const yes  = field.trueCount  ?? 0;
+          const no   = field.falseCount ?? 0;
+          const total = yes + no;
+          const yesPct = total > 0 ? Math.round((yes / total) * 100) : 0;
+          const isGood = yesPct >= 50;
+
+          return (
+            <div key={field.key}>
+              <div className="flex items-center gap-2 mb-1">
+                {isGood
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  : <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                }
+                <span className="text-xs font-medium text-gray-700 flex-1 truncate">{field.key}</span>
+                <span className={`text-xs font-bold ${isGood ? "text-emerald-600" : "text-red-500"}`}>
+                  {yesPct}% sim
+                </span>
+                <span className="text-xs text-gray-400">{100 - yesPct}% não</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+                <div
+                  className="h-full rounded-full"
+                  style={{ width: `${yesPct}%`, background: isGood ? "#10b981" : "#ef4444" }}
+                />
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
+
+// ─── 5. Análise de campos com abas ────────────────────────────────────────────
+
+type FieldTab = "enum" | "boolean" | "number" | "text";
 
 function EnumCard({ field }: { field: FieldAnalysis }) {
   if (!field.distribution) return null;
@@ -175,33 +470,6 @@ function EnumCard({ field }: { field: FieldAnalysis }) {
   );
 }
 
-function BooleanCard({ field }: { field: FieldAnalysis }) {
-  const yes  = field.trueCount  ?? 0;
-  const no   = field.falseCount ?? 0;
-  const total = yes + no;
-  const yesPct = total > 0 ? Math.round((yes / total) * 100) : 0;
-
-  return (
-    <div className="card p-4">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-        {yesPct >= 50 ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> : <XCircle className="w-3.5 h-3.5 text-red-400" />}
-        {field.key}
-        <span className="ml-auto text-gray-300 font-normal normal-case">{field.count} registros</span>
-      </h4>
-      <div className="flex gap-3">
-        <div className="flex-1 rounded-lg p-3 text-center" style={{ background: "#10b98118" }}>
-          <p className="text-2xl font-bold text-emerald-600">{yesPct}%</p>
-          <p className="text-xs text-gray-500 mt-0.5">Sim ({yes})</p>
-        </div>
-        <div className="flex-1 rounded-lg p-3 text-center" style={{ background: "#ef444418" }}>
-          <p className="text-2xl font-bold text-red-500">{100 - yesPct}%</p>
-          <p className="text-xs text-gray-500 mt-0.5">Não ({no})</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function NumberCard({ field }: { field: FieldAnalysis }) {
   return (
     <div className="card p-4">
@@ -228,111 +496,115 @@ function NumberCard({ field }: { field: FieldAnalysis }) {
   );
 }
 
-function TextCard({ field }: { field: FieldAnalysis }) {
+function TextAccordion({ field }: { field: FieldAnalysis }) {
+  const [open, setOpen] = useState(false);
+  const samples = field.samples ?? [];
+
   return (
-    <div className="card p-4">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-        <Info className="w-3.5 h-3.5" />
-        {field.key}
-        <span className="ml-auto text-gray-300 font-normal normal-case">{field.count} registros</span>
-      </h4>
-      <div className="space-y-1.5">
-        {(field.samples ?? []).map((s, i) => (
-          <p key={i} className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2 line-clamp-2">
-            "{s}"
-          </p>
-        ))}
-      </div>
+    <div className="border border-gray-100 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Info className="w-3.5 h-3.5 text-gray-400" />
+          <span className="text-xs font-semibold text-gray-700">{field.key}</span>
+          <span className="text-xs text-gray-400">{field.count} registros</span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="px-4 py-3 space-y-2 bg-white">
+          {samples.length === 0 ? (
+            <p className="text-xs text-gray-400">Nenhuma amostra disponível.</p>
+          ) : (
+            samples.map((s, i) => (
+              <p key={i} className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2 line-clamp-3 leading-relaxed">
+                "{s}"
+              </p>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function FieldCard({ field }: { field: FieldAnalysis }) {
-  if (field.type === "enum")    return <EnumCard field={field} />;
-  if (field.type === "boolean") return <BooleanCard field={field} />;
-  if (field.type === "number")  return <NumberCard field={field} />;
-  return <TextCard field={field} />;
-}
+function TabbedFieldAnalysis({ fieldAnalysis, structuredCount }: {
+  fieldAnalysis: FieldAnalysis[];
+  structuredCount: number;
+}) {
+  const enums    = fieldAnalysis.filter((f) => f.type === "enum");
+  const booleans = fieldAnalysis.filter((f) => f.type === "boolean");
+  const numbers  = fieldAnalysis.filter((f) => f.type === "number");
+  const texts    = fieldAnalysis.filter((f) => f.type === "text");
 
-// ─── Funil de Abandono por Etapa ──────────────────────────────────────────────
+  const tabs = (
+    [
+      { id: "enum"    as FieldTab, label: "Distribuições", count: enums.length },
+      { id: "boolean" as FieldTab, label: "Saúde",         count: booleans.length },
+      { id: "number"  as FieldTab, label: "Números",       count: numbers.length },
+      { id: "text"    as FieldTab, label: "Análises",      count: texts.length },
+    ] as { id: FieldTab; label: string; count: number }[]
+  ).filter((t) => t.count > 0);
 
-function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
-  if (!funnel.hasData || funnel.stages.length === 0) return null;
+  const [activeTab, setActiveTab] = useState<FieldTab>(tabs[0]?.id ?? "enum");
 
-  const STAGE_COLORS = ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ddd6fe"];
+  if (tabs.length === 0) return null;
 
   return (
     <section>
       <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-        <TrendingDown className="w-4 h-4 text-violet-500" />
-        Funil de Abandono — onde a conversa para
+        <BarChart3 className="w-4 h-4 text-indigo-500" />
+        Inteligência dos Dados — Structured Outputs
       </h2>
       <p className="text-xs text-gray-400 mb-3">
-        Baseado em {funnel.totalWithData.toLocaleString("pt-BR")} chamadas com dados de etapa.
+        Baseado em {structuredCount.toLocaleString("pt-BR")} chamadas com dados estruturados.
       </p>
-      <div className="card p-4">
-        <div className="space-y-2.5">
-          {funnel.stages.map((stage, i) => (
-            <div key={stage.label}>
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
-                    style={{ background: STAGE_COLORS[i] }}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="text-sm font-medium text-gray-800 truncate">{stage.label}</span>
-                </div>
-                <div className="flex items-center gap-3 shrink-0 ml-3">
-                  {stage.dropoff !== null && stage.dropoff > 0 && (
-                    <span className="text-xs text-red-500 font-medium">
-                      −{stage.dropoff}% na entrada
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-500">{stage.cumulative} calls</span>
-                  <span className="text-xs font-bold text-gray-700 w-10 text-right">{stage.pct}%</span>
-                </div>
-              </div>
-              <div className="h-3 rounded-full overflow-hidden bg-gray-100">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${stage.pct}%`,
-                    background: STAGE_COLORS[i],
-                    opacity: 0.85,
-                  }}
-                />
-              </div>
-              {stage.stopped > 0 && (
-                <p className="text-xs text-gray-400 mt-1">
-                  {stage.stopped} {stage.stopped === 1 ? "ligação encerrou" : "ligações encerraram"} nesta etapa
-                  {stage.label !== "Agendamento/Fechamento" ? " (não avançaram)" : " (objetivo atingido ✓)"}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
 
-        {/* Insight diagnóstico */}
-        {(() => {
-          const worstDropoff = funnel.stages.reduce((worst, s) =>
-            s.dropoff !== null && s.dropoff > (worst?.dropoff ?? 0) ? s : worst,
-            null as FunnelStage | null
-          );
-          if (!worstDropoff || worstDropoff.dropoff === null) return null;
-          return (
-            <div className="mt-4 flex items-start gap-2 rounded-lg bg-violet-50 border border-violet-100 px-3 py-2.5">
-              <AlertCircle className="w-3.5 h-3.5 text-violet-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-violet-700">
-                <strong>Maior gargalo:</strong> a etapa "{worstDropoff.label}" perde{" "}
-                <strong>{worstDropoff.dropoff}%</strong> das conversas que chegaram até ela.
-                Revise o script neste ponto específico.
-              </p>
-            </div>
-          );
-        })()}
+      {/* Tabs */}
+      <div className="flex gap-1 mb-3 border-b border-gray-100 pb-0">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-3 py-2 text-xs font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
+              activeTab === tab.id
+                ? "border-indigo-500 text-indigo-700 bg-indigo-50"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {tab.label}
+            <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
+              activeTab === tab.id ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"
+            }`}>
+              {tab.count}
+            </span>
+          </button>
+        ))}
       </div>
+
+      {/* Tab content */}
+      {activeTab === "boolean" && <QualityScorecard fields={booleans} />}
+
+      {activeTab === "enum" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {enums.map((f) => <EnumCard key={f.key} field={f} />)}
+        </div>
+      )}
+
+      {activeTab === "number" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {numbers.map((f) => <NumberCard key={f.key} field={f} />)}
+        </div>
+      )}
+
+      {activeTab === "text" && (
+        <div className="space-y-2">
+          {texts.map((f) => <TextAccordion key={f.key} field={f} />)}
+        </div>
+      )}
     </section>
   );
 }
@@ -358,7 +630,6 @@ function OpportunitiesSection({
       </h2>
       <div className="card p-4 border-l-4 border-amber-400">
         <div className="flex flex-col md:flex-row gap-4">
-          {/* Métrica principal */}
           <div className="flex-1">
             <p className="text-xs text-gray-500 mb-1">Chamadas com falha técnica</p>
             <p className="text-3xl font-bold text-amber-600">{card.techIssueCount}</p>
@@ -371,7 +642,6 @@ function OpportunitiesSection({
             </p>
           </div>
 
-          {/* Impacto financeiro ou CTA para configurar */}
           <div className="md:w-56 shrink-0">
             {card.hasConfig && card.potentialValue != null ? (
               <div className="rounded-xl p-4 text-center h-full flex flex-col items-center justify-center" style={{ background: "#f59e0b18" }}>
@@ -404,6 +674,56 @@ function OpportunitiesSection({
             )}
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Correlações: Detector de ICP ─────────────────────────────────────────────
+
+function ICPSection({ correlations }: { correlations: DossieData["correlations"] }) {
+  if (Object.keys(correlations).length === 0) return null;
+
+  return (
+    <section>
+      <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+        <Users className="w-4 h-4 text-amber-500" />
+        Detector de ICP — Engajamento por Segmento
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {Object.entries(correlations).map(([field, groups]) => {
+          const sorted = Object.entries(groups).sort((a, b) => b[1].avgDuration - a[1].avgDuration);
+          const maxDur = Math.max(...sorted.map((g) => g[1].avgDuration), 1);
+          return (
+            <div key={field} className="card p-4">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                {field} × Duração Média
+              </h4>
+              <div className="space-y-2.5">
+                {sorted.map(([label, stats]) => {
+                  const pct = Math.round((stats.avgDuration / maxDur) * 100);
+                  return (
+                    <div key={label}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-medium text-gray-700 truncate max-w-[55%]">{label}</span>
+                        <span className="text-xs text-gray-500 shrink-0">
+                          {fmtDuration(stats.avgDuration)} · {stats.count} calls
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${pct}%`, background: "#f59e0b" }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">{getEngagementLabel(stats.avgDuration)}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
@@ -444,14 +764,6 @@ export default function DossiePage() {
   }, [tenantId, load]);
 
   function handlePrint() { window.print(); }
-
-  const BUCKET_ORDER  = ["0–10s", "10–30s", "30–60s", "1–3min", "3–5min", "5min+"];
-  const BUCKET_COLORS = ["#ef4444", "#f97316", "#f59e0b", "#84cc16", "#10b981", "#6366f1"];
-
-  const durationBuckets = data
-    ? BUCKET_ORDER.map((k) => ({ label: k, value: data.durationAnalysis.buckets[k] ?? 0 }))
-    : [];
-  const maxBucket = Math.max(...durationBuckets.map((b) => b.value), 1);
 
   return (
     <div>
@@ -553,61 +865,8 @@ export default function DossiePage() {
             </p>
           </div>
 
-          {/* 1. Visão Geral */}
-          <section>
-            <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <PhoneCall className="w-4 h-4 text-indigo-500" />
-              Visão Geral
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              <StatCard
-                icon={PhoneCall}
-                label="Total de chamadas"
-                value={data.overview.totalCalls.toLocaleString("pt-BR")}
-                color="#6366f1"
-              />
-              <StatCard
-                icon={Users}
-                label="Atenderam"
-                value={`${data.overview.answerRate}%`}
-                sub={`${data.overview.answeredCalls.toLocaleString("pt-BR")} chamadas`}
-                color="#10b981"
-              />
-              <StatCard
-                icon={PhoneMissed}
-                label="Não atenderam"
-                value={`${100 - data.overview.answerRate}%`}
-                sub={`${(data.overview.totalCalls - data.overview.answeredCalls).toLocaleString("pt-BR")} chamadas`}
-                color="#ef4444"
-              />
-              <StatCard
-                icon={Clock}
-                label="Duração média"
-                value={fmtDuration(data.durationAnalysis.avg)}
-                sub="chamadas atendidas"
-                color="#f59e0b"
-              />
-              <StatCard
-                icon={DollarSign}
-                label="Custo total"
-                value={fmtCurrency(data.overview.totalCost)}
-                color="#8b5cf6"
-              />
-              <StatCard
-                icon={DollarSign}
-                label="Custo por chamada"
-                value={fmtCurrency(data.overview.avgCostPerCall)}
-                color="#8b5cf6"
-              />
-              <StatCard
-                icon={TrendingUp}
-                label="Com inteligência"
-                value={`${data.overview.structuredOutputsRate}%`}
-                sub={`${data.overview.structuredOutputsCount.toLocaleString("pt-BR")} com dados`}
-                color="#14b8a6"
-              />
-            </div>
-          </section>
+          {/* 1. Visão Geral — hero metrics */}
+          <HeroMetrics overview={data.overview} durationAvg={data.durationAnalysis.avg} />
 
           {/* 2. Oportunidades Não Trabalhadas */}
           <OpportunitiesSection
@@ -616,140 +875,19 @@ export default function DossiePage() {
             campaignId={data.campaign?.id}
           />
 
-          {/* 3. Mapa de Abandono — quando desligam */}
-          <section>
-            <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <TrendingDown className="w-4 h-4 text-red-500" />
-              Mapa de Abandono — quando os leads desligam
-            </h2>
-            <div className="card p-4">
-              {data.durationAnalysis.total === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-4">Nenhuma chamada atendida no período.</p>
-              ) : (
-                <>
-                  {data.durationAnalysis.voicemailCount > 0 && (
-                    <div className="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
-                      <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-700">
-                        <strong>{data.durationAnalysis.voicemailCount} chamadas</strong> foram para caixa postal (detectadas pelo Vapi) e estão excluídas do mapa abaixo.
-                      </p>
-                    </div>
-                  )}
+          {/* 3. Mapa de Abandono */}
+          <AbandonmentChart durationAnalysis={data.durationAnalysis} />
 
-                  <div className="flex items-end gap-2" style={{ height: "120px" }}>
-                    {durationBuckets.map((b, i) => {
-                      const barH   = maxBucket > 0 ? Math.max(Math.round((b.value / maxBucket) * 100), b.value > 0 ? 4 : 0) : 0;
-                      const callPct = data.durationAnalysis.total > 0
-                        ? Math.round((b.value / data.durationAnalysis.total) * 100)
-                        : 0;
-                      return (
-                        <div key={b.label} className="flex-1 flex flex-col items-center justify-end gap-1" style={{ height: "120px" }}>
-                          {b.value > 0 && (
-                            <span className="text-xs font-semibold text-gray-700">{callPct}%</span>
-                          )}
-                          <div
-                            className="w-full rounded-t-md"
-                            style={{
-                              height: `${barH}px`,
-                              background: BUCKET_COLORS[i],
-                              opacity: 0.85,
-                              minHeight: b.value > 0 ? "4px" : "0",
-                            }}
-                          />
-                          <span className="text-xs text-gray-500 text-center leading-tight">{b.label}</span>
-                          <span className="text-xs text-gray-400">{b.value}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <p className="text-xs mt-3 text-center" style={{ color: "#6b7280" }}>
-                    {(() => {
-                      const early = (data.durationAnalysis.buckets["0–10s"] ?? 0) +
-                                    (data.durationAnalysis.buckets["10–30s"] ?? 0);
-                      const earlyPct = data.durationAnalysis.total > 0
-                        ? Math.round((early / data.durationAnalysis.total) * 100) : 0;
-                      const vmNote = data.durationAnalysis.voicemailCount > 0
-                        ? ` (${data.durationAnalysis.voicemailCount} caixas postais já excluídas)`
-                        : "";
-                      if (earlyPct > 40) return `⚠️ ${earlyPct}% das conversas duram menos de 30s${vmNote} — avalie o script de abertura.`;
-                      if (earlyPct > 20) return `${earlyPct}% das conversas encerram antes de 30s${vmNote} — considere revisar a abordagem inicial.`;
-                      return `Perfil de engajamento saudável — maioria das conversas passa de 30s.`;
-                    })()}
-                  </p>
-                </>
-              )}
-            </div>
-          </section>
-
-          {/* 4. Funil de Abandono por Etapa */}
+          {/* 4. Funil de Abandono */}
           <FunnelSection funnel={data.funnelAnalysis} />
 
-          {/* 5. Análise de Campos (Structured Outputs) */}
-          {data.fieldAnalysis.length > 0 && (
-            <section>
-              <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-indigo-500" />
-                Inteligência dos Dados — Structured Outputs
-              </h2>
-              <p className="text-xs text-gray-400 mb-3">
-                Baseado em {data.overview.structuredOutputsCount.toLocaleString("pt-BR")} chamadas com dados estruturados.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {data.fieldAnalysis.map((field) => (
-                  <FieldCard key={field.key} field={field} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* 6. Correlações: campo × duração */}
-          {Object.keys(data.correlations).length > 0 && (
-            <section>
-              <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <Users className="w-4 h-4 text-amber-500" />
-                Detector de ICP — Engajamento por Segmento
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {Object.entries(data.correlations).map(([field, groups]) => {
-                  const sorted = Object.entries(groups).sort((a, b) => b[1].avgDuration - a[1].avgDuration);
-                  const maxDur = Math.max(...sorted.map((g) => g[1].avgDuration), 1);
-                  return (
-                    <div key={field} className="card p-4">
-                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                        {field} × Duração Média
-                      </h4>
-                      <div className="space-y-2.5">
-                        {sorted.map(([label, stats]) => {
-                          const pct = Math.round((stats.avgDuration / maxDur) * 100);
-                          return (
-                            <div key={label}>
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-medium text-gray-700 truncate max-w-[55%]">{label}</span>
-                                <span className="text-xs text-gray-500 shrink-0">
-                                  {fmtDuration(stats.avgDuration)} · {stats.count} calls
-                                </span>
-                              </div>
-                              <div className="h-2 rounded-full overflow-hidden bg-gray-100">
-                                <div
-                                  className="h-full rounded-full"
-                                  style={{ width: `${pct}%`, background: "#f59e0b" }}
-                                />
-                              </div>
-                              <p className="text-xs text-gray-400 mt-0.5">{getEngagementLabel(stats.avgDuration)}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* Sem structured outputs */}
-          {data.fieldAnalysis.length === 0 && (
+          {/* 5. Inteligência dos Dados — tabs + scorecard */}
+          {data.fieldAnalysis.length > 0 ? (
+            <TabbedFieldAnalysis
+              fieldAnalysis={data.fieldAnalysis}
+              structuredCount={data.overview.structuredOutputsCount}
+            />
+          ) : (
             <div className="card p-6 text-center">
               <Info className="w-8 h-8 text-gray-300 mx-auto mb-2" />
               <p className="text-sm font-medium text-gray-700 mb-1">Nenhum dado estruturado encontrado</p>
@@ -758,6 +896,9 @@ export default function DossiePage() {
               </p>
             </div>
           )}
+
+          {/* 6. Detector de ICP */}
+          <ICPSection correlations={data.correlations} />
 
           {/* Rodapé de impressão */}
           <div className="hidden print:block mt-8 pt-4 border-t border-gray-200 text-xs text-gray-400 text-center">

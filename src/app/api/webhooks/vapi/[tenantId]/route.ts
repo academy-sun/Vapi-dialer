@@ -62,18 +62,70 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const service = createServiceClient();
 
-  // Buscar timezone do tenant
-  const { data: tenant } = await service
-    .from("tenants")
-    .select("timezone")
-    .eq("id", tenantId)
-    .single();
-  const tz = tenant?.timezone ?? "America/Sao_Paulo";
-
   const msgType = message.type;
+
+  // ── transcript (detecção de caixa postal / URA em tempo real) ──
+  if (msgType === "transcript") {
+    const transcriptText = message.transcript as string | undefined;
+    const call = message.call as Record<string, unknown> | undefined;
+    const controlUrl = (call?.monitor as Record<string, unknown> | undefined)?.controlUrl as string | undefined;
+
+    if (controlUrl && transcriptText) {
+      const startedAt = call?.startedAt as string | undefined;
+      const elapsedSec = startedAt
+        ? (Date.now() - new Date(startedAt).getTime()) / 1000
+        : 0;
+
+      if (elapsedSec <= 25) {
+        const VOICEMAIL_RE = /grave (sua )?mensagem|ap[oó]s o sinal|deixe (seu|sua) recado|caixa postal|n[aã]o est[aá] dispon[ií]vel/i;
+        const IVR_RE = /para falar com|disque|tecle|digite|op[cç][aã]o|ramal/i;
+
+        if (VOICEMAIL_RE.test(transcriptText) || IVR_RE.test(transcriptText)) {
+          const callId = call?.id as string | undefined;
+          console.log(
+            `[webhook] 📵 Caixa postal/URA detectada | call=${callId}` +
+            ` | transcript="${transcriptText.slice(0, 100)}"` +
+            ` | elapsed=${elapsedSec.toFixed(1)}s`
+          );
+
+          // Marcar call_record antes de encerrar — race condition improvável
+          // (worker cria o record antes do dispatch), mas UPDATE é no-op se não existir
+          if (callId) {
+            await service
+              .from("call_records")
+              .update({ machine_detected: true })
+              .eq("vapi_call_id", callId);
+          }
+
+          try {
+            await fetch(controlUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ type: "end-call" }),
+              signal: AbortSignal.timeout(5_000),
+            });
+          } catch (err) {
+            console.error(
+              `[webhook] ✗ Falha ao encerrar call via controlUrl | call=${callId}` +
+              ` | erro=${err instanceof Error ? err.message : String(err)}`
+            );
+          }
+        }
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   // ── tool-calls ──
   if (msgType === "tool-calls") {
+    // Buscar timezone do tenant (necessário apenas para parse_callback_time)
+    const { data: tenant } = await service
+      .from("tenants")
+      .select("timezone")
+      .eq("id", tenantId)
+      .single();
+    const tz = tenant?.timezone ?? "America/Sao_Paulo";
+
     const toolCallList: Array<{ id: string; function: { name: string; arguments: Record<string, unknown> } }> =
       message.toolCallList ?? [];
 
@@ -480,7 +532,15 @@ async function updateLeadAfterCall(
     durationSeconds != null &&
     durationSeconds >= 1;
 
-  const isAnswered = endedReason != null && (ANSWERED_REASONS.has(endedReason) || silenceButAnswered);
+  // assistant-ended-call com duração curta = caixa postal/URA detectada por nós via transcript
+  // e encerrada via controlUrl. O Vapi retorna "assistant-ended-call" nesse caso, mas
+  // NÃO é uma conversa real — deve voltar para retry como qualquer não-atendimento.
+  const voicemailDetectedByUs =
+    endedReason === "assistant-ended-call" &&
+    durationSeconds != null &&
+    durationSeconds < 25;
+
+  const isAnswered = endedReason != null && (ANSWERED_REASONS.has(endedReason) || silenceButAnswered) && !voicemailDetectedByUs;
 
   if (isAnswered) {
     // ── Chamada realmente atendida → concluído ──
