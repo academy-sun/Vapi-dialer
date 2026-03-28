@@ -43,22 +43,17 @@ type FieldType = "enum" | "number" | "boolean" | "text";
 interface FieldAnalysis {
   key: string;
   type: FieldType;
-  count: number; // chamadas com este campo
-  // enum
+  count: number;
   distribution?: Record<string, number>;
-  // number
   avg?: number;
   min?: number;
   max?: number;
-  // boolean
   trueCount?: number;
   falseCount?: number;
-  // text
   samples?: string[];
 }
 
 function analyzeFields(rows: Record<string, unknown>[]): FieldAnalysis[] {
-  // Coleta valores por campo
   const fieldValues: Record<string, unknown[]> = {};
   for (const row of rows) {
     for (const [k, v] of Object.entries(row)) {
@@ -73,17 +68,14 @@ function analyzeFields(rows: Record<string, unknown>[]): FieldAnalysis[] {
   for (const [key, values] of Object.entries(fieldValues)) {
     if (values.length === 0) continue;
 
-    // Detectar tipo predominante
     const boolCount = values.filter((v) => typeof v === "boolean").length;
     const numCount  = values.filter((v) => typeof v === "number").length;
 
     if (boolCount >= values.length * 0.8) {
-      // Boolean
       const trueCount  = values.filter((v) => v === true || v === 1).length;
       const falseCount = values.length - trueCount;
       results.push({ key, type: "boolean", count: values.length, trueCount, falseCount });
     } else if (numCount >= values.length * 0.8) {
-      // Number
       const nums = values.filter((v) => typeof v === "number") as number[];
       const avg  = nums.reduce((s, n) => s + n, 0) / nums.length;
       results.push({
@@ -93,24 +85,20 @@ function analyzeFields(rows: Record<string, unknown>[]): FieldAnalysis[] {
         max: Math.max(...nums),
       });
     } else {
-      // String → enum ou text
       const strings = values.map((v) => String(v).trim()).filter(Boolean);
       const unique  = new Set(strings);
 
       if (unique.size <= 12) {
-        // Enum com distribuição
         const distribution: Record<string, number> = {};
         for (const s of strings) distribution[s] = (distribution[s] ?? 0) + 1;
         results.push({ key, type: "enum", count: values.length, distribution });
       } else {
-        // Texto livre — amostra de 5
         const samples = Array.from(unique).slice(0, 5).map((s) => s.substring(0, 120));
         results.push({ key, type: "text", count: values.length, samples });
       }
     }
   }
 
-  // Ordenar: enum → boolean → number → text; dentro de cada grupo, por count desc
   const order: FieldType[] = ["enum", "boolean", "number", "text"];
   results.sort((a, b) => {
     const oa = order.indexOf(a.type);
@@ -126,13 +114,15 @@ const VOICEMAIL_REASONS = new Set([
   "voicemail", "machine_end_silence", "machine_end_other", "silence-timed-out",
 ]);
 
+const TECH_FAULT_REASONS = new Set([
+  "pipeline-error", "transport-error", "error-vapifault",
+]);
+
 /** Análise de duração: separando conversas reais de caixa postal */
 function analyzeDuration(calls: { duration_seconds: number | null; ended_reason: string | null }[]) {
-  // Conversas reais = cliente ou assistente encerraram (inclui possível caixa postal curta)
   const answered = calls.filter((c) =>
     c.ended_reason === "customer-ended-call" || c.ended_reason === "assistant-ended-call"
   );
-  // Caixa postal detectada explicitamente pelo Vapi
   const voicemailCount = calls.filter((c) =>
     c.ended_reason != null && VOICEMAIL_REASONS.has(c.ended_reason)
   ).length;
@@ -159,7 +149,7 @@ function analyzeDuration(calls: { duration_seconds: number | null; ended_reason:
   return { buckets, avg: Math.round(avg), total: answered.length, voicemailCount };
 }
 
-/** Correlação entre um campo de engajamento e duração média */
+/** Correlação entre um campo e duração média */
 function correlateWithDuration(
   flatRows: Record<string, unknown>[],
   durations: (number | null)[],
@@ -183,6 +173,78 @@ function correlateWithDuration(
   );
 }
 
+// Etapas do funil em ordem crescente de profundidade
+const FUNNEL_STAGES = [
+  "Abertura apenas",
+  "Apresentação do produto",
+  "Levantamento de objeção",
+  "Negociação",
+  "Agendamento/Fechamento",
+] as const;
+
+/** Funil de abandono por etapa da conversa */
+function buildFunnelAnalysis(flatRows: Record<string, unknown>[]) {
+  // Conta chamadas que chegaram a CADA etapa (uma call com estagio X
+  // também passou pelas etapas anteriores, então é contada em todas elas)
+  const reachedCount: Record<string, number> = {};
+  const stoppedCount: Record<string, number> = {};
+
+  for (const row of flatRows) {
+    const stage = row["estagio_atingido"] as string | undefined;
+    if (!stage || stage === "Não atendeu") continue;
+    const idx = FUNNEL_STAGES.indexOf(stage as typeof FUNNEL_STAGES[number]);
+    if (idx < 0) continue;
+    // A call atingiu este estágio → passou por todos os anteriores também
+    for (let i = 0; i <= idx; i++) {
+      reachedCount[FUNNEL_STAGES[i]] = (reachedCount[FUNNEL_STAGES[i]] ?? 0) + 1;
+    }
+    stoppedCount[stage] = (stoppedCount[stage] ?? 0) + 1;
+  }
+
+  const topCount = reachedCount[FUNNEL_STAGES[0]] ?? 0;
+  if (topCount === 0) return { stages: [], totalWithData: 0, hasData: false };
+
+  const stages = FUNNEL_STAGES.map((label, i) => {
+    const cumulative = reachedCount[label] ?? 0;
+    const stopped    = stoppedCount[label] ?? 0;
+    const prev       = i > 0 ? (reachedCount[FUNNEL_STAGES[i - 1]] ?? 0) : topCount;
+    const dropoff    = i > 0 && prev > 0 ? Math.round(((prev - cumulative) / prev) * 100) : null;
+    const pct        = topCount > 0 ? Math.round((cumulative / topCount) * 100) : 0;
+    return { label, cumulative, stopped, pct, dropoff };
+  });
+
+  return { stages, totalWithData: topCount, hasData: true };
+}
+
+/** Card de oportunidades não trabalhadas por problemas técnicos */
+function buildOpportunitiesCard(
+  calls: { id: string; ended_reason: string | null }[],
+  flatRows: Record<string, unknown>[],
+  callIds: string[],
+  avgDealValue: number | null
+) {
+  // Problemas técnicos via ended_reason (disponível em TODAS as chamadas)
+  const techFaultIds = new Set(
+    calls.filter((c) => c.ended_reason != null && TECH_FAULT_REASONS.has(c.ended_reason)).map((c) => c.id)
+  );
+
+  // Problemas técnicos adicionais detectados via structured_outputs (schema novo)
+  for (let i = 0; i < flatRows.length; i++) {
+    const qt = flatRows[i]["qualidade_tecnica"] as string | undefined;
+    if (qt === "Latência percebida" || qt === "Queda abrupta") {
+      techFaultIds.add(callIds[i]);
+    }
+  }
+
+  const techIssueCount = techFaultIds.size;
+  const techIssuePct   = calls.length > 0 ? Math.round((techIssueCount / calls.length) * 100) : 0;
+  const potentialValue = avgDealValue != null && techIssueCount > 0
+    ? Math.round(techIssueCount * avgDealValue)
+    : null;
+
+  return { techIssueCount, techIssuePct, avgDealValue, potentialValue, hasConfig: avgDealValue != null };
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest, { params }: Params) {
@@ -200,7 +262,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   // ── Campanhas disponíveis ──
   const { data: queuesRaw } = await service
     .from("dial_queues")
-    .select("id, name, lead_list_id, assistant_id")
+    .select("id, name, lead_list_id, assistant_id, avg_deal_value")
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false });
 
@@ -210,10 +272,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     return NextResponse.json({ campaigns, data: null });
   }
 
-  const campaign = campaigns.find((c) => c.id === queueId);
+  const campaign    = campaigns.find((c) => c.id === queueId);
+  const queueConfig = queuesRaw?.find((q) => q.id === queueId);
+  const avgDealValue: number | null = queueConfig?.avg_deal_value ?? null;
 
   // ── Call records da campanha — batch pagination (lotes de 1000) ──
-  // Respeita max-rows=1000 do PostgREST sem precisar aumentar o limite global.
   const calls: {
     id: string;
     cost: number | null;
@@ -240,6 +303,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       from += BATCH;
     }
   }
+
   const totalCalls    = calls.length;
   const totalCost     = calls.reduce((s, c) => s + (c.cost ?? 0), 0);
   const answeredCalls = calls.filter((c) =>
@@ -252,13 +316,28 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   // ── Structured outputs → análise dinâmica de campos ──
   const withOutputs = calls.filter((c) => c.structured_outputs != null);
-  const flatRows     = withOutputs.map((c) => flattenOutput(c.structured_outputs));
-  const durations    = withOutputs.map((c) => c.duration_seconds ?? null);
+  const flatRows    = withOutputs.map((c) => flattenOutput(c.structured_outputs));
+  const callIds     = withOutputs.map((c) => c.id);
+  const durations   = withOutputs.map((c) => c.duration_seconds ?? null);
 
   const fieldAnalysis = analyzeFields(flatRows);
 
-  // ── Correlação duração × campo de interesse/cargo (se existir) ──
-  const ENGAGEMENT_FIELDS = ["interesse", "nivel_de_engajamento", "resultado_da_ligacao", "cargo_presumido"];
+  // ── Funil de abandono por etapa ──
+  const funnelAnalysis = buildFunnelAnalysis(flatRows);
+
+  // ── Card de oportunidades não trabalhadas ──
+  const opportunitiesCard = buildOpportunitiesCard(calls, flatRows, callIds, avgDealValue);
+
+  // ── Correlação duração × campo (campos relevantes do novo schema + legado) ──
+  const ENGAGEMENT_FIELDS = [
+    "interesse",
+    "nivel_engajamento",
+    "resultado",
+    "cargo_presumido",
+    // campos legado (schema antigo)
+    "nivel_de_engajamento",
+    "resultado_da_ligacao",
+  ];
   const correlations: Record<string, Record<string, { count: number; avgDuration: number }>> = {};
   for (const field of ENGAGEMENT_FIELDS) {
     if (flatRows.some((r) => field in r)) {
@@ -278,6 +357,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     data: {
       campaign,
       period: { days, since },
+      avgDealValue,
       overview: {
         totalCalls,
         answeredCalls,
@@ -288,6 +368,8 @@ export async function GET(req: NextRequest, { params }: Params) {
         structuredOutputsRate: totalCalls > 0 ? Math.round((withOutputs.length / totalCalls) * 100) : 0,
       },
       durationAnalysis,
+      funnelAnalysis,
+      opportunitiesCard,
       fieldAnalysis,
       correlations,
       endedReasonBreakdown,

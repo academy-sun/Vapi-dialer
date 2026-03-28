@@ -40,6 +40,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     webhook_url = null,
     allowed_days,
     allowed_time_window,
+    avg_deal_value = null,
   } = body;
 
   if (!name || !assistant_id || !phone_number_id || !lead_list_id) {
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       retry_delay_minutes:  safeDelay,
       max_daily_attempts:   safeDaily,
       webhook_url,
+      avg_deal_value: avg_deal_value != null ? parseFloat(String(avg_deal_value)) || null : null,
       ...(allowed_days         !== undefined && { allowed_days }),
       ...(allowed_time_window  !== undefined && { allowed_time_window }),
     })

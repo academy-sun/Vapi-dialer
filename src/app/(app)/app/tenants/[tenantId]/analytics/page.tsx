@@ -706,6 +706,7 @@ export default function AnalyticsPage() {
                 {[
                   { label: "Atendidas", icon: Phone, value: data.answeredCalls, color: "bg-emerald-500", textColor: "text-emerald-700" },
                   { label: "Não atendidas", icon: PhoneOff, value: data.notAnsweredCalls, color: "bg-red-400", textColor: "text-red-500" },
+                  ...(data.statusBreakdown["ura-suspeita"] > 0 ? [{ label: "Poss. URA / Caixa postal", icon: AlertTriangle, value: data.statusBreakdown["ura-suspeita"], color: "bg-amber-400", textColor: "text-amber-600" }] : []),
                 ].map(({ label, icon: Icon, value, color, textColor }) => (
                   <div key={label}>
                     <div className="flex justify-between text-xs text-gray-600 mb-1.5">

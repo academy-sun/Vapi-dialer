@@ -730,11 +730,14 @@ export default function CallsPage() {
             </thead>
             <tbody>
               {pagedCalls.map((call) => {
-                const reason = REASON_CONFIG[call.ended_reason ?? ""] ?? { label: call.ended_reason ?? "Em andamento", badge: "badge-gray" };
+                const isUraSuspect = call.ended_reason === "customer-did-not-answer" && call.duration_seconds != null && call.duration_seconds >= 1 && call.duration_seconds <= 30;
+                const reason = isUraSuspect
+                  ? { label: "Poss. URA/Caixa postal", badge: "badge-purple" }
+                  : (REASON_CONFIG[call.ended_reason ?? ""] ?? { label: call.ended_reason ?? "Em andamento", badge: "badge-gray" });
                 const { relative, full } = formatRelativeTime(call.created_at);
                 const isSelected = selected?.id === call.id;
                 const result = call.structured_outputs ? extractResult(call.structured_outputs) : null;
-                const score = result?.["Performance Global Score"];
+                const score = result?.["score"] ?? result?.["Score"] ?? result?.["Performance Global Score"];
                 return (
                   <tr
                     key={call.id}
