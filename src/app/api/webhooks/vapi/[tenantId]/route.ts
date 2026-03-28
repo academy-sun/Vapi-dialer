@@ -37,11 +37,16 @@ function _nextStart(from: Date, days: number[], tw: TW): Date {
   return new Date(from.getTime() + 86_400_000);
 }
 
-function scheduleNextAttempt(base: Date, delayMin: number, days: number[] | null | undefined, tw: TW | null | undefined, jitterMin = 60): string {
+function scheduleNextAttempt(base: Date, delayMin: number, days: number[] | null | undefined, tw: TW | null | undefined, jitterMin = 60, sameDayJitterMin = 10): string {
   const naive = new Date(base.getTime() + delayMin * 60_000);
-  if (!days || days.length === 0 || !tw?.start || !tw?.end || !tw?.timezone) return naive.toISOString();
-  if (_inWindow(naive, days, tw)) return naive.toISOString();
-  const next    = _nextStart(naive, days, tw);
+  // Jitter para retentativas dentro da mesma janela (evita pile-up no mesmo minuto)
+  const sameDayJitterMs = Math.floor(Math.random() * (sameDayJitterMin + 1)) * 60_000;
+  if (!days || days.length === 0 || !tw?.start || !tw?.end || !tw?.timezone)
+    return new Date(naive.getTime() + sameDayJitterMs).toISOString();
+  if (_inWindow(naive, days, tw))
+    return new Date(naive.getTime() + sameDayJitterMs).toISOString();
+  // Fora da janela → próximo início com jitter maior (evita thundering herd no início do dia)
+  const next     = _nextStart(naive, days, tw);
   const jitterMs = Math.floor(Math.random() * (jitterMin + 1)) * 60_000;
   return new Date(next.getTime() + jitterMs).toISOString();
 }
@@ -463,6 +468,7 @@ async function updateLeadAfterCall(
   // → Após max_attempts: failed (igual a qualquer outro não-atendimento).
   const isAmbiguousSip = endedReason != null && (
     endedReason.includes("error-providerfault") ||
+    endedReason.includes("error-sip-outbound") ||   // failed-to-connect e variantes
     endedReason.includes("sip-503") ||
     endedReason.includes("sip-408") ||
     endedReason.includes("sip-500") ||
@@ -498,10 +504,12 @@ async function updateLeadAfterCall(
         .eq("id", leadId);
       await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
-      const retryAt = new Date(Date.now() + 3 * 60 * 1000).toISOString();
+      const jitterMs = Math.floor(Math.random() * 13) * 60_000; // 0–12 min aleatório
+      const retryAt  = new Date(Date.now() + 3 * 60_000 + jitterMs).toISOString();
+      const retryMin = Math.round((3 * 60_000 + jitterMs) / 60_000);
       console.warn(
         `[webhook] ⚠ SIP ambíguo (${endedReason}) | lead=${leadId}` +
-        ` — tentativa ${attempts}/${maxAttempts} | retry em 3min (contando tentativa)`
+        ` — tentativa ${attempts}/${maxAttempts} | retry em ${retryMin}min (3+${Math.round(jitterMs/60_000)} jitter)`
       );
       // NÃO alterar attempt_count — manter o incremento feito pelo worker
       await service
