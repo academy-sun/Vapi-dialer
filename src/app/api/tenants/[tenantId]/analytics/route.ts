@@ -255,7 +255,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       durationBuckets: { "0-10s": 0, "10-60s": 0, "1-3min": 0, "3-5min": 0, "5min+": 0 },
       answeredCalls: 0,
       notAnsweredCalls: 0,
-      statusBreakdown: { answered: 0, voicemail: 0, busy: 0, "no-answer": 0, failed: 0, other: 0 },
+      statusBreakdown: { answered: 0, voicemail: 0, busy: 0, "no-answer": 0, failed: 0, other: 0, "ura-suspeita": 0 },
       endedReasonRaw: {},
       structuredWithOutput: 0,
       structuredSuccessCalls: 0,
@@ -362,18 +362,26 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   // Breakdown por status com ended_reason raw para diagnóstico
   const statusBreakdown = {
-    answered:    0,
-    voicemail:   0,
-    busy:        0,
-    "no-answer": 0,
-    failed:      0,
-    other:       0,
+    answered:        0,
+    voicemail:       0,
+    busy:            0,
+    "no-answer":     0,
+    failed:          0,
+    other:           0,
+    "ura-suspeita":  0, // customer-did-not-answer + 1–30s → provável URA ou caixa postal não detectada
   };
   const endedReasonRaw: Record<string, number> = {}; // diagnóstico: valores reais do banco
 
   for (const c of calls) {
-    const cat = classifyReason(c.ended_reason);
-    statusBreakdown[cat]++;
+    // Heurística URA: customer-did-not-answer com duração 1–30s é provável URA/caixa postal
+    const isUraSuspect =
+      c.ended_reason === "customer-did-not-answer" &&
+      c.duration_seconds != null &&
+      c.duration_seconds >= 1 &&
+      c.duration_seconds <= 30;
+
+    const cat = isUraSuspect ? "ura-suspeita" : classifyReason(c.ended_reason);
+    statusBreakdown[cat as keyof typeof statusBreakdown]++;
 
     const raw = c.ended_reason ?? "null";
     endedReasonRaw[raw] = (endedReasonRaw[raw] ?? 0) + 1;
