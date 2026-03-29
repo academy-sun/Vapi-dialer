@@ -1110,24 +1110,23 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
 
       const tenantLimit: number = (conn as { concurrency_limit?: number } | null)?.concurrency_limit ?? 10;
 
-      // Contar chamadas ativas do tenant via call_records (mais preciso que leads.status='calling').
-      // call_records é criado apenas quando o Vapi CONFIRMA a chamada (sem fantasmas de falha),
-      // e ended_reason só é preenchido pelo webhook quando a chamada termina.
-      // Isso evita o falso "slot livre" que ocorre quando recoverStaleCalls reseta leads
-      // para 'queued' enquanto a chamada ainda está ativa no Vapi.
-      const activeThreshold = new Date(Date.now() - STALE_CALLING_MINUTES * 2 * 60_000).toISOString();
+      // Contar chamadas ativas do tenant via leads.status='calling'.
+      // Fonte única de verdade: o worker seta status='calling' atomicamente antes de chamar o Vapi,
+      // e o webhook (end-of-call-report) ou o recoverStaleCalls resetam para outro status ao término.
+      // Usar call_records.ended_reason IS NULL tinha um filtro de 60min que causava undercounting:
+      // após 60min, registros velhos (sem webhook por falha) deixavam de ser contados, permitindo
+      // dispatches extras que ultrapassavam o limite real da org no Vapi.
       const { count: tenantActiveCalls } = await supabase
-        .from("call_records")
+        .from("leads")
         .select("id", { count: "exact", head: true })
         .eq("tenant_id", tenantId)
-        .is("ended_reason", null)
-        .gte("created_at", activeThreshold);
+        .eq("status", "calling");
 
       const freeSlots = Math.max(0, tenantLimit - (tenantActiveCalls ?? 0));
 
       if (freeSlots === 0) {
         console.log(
-          `[worker] Tenant ${tName(tenantId)} sem slots livres (call_records_ativos=${tenantActiveCalls}, limite=${tenantLimit}) — todas as filas aguardam`
+          `[worker] Tenant ${tName(tenantId)} sem slots livres (leads_em_calling=${tenantActiveCalls}, limite=${tenantLimit}) — todas as filas aguardam`
         );
         for (const q of tenantQueues) queueSlotBudgets.set(q.id, 0);
         return;
@@ -1146,7 +1145,7 @@ async function pollCycle(supabase: SupabaseClient): Promise<void> {
 
       if (numQueues > 1) {
         console.log(
-          `[worker] Tenant ${tName(tenantId)} | limite=${tenantLimit} | call_records_ativos=${tenantActiveCalls ?? 0} | ` +
+          `[worker] Tenant ${tName(tenantId)} | limite=${tenantLimit} | leads_em_calling=${tenantActiveCalls ?? 0} | ` +
           `livres=${freeSlots} | distribuídos entre ${numQueues} filas: ` +
           tenantQueues.map((q, i) => `"${q.name}"=${queueSlotBudgets.get(q.id)}`).join(", ")
         );
