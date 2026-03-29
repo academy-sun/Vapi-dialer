@@ -157,8 +157,11 @@ interface Lead {
 }
 
 interface VapiCallResponse {
-  id:     string;
-  status: string;
+  id:                        string;
+  status:                    string;
+  concurrencyLimit?:          number;
+  remainingConcurrentCalls?:  number;
+  concurrencyBlocked?:        boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -429,16 +432,23 @@ async function initiateVapiCall(
 // Processar lead individual
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface ProcessLeadResult {
+  hitLimit:       boolean;   // true = Over Concurrency Limit → abortar loop da fila
+  remainingSlots?: number;  // slots restantes informados pelo Vapi (remainingConcurrentCalls)
+}
+
 /**
  * Processa um lead individual: claim atômico → chamada Vapi → call_record.
- * Retorna `true` se atingiu Over Concurrency Limit (sinal para abortar o loop da fila).
+ * Retorna `{ hitLimit: true }` se atingiu Over Concurrency Limit (fila deve parar).
+ * Retorna `{ hitLimit: false, remainingSlots: N }` após chamada bem-sucedida;
+ * se `remainingSlots === 0` o loop deve parar antes de tentar o próximo lead.
  */
 async function processLead(
   supabase: SupabaseClient,
   queue:    DialQueue,
   lead:     Lead,
   vapiKey:  string,
-): Promise<boolean> {
+): Promise<ProcessLeadResult> {
   const now             = new Date().toISOString();
   const newAttemptCount = lead.attempt_count + 1;
 
@@ -457,7 +467,7 @@ async function processLead(
 
   if (!claimed) {
     // Lead já foi processado por outro ciclo (não deve acontecer com 1 worker)
-    return false;
+    return { hitLimit: false };
   }
 
   // ── 2. Chamar a API da Vapi ──
@@ -471,7 +481,29 @@ async function processLead(
       queue.tenant_id,
     );
 
-    // ── 3. Criar call_record ──
+    // ── 3. Verificar se o Vapi bloqueou por concorrência mesmo com status 200 ──
+    // Cenário edge-case: Vapi retorna 200 mas concurrencyBlocked=true.
+    // Tratar igual ao erro "Over Concurrency Limit": reverter lead, cooldown, abortar fila.
+    if (vapiCall.concurrencyBlocked === true) {
+      setTenantConcurrencyCooldown(queue.tenant_id);
+      console.warn(
+        `[worker] ⚠ concurrencyBlocked=true (200 OK) — revertendo lead ${lead.id} sem contar tentativa` +
+        ` | fila=${queue.name} | tenant=${tName(queue.tenant_id)}` +
+        ` | cooldown ativo por ${CONCURRENCY_COOLDOWN_MS / 1000}s`
+      );
+      await supabase
+        .from("leads")
+        .update({
+          status:          lead.status,
+          attempt_count:   lead.attempt_count,
+          next_attempt_at: new Date(Date.now() + CONCURRENCY_COOLDOWN_MS).toISOString(),
+          last_outcome:    "concurrency-limited",
+        })
+        .eq("id", lead.id);
+      return { hitLimit: true };
+    }
+
+    // ── 4. Criar call_record ──
     const { error: insertErr } = await supabase.from("call_records").insert({
       tenant_id:    queue.tenant_id,
       dial_queue_id: queue.id,
@@ -484,10 +516,14 @@ async function processLead(
       console.error(`[worker] Erro ao criar call_record para lead ${lead.id}:`, insertErr.message);
     }
 
+    const remaining = vapiCall.remainingConcurrentCalls;
     console.log(
       `[worker] ✓ Chamada iniciada | tenant=${tName(queue.tenant_id)} | lead=${lead.id}` +
-      ` | phone=${lead.phone_e164} | vapi_call=${vapiCall.id}`,
+      ` | phone=${lead.phone_e164} | vapi_call=${vapiCall.id}` +
+      (remaining !== undefined ? ` | slots_restantes=${remaining}` : ""),
     );
+
+    return { hitLimit: false, remainingSlots: remaining };
   } catch (err) {
     // ── 4. Falha na API Vapi → reagendar ou marcar como falha ──
     const isRateLimit       = err instanceof AxiosError && err.response?.status === 429;
@@ -522,7 +558,7 @@ async function processLead(
           last_outcome:    "concurrency-limited",
         })
         .eq("id", lead.id);
-      return true; // sinal para abortar o restante do loop desta fila
+      return { hitLimit: true }; // sinal para abortar o restante do loop desta fila
     }
 
     // ── Recurso não encontrado na Vapi (404) ── erro permanente de configuração ──
@@ -550,7 +586,7 @@ async function processLead(
         .from("dial_queues")
         .update({ status: "paused", last_error: errMsg })
         .eq("id", queue.id);
-      return false;
+      return { hitLimit: false };
     }
 
     // ── Erro de validação de dados (422) ── falha permanente, não tentar de novo ──
@@ -577,7 +613,7 @@ async function processLead(
           last_outcome:  lastOutcome,
         })
         .eq("id", lead.id);
-      return false;
+      return { hitLimit: false };
     }
 
     console.error(
@@ -610,7 +646,7 @@ async function processLead(
             last_outcome:  "invalid-phone",
           })
           .eq("id", lead.id);
-        return false;
+        return { hitLimit: false };
       }
 
       console.error(
@@ -642,7 +678,7 @@ async function processLead(
           last_outcome:    `provider-${httpStatus}`,
         })
         .eq("id", lead.id);
-      return false;
+      return { hitLimit: false };
     }
 
     if (newAttemptCount < queue.max_attempts) {
@@ -672,7 +708,7 @@ async function processLead(
         .eq("id", lead.id);
     }
   }
-  return false;
+  return { hitLimit: false };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -713,7 +749,15 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
   const slots = tenantSlotBudget !== undefined
     ? Math.min(perQueueAvailable, tenantSlotBudget)
     : perQueueAvailable;
-  if (slots <= 0) return; // Concorrência máxima atingida
+  if (slots <= 0) {
+    console.log(
+      `[worker] Fila="${queue.name}" | sem slots disponíveis` +
+      ` (calling_db=${activeCount ?? 0}, concurrency_fila=${queue.concurrency}` +
+      (tenantSlotBudget !== undefined ? `, budget_tenant=${tenantSlotBudget}` : "") +
+      `) — aguardando`
+    );
+    return; // Concorrência máxima atingida
+  }
 
   const now = new Date().toISOString();
 
@@ -729,8 +773,8 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
     .limit(slots);
 
   // ── Prioridade 2: leads novos na fila ──
-  const remainingSlots = slots - (priorityLeads?.length ?? 0);
-  const freshLeads = remainingSlots > 0
+  const freshSlots = slots - (priorityLeads?.length ?? 0);
+  const freshLeads = freshSlots > 0
     ? (await supabase
         .from("leads")
         .select("id, phone_e164, data_json, status, attempt_count")
@@ -739,7 +783,7 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
         .eq("status",       "queued")
         .or(`next_attempt_at.is.null,next_attempt_at.lte.${now}`)
         .order("next_attempt_at", { ascending: true, nullsFirst: true })
-        .limit(remainingSlots)
+        .limit(freshSlots)
       ).data
     : [];
 
@@ -813,8 +857,11 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
   // ─────────────────────────────────────────────────────────────────────────────
 
   console.log(
-    `[worker] Fila="${queue.name}" (${queue.id}) | lista=${queue.lead_list_id} | ` +
-    `slots=${slots} | leads selecionados: [${leads.map(l => l.phone_e164).join(", ")}]`
+    `[worker] ┌─ Fila="${queue.name}" | tenant=${tName(queue.tenant_id)}` +
+    ` | calling_db=${activeCount ?? 0}/${queue.concurrency}` +
+    (tenantSlotBudget !== undefined ? ` | budget_tenant=${tenantSlotBudget}` : "") +
+    ` | slots=${slots} | dispatch=${leads.length} lead(s)` +
+    ` | phones=[${leads.map(l => l.phone_e164).join(", ")}]`
   );
 
   // ── Buscar chave Vapi do tenant ──
@@ -826,13 +873,44 @@ async function processQueue(supabase: SupabaseClient, queue: DialQueue, tenantSl
 
   // ── Processar leads em sequência (um por um para não sobrecarregar a Vapi/SIP) ──
   // DISPATCH_DELAY_MS entre chamadas: evita HTTP 429 (Vapi rate limit) e 503/408 (SIP overload)
-  // Se processLead retornar true (Over Concurrency Limit), abortar o restante do loop:
-  // não faz sentido tentar os demais leads da fila quando o Vapi já está no limite.
+  // Condições de abort do loop:
+  //   1. hitLimit=true  → Vapi retornou Over Concurrency Limit (HTTP 400 ou concurrencyBlocked)
+  //   2. remainingSlots === 0 → Vapi informa em tempo real que não há mais slots disponíveis
+  //      (mais preciso que o cálculo local do DB, que pode divergir por webhooks atrasados)
+  let dispatched = 0;
+  let stopReason: "done" | "hitLimit" | "noSlotsVapi" = "done";
+
   for (const lead of leads) {
-    const hitConcurrencyLimit = await processLead(supabase, queue, lead, vapiKey);
-    if (hitConcurrencyLimit) break;
-    await sleep(DISPATCH_DELAY_MS);
+    const result = await processLead(supabase, queue, lead, vapiKey);
+    if (result.hitLimit) {
+      stopReason = "hitLimit";
+      break;
+    }
+    dispatched++;
+    // Vapi confirmou que não há slots restantes → cooldown e parar
+    if (result.remainingSlots === 0) {
+      console.warn(
+        `[worker] ⚠ Vapi informou remainingConcurrentCalls=0 após disparar lead ${lead.id}` +
+        ` | fila=${queue.name} | tenant=${tName(queue.tenant_id)}` +
+        ` — aplicando cooldown de ${CONCURRENCY_COOLDOWN_MS / 1000}s e encerrando loop`
+      );
+      setTenantConcurrencyCooldown(queue.tenant_id);
+      stopReason = "noSlotsVapi";
+      break;
+    }
+    // Só aplica delay se há mais leads a processar
+    if (dispatched < leads.length) {
+      await sleep(DISPATCH_DELAY_MS);
+    }
   }
+
+  const stopLabel =
+    stopReason === "done"       ? "batch completo" :
+    stopReason === "hitLimit"   ? "OVER CONCURRENCY LIMIT" :
+    /* noSlotsVapi */             "Vapi: 0 slots restantes";
+  console.log(
+    `[worker] └─ Fila="${queue.name}" | ${dispatched}/${leads.length} chamada(s) disparada(s) | motivo_parada=${stopLabel}`
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
