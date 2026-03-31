@@ -74,7 +74,10 @@
       "Bash(tail -400 \"/c/Users/henrique.silvatte/Desktop/Projetos Fabricio/Vapi-dialer/Vapi-dialer-master/src/app/\\(app\\)/app/tenants/[tenantId]/calls/page.tsx\")",
       "Bash(grep -r \"filterInteresse\\\\|successField\\\\|success_field\" '/c/Users/henrique.silvatte/Desktop/Projetos Fabricio/Vapi-dialer/Vapi-dialer-master/src' --include=*.tsx --include=*.ts)",
       "Bash(cat \"/c/Users/henrique.silvatte/Desktop/Projetos Fabricio/Vapi-dialer/Vapi-dialer-master/src/app/\\(app\\)/app/tenants/[tenantId]/calls/page.tsx\")",
-      "Bash(cat \"/c/Users/henrique.silvatte/Desktop/Projetos Fabricio/Vapi-dialer/Vapi-dialer-master/src/app/\\(app\\)/app/tenants/[tenantId]/vapi/VapiConnectionClient.tsx\")"
+      "Bash(cat \"/c/Users/henrique.silvatte/Desktop/Projetos Fabricio/Vapi-dialer/Vapi-dialer-master/src/app/\\(app\\)/app/tenants/[tenantId]/vapi/VapiConnectionClient.tsx\")",
+      "Bash(npx supabase:*)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(list\\(d.get\\(''''mcpServers'''',{}\\).keys\\(\\)\\), indent=2\\)\\)\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")"
     ]
   }
 }

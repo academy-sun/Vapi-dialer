@@ -4,10 +4,22 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   RefreshCw, Phone, PhoneOff, PhoneCall, DollarSign, Clock,
   Timer, Users, CheckCircle2, BarChart3, Loader2, Bot, Filter,
-  Flame, Activity, TrendingUp, AlertTriangle,
+  Flame, Activity, TrendingUp, AlertTriangle, Sparkles, History,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
+import Markdown from "react-markdown";
+import { createClient } from "@/lib/supabase/browser";
 
 interface Campaign { id: string; name: string; assistantId: string }
+
+interface AnalysisRecord {
+  id: string;
+  queue_id: string | null;
+  content: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  dial_queues: { name: string } | null;
+}
 interface AssistantRef { id: string; name: string }
 
 interface AnalyticsData {
@@ -413,6 +425,13 @@ export default function AnalyticsPage() {
   } | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
 
+  // ── IA ──
+  const [aiAnalysis, setAiAnalysis]   = useState<string | null>(null);
+  const [loadingAi, setLoadingAi]     = useState(false);
+  const [aiHistory, setAiHistory]     = useState<AnalysisRecord[]>([]);
+  const [expandedId, setExpandedId]   = useState<string | null>(null);
+  const supabase = createClient();
+
   const selectedAssistant = searchParams.get("assistantId") ?? "";
   const selectedQueue = searchParams.get("queueId") ?? "";
   const selectedDays = searchParams.get("days") ?? "90";
@@ -465,6 +484,34 @@ export default function AnalyticsPage() {
   }, [tenantId, selectedAssistant, selectedQueue, selectedDays]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadAiHistory = useCallback(async () => {
+    const res = await fetch(`/api/tenants/${tenantId}/analyses?limit=20`);
+    if (!res.ok) return;
+    const json = await res.json();
+    setAiHistory(json.analyses ?? []);
+  }, [tenantId]);
+
+  useEffect(() => { loadAiHistory(); }, [loadAiHistory]);
+
+  const handleRunAiAnalysis = async () => {
+    if (!selectedQueue) return;
+    setLoadingAi(true);
+    setAiAnalysis(null);
+    try {
+      const { data: result, error } = await supabase.functions.invoke("generate-tenant-analysis", {
+        body: { tenantId, queueId: selectedQueue },
+      });
+      if (error) throw error;
+      setAiAnalysis(result.content);
+      await loadAiHistory();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert("Erro ao gerar análise: " + msg);
+    } finally {
+      setLoadingAi(false);
+    }
+  };
 
   function setFilter(key: "assistantId" | "queueId" | "days", value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -817,6 +864,104 @@ export default function AnalyticsPage() {
 
           {/* Call End Reasons */}
           <EndReasonsSection data={data} />
+
+          {/* ── Insights de IA ── */}
+          <div className="card p-5 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-indigo-500" />
+                <h3 className="text-sm font-semibold text-gray-700">Insights de IA — Análise de Gargalo</h3>
+              </div>
+              <button
+                onClick={handleRunAiAnalysis}
+                disabled={loadingAi || !selectedQueue}
+                title={!selectedQueue ? "Selecione uma campanha para analisar" : ""}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors border
+                  disabled:opacity-50 disabled:cursor-not-allowed
+                  bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200"
+              >
+                {loadingAi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                {loadingAi ? "Gerando análise…" : "Analisar Gargalos (10–40s)"}
+              </button>
+            </div>
+
+            {!selectedQueue && (
+              <p className="text-xs text-gray-400">Selecione uma campanha no filtro acima para habilitar a análise de IA.</p>
+            )}
+
+            {/* Resultado atual */}
+            {aiAnalysis && (
+              <div className="rounded-xl bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-5">
+                <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-3">Análise gerada agora</p>
+                <div className="prose prose-sm max-w-none
+                  prose-headings:text-gray-800 prose-headings:font-semibold
+                  prose-ul:marker:text-indigo-400
+                  prose-li:text-gray-700
+                  prose-p:text-gray-700 prose-p:leading-relaxed">
+                  <Markdown>{aiAnalysis}</Markdown>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Histórico de Análises ── */}
+          {aiHistory.length > 0 && (
+            <div className="card p-5 space-y-3">
+              <div className="flex items-center gap-2">
+                <History className="w-4 h-4 text-gray-400" />
+                <h3 className="text-sm font-semibold text-gray-700">Histórico de Análises</h3>
+                <span className="text-xs text-gray-400 ml-auto">{aiHistory.length} registro{aiHistory.length !== 1 ? "s" : ""}</span>
+              </div>
+
+              <div className="space-y-2">
+                {aiHistory.map((item) => {
+                  const isExpanded = expandedId === item.id;
+                  const campaignName = item.dial_queues?.name
+                    ?? data?.campaigns.find((c) => c.id === item.queue_id)?.name
+                    ?? "Campanha removida";
+                  const date = new Date(item.created_at).toLocaleString("pt-BR", {
+                    day: "2-digit", month: "2-digit", year: "numeric",
+                    hour: "2-digit", minute: "2-digit",
+                  });
+                  const preview = item.content.replace(/#{1,6}\s/g, "").replace(/\*\*/g, "").slice(0, 160);
+
+                  return (
+                    <div key={item.id} className="rounded-lg border border-gray-100 overflow-hidden">
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-xs font-semibold text-indigo-600 truncate">{campaignName}</span>
+                            <span className="text-xs text-gray-400 shrink-0">{date}</span>
+                          </div>
+                          {!isExpanded && (
+                            <p className="text-xs text-gray-500 truncate">{preview}…</p>
+                          )}
+                        </div>
+                        {isExpanded
+                          ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
+                          : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+                      </button>
+
+                      {isExpanded && (
+                        <div className="px-4 pb-4 pt-1 border-t border-gray-100 bg-gray-50">
+                          <div className="prose prose-sm max-w-none
+                            prose-headings:text-gray-800 prose-headings:font-semibold
+                            prose-ul:marker:text-indigo-400
+                            prose-li:text-gray-700
+                            prose-p:text-gray-700 prose-p:leading-relaxed">
+                            <Markdown>{item.content}</Markdown>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

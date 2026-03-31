@@ -1,0 +1,2 @@
+[functions.generate-tenant-analysis]
+verify_jwt = false
