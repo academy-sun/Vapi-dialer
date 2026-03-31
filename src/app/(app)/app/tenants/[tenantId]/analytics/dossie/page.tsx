@@ -22,7 +22,11 @@ import {
   ArrowRight,
   Settings2,
   ShieldCheck,
+  Bot,
+  Sparkles,
 } from "lucide-react";
+import Markdown from "react-markdown";
+import { createClient } from "@/lib/supabase/browser";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -739,11 +743,46 @@ export default function DossiePage() {
   const [loading, setLoading]             = useState(false);
   const [data, setData]                   = useState<DossieData | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [loadingAi, setLoadingAi] = useState(false);
+  const supabase = createClient();
+
+  const loadAi = useCallback(async (queueId: string) => {
+    if (!queueId) return;
+    setAiAnalysis(null);
+    const { data } = await supabase
+      .from("tenant_analyses")
+      .select("content")
+      .eq("tenant_id", tenantId)
+      .eq("queue_id", queueId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    if (data) setAiAnalysis(data.content);
+  }, [tenantId, supabase]);
+
+  const handleRunAiAnalysis = async () => {
+    if (!selectedQueue) return;
+    setLoadingAi(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-tenant-analysis", {
+        body: { tenantId, queueId: selectedQueue }
+      });
+      if (error) throw error;
+      setAiAnalysis(data.content);
+    } catch (err: any) {
+      alert("Erro ao analisar: " + err.message);
+    } finally {
+      setLoadingAi(false);
+    }
+  };
 
   const load = useCallback(async (queueId: string, d: number) => {
     if (!queueId) return;
     setLoading(true);
     setData(null);
+    loadAi(queueId);
     const res  = await fetch(`/api/tenants/${tenantId}/analytics/dossie?queueId=${queueId}&days=${d}`);
     const json = await res.json();
     if (json.data) setData(json.data);
@@ -789,10 +828,20 @@ export default function DossiePage() {
         </div>
 
         {data && (
-          <button onClick={handlePrint} className="btn-secondary gap-2 no-print">
-            <Printer className="w-4 h-4" />
-            Exportar / Imprimir
-          </button>
+          <div className="flex items-center gap-3 no-print">
+            <button 
+              onClick={handleRunAiAnalysis} 
+              disabled={loadingAi}
+              className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 border border-indigo-200"
+            >
+              {loadingAi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+              {loadingAi ? "Gerando Análise..." : "Analisar Gargalos (10-40s)"}
+            </button>
+            <button onClick={handlePrint} className="btn-secondary gap-2">
+              <Printer className="w-4 h-4" />
+              Exportar / Imprimir
+            </button>
+          </div>
         )}
       </div>
 
@@ -867,6 +916,30 @@ export default function DossiePage() {
 
           {/* 1. Visão Geral — hero metrics */}
           <HeroMetrics overview={data.overview} durationAvg={data.durationAnalysis.avg} />
+
+          {/* AI Analysis Card */}
+          {aiAnalysis && (
+            <div className="card p-6 bg-gradient-to-br from-indigo-50 to-white border-indigo-100 shadow-sm relative overflow-hidden text-gray-800">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-bl-full -z-0" />
+              <div className="relative z-10 flex items-center gap-2.5 mb-5 border-b border-indigo-100/50 pb-3">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shadow-inner">
+                  <Bot className="w-4 h-4 text-white" />
+                </div>
+                <h3 className="text-base font-bold text-gray-900 tracking-tight">Análise de IA: Gargalos de Retenção</h3>
+              </div>
+              <div className="relative z-10 prose prose-sm prose-indigo max-w-none 
+                prose-headings:text-gray-900 prose-headings:font-bold prose-h2:text-sm prose-h3:text-sm
+                prose-a:text-indigo-600 hover:prose-a:text-indigo-500
+                prose-strong:text-gray-900
+                prose-blockquote:border-l-indigo-300 prose-blockquote:bg-indigo-50/50 prose-blockquote:px-4 prose-blockquote:py-1 prose-blockquote:rounded-r-lg prose-blockquote:font-medium prose-blockquote:text-indigo-900 prose-blockquote:not-italic
+                prose-ul:marker:text-indigo-400
+                prose-li:text-gray-700
+                prose-p:text-gray-700 prose-p:leading-relaxed"
+              >
+                <Markdown>{aiAnalysis}</Markdown>
+              </div>
+            </div>
+          )}
 
           {/* 2. Oportunidades Não Trabalhadas */}
           <OpportunitiesSection
