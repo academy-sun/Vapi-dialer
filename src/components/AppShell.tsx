@@ -25,21 +25,77 @@ import {
   AlertTriangle,
   Search,
   FileBarChart2,
-  Loader2,
 } from "lucide-react";
 
-interface Tenant {
-  id: string;
-  name: string;
-  timezone: string;
+// ── Design tokens (inline for zero-dep styling) ──────────────────
+const T = {
+  red:         "#E8002D",
+  redLo:       "rgba(232,0,45,0.18)",
+  redGlow:     "rgba(232,0,45,0.35)",
+  glass:       "rgba(255,255,255,0.04)",
+  glass2:      "rgba(255,255,255,0.07)",
+  glassBorder: "rgba(255,255,255,0.09)",
+  text1:       "#FFFFFF",
+  text2:       "rgba(255,255,255,0.58)",
+  text3:       "rgba(255,255,255,0.28)",
+  green:       "#00D68F",
+  yellow:      "#FFB800",
+  sidebar:     "rgba(6,6,8,0.90)",
+  topbar:      "rgba(6,6,8,0.80)",
+};
+
+const SIDEBAR_W      = 242;
+const SIDEBAR_W_COL  = 66;
+const EASE           = "cubic-bezier(.4,0,.2,1)";
+const TRANSITION     = `width 0.28s ${EASE}`;
+const MARGIN_TRANS   = `margin-left 0.28s ${EASE}`;
+
+// ── Inline SVG logo (CALL·X com X vermelho) ──────────────────────
+function LogoSVG({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 1509 446"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{
+        width:      collapsed ? "0" : "90px",
+        height:     "auto",
+        flexShrink: 0,
+        overflow:   "hidden",
+        opacity:    collapsed ? 0 : 1,
+        transition: `opacity 0.22s ${EASE}, width 0.28s ${EASE}`,
+        color:      T.text1,
+      }}
+    >
+      <path fill="currentColor" d="M 336.06 155.42 C 329.08 96.80 278.51 62.00 222.98 57.21 C 204.26 55.60 185.78 56.42 168.43 60.76 C 107.52 75.99 67.69 126.49 60.55 187.99 C 54.29 241.89 69.02 297.15 112.05 332.86 C 136.31 353.00 166.45 364.11 198.06 365.39 Q 221.85 366.35 243.21 361.77 C 293.33 351.03 330.68 312.83 336.06 261.41 A 0.50 0.49 -86.7 0 1 336.55 260.97 L 394.02 260.97 A 0.44 0.43 1.8 0 1 394.46 261.43 C 391.00 306.23 371.40 349.88 336.63 378.86 Q 306.07 404.34 267.03 414.30 C 247.02 419.41 226.38 421.57 205.55 421.52 Q 174.58 421.46 147.34 414.65 C 109.18 405.11 73.89 384.21 48.56 353.93 C 21.00 320.99 5.61 280.01 1.89 237.08 C -3.79 171.39 11.63 104.15 58.88 56.92 C 91.86 23.95 135.28 5.65 182.01 1.52 Q 218.98 -1.74 254.66 4.83 Q 294.47 12.16 327.16 34.81 C 367.28 62.61 390.15 106.61 393.92 155.35 A 0.60 0.60 0.0 0 1 393.32 156.00 L 336.72 156.00 A 0.67 0.66 -3.4 0 1 336.06 155.42 Z"/>
+      <rect fill="currentColor" x="787.76" y="6.75" width="58.48" height="408.50" rx="0.41"/>
+      <rect fill="currentColor" x="888.75" y="6.75" width="58.24" height="408.50" rx="0.42"/>
+      <path fill="#ff1537" d="M 1331.34 238.15 C 1331.33 250.69 1329.45 263.03 1325.58 275.50 Q 1322.61 285.09 1312.29 304.09 Q 1311.97 304.69 1238.67 445.17 A 0.64 0.63 14.1 0 1 1238.11 445.50 L 1168.88 445.50 A 0.32 0.31 13.5 0 1 1168.59 445.04 Q 1228.04 331.67 1271.88 247.82 Q 1273.79 244.17 1273.79 238.14 Q 1273.79 232.12 1271.88 228.46 Q 1228.06 144.61 1168.64 31.22 A 0.32 0.31 -13.4 0 1 1168.93 30.76 L 1238.16 30.78 A 0.64 0.63 -14.1 0 1 1238.72 31.11 Q 1311.99 171.61 1312.31 172.21 Q 1322.62 191.21 1325.59 200.80 C 1329.45 213.27 1331.34 225.61 1331.34 238.15 Z"/>
+      <path fill="#ff1537" d="M 1402.86 238.09 Q 1402.86 244.12 1404.77 247.77 Q 1448.60 331.62 1508.03 444.99 A 0.32 0.31 -13.5 0 1 1507.74 445.45 L 1438.52 445.44 A 0.64 0.63 -14.1 0 1 1437.96 445.11 Q 1364.68 304.63 1364.36 304.03 Q 1354.04 285.03 1351.07 275.44 C 1347.21 262.97 1345.32 250.64 1345.32 238.09 C 1345.32 225.55 1347.21 213.22 1351.07 200.75 Q 1354.04 191.16 1364.36 172.16 Q 1364.68 171.56 1437.96 31.08 A 0.64 0.63 14.1 0 1 1438.52 30.75 L 1507.75 30.74 A 0.32 0.31 13.5 0 1 1508.04 31.20 Q 1448.60 144.57 1404.77 228.41 Q 1402.86 232.07 1402.86 238.09 Z"/>
+      <path fill="currentColor" d="M 441.96 215.20 C 443.01 175.68 457.04 141.94 489.74 119.48 C 512.95 103.54 539.99 96.59 567.91 95.38 Q 597.46 94.11 625.76 99.43 Q 642.55 102.58 657.74 109.49 Q 698.72 128.13 711.82 170.69 Q 717.90 190.45 718.11 213.32 Q 718.35 238.89 718.21 342.50 C 718.20 349.54 720.32 355.90 728.19 357.69 Q 731.18 358.37 744.90 358.24 A 0.59 0.58 89.5 0 1 745.49 358.83 L 745.49 414.62 A 0.64 0.64 0.0 0 1 744.85 415.26 Q 729.03 415.15 719.86 415.32 Q 705.87 415.57 698.00 413.40 C 676.03 407.35 664.40 385.93 663.65 363.96 Q 663.32 354.27 663.55 343.45 A 0.44 0.44 0.0 0 0 663.11 343.00 L 658.51 343.00 A 0.47 0.47 0.0 0 0 658.04 343.41 Q 656.67 354.29 656.03 358.00 C 652.77 377.04 641.34 391.33 625.22 401.53 Q 610.47 410.86 593.95 415.45 Q 562.17 424.28 528.26 420.38 C 509.24 418.19 491.10 412.68 475.42 402.04 Q 453.18 386.95 444.30 364.18 Q 436.17 343.36 437.90 318.25 C 440.85 275.45 470.67 252.20 509.68 242.19 Q 531.83 236.50 555.51 235.07 Q 566.51 234.41 577.75 234.00 Q 603.62 233.07 627.47 230.41 C 635.69 229.49 644.32 228.31 651.70 224.71 Q 661.76 219.81 661.03 208.26 Q 660.48 199.67 659.25 194.52 Q 653.11 168.90 630.30 156.67 C 619.31 150.78 606.40 148.22 593.22 147.19 C 559.27 144.53 521.09 152.67 505.97 186.72 Q 500.24 199.63 499.22 215.41 A 0.63 0.63 0.0 0 1 498.59 216.00 L 442.73 216.00 A 0.77 0.77 0.0 0 1 441.96 215.20 Z M 656.78 242.73 A 0.60 0.59 -86.1 0 0 656.19 243.25 C 655.77 246.35 655.25 252.55 653.85 255.85 C 646.16 274.05 623.47 274.87 606.85 276.73 C 585.08 279.17 560.26 280.98 544.79 283.10 C 521.74 286.27 495.12 295.72 494.24 323.56 C 493.90 334.15 496.75 343.84 503.73 351.29 C 518.32 366.85 541.23 370.11 561.40 369.14 C 592.58 367.64 628.40 357.37 649.08 332.84 Q 656.19 324.40 659.47 312.56 Q 661.32 305.89 661.02 290.32 Q 660.99 289.03 660.99 243.19 A 0.46 0.46 0.0 0 0 660.53 242.73 L 656.78 242.73 Z"/>
+      <rect fill="#ff1537" x="1035.00" y="219.50" width="75.00" height="37.24" rx="0.39"/>
+    </svg>
+  );
 }
 
-interface ToastItem {
-  id: string;
-  message: string;
-  type: "success" | "error";
+// ── Sidebar panel toggle icon ────────────────────────────────────
+function SidebarIcon() {
+  return (
+    <svg width="18" height="16" viewBox="0 0 18 16" fill="none"
+      stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="0.75" y="0.75" width="16.5" height="14.5" rx="2"/>
+      <line x1="5.5" y1="0.75" x2="5.5" y2="15.25"/>
+      <line x1="8.5" y1="4.75" x2="14.5" y2="4.75"/>
+      <line x1="8.5" y1="8"    x2="14.5" y2="8"/>
+      <line x1="8.5" y1="11.25" x2="14.5" y2="11.25"/>
+    </svg>
+  );
 }
 
+// ── Types ────────────────────────────────────────────────────────
+interface Tenant { id: string; name: string; timezone: string; }
+interface ToastItem { id: string; message: string; type: "success" | "error"; }
+
+// ════════════════════════════════════════════════════════════════
 export default function AppShell({
   user,
   isAdmin = false,
@@ -49,87 +105,73 @@ export default function AppShell({
   isAdmin?: boolean;
   children: React.ReactNode;
 }) {
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [tenantRoles, setTenantRoles] = useState<Record<string, string>>({});
+  // ── State ────────────────────────────────────────────────────
+  const [collapsed, setCollapsed]           = useState(false);
+  const [tenants, setTenants]               = useState<Tenant[]>([]);
+  const [tenantRoles, setTenantRoles]       = useState<Record<string, string>>({});
   const [activeTenantId, setActiveTenantId] = useState<string>("");
-  const [rolesLoaded, setRolesLoaded] = useState(false);
+  const [rolesLoaded, setRolesLoaded]       = useState(false);
   const [showCreateTenant, setShowCreateTenant] = useState(false);
   const [showTenantDropdown, setShowTenantDropdown] = useState(false);
-  const [newTenantName, setNewTenantName] = useState("");
-  const [tenantSearch, setTenantSearch] = useState("");
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [newTenantName, setNewTenantName]   = useState("");
+  const [tenantSearch, setTenantSearch]     = useState("");
+  const [toasts, setToasts]                 = useState<ToastItem[]>([]);
 
-  // ── Bell de notificações de minutos ──
-  const [minutesStatus, setMinutesStatus] = useState<{
-    contracted: number | null;
-    usedSeconds: number;
-    blocked: boolean;
-    month: string | null;
+  // Bell / minutes
+  const [minutesStatus, setMinutesStatus]   = useState<{
+    contracted: number | null; usedSeconds: number; blocked: boolean; month: string | null;
   } | null>(null);
   const [showBellDropdown, setShowBellDropdown] = useState(false);
-  const [bellDismissed, setBellDismissed] = useState(false);
-  const [sendingEmail, setSendingEmail] = useState(false);
-  const bellRef = useRef<HTMLDivElement>(null);
+  const [bellDismissed, setBellDismissed]   = useState(false);
+  const [sendingEmail, setSendingEmail]     = useState(false);
 
+  const bellRef     = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
-  const pathname = usePathname();
-  const supabase = createClient();
+  const router      = useRouter();
+  const pathname    = usePathname();
+  const supabase    = createClient();
 
-  useEffect(() => {
-    loadTenants();
-  }, []);
+  // ── Effects (all original logic preserved) ───────────────────
+  useEffect(() => { loadTenants(); }, []);
 
-  // Fetch minutes status when active tenant changes
   useEffect(() => {
     if (!activeTenantId) return;
     fetch(`/api/tenants/${activeTenantId}/vapi-connection`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => {
         const conn = d?.connection;
-        if (!conn || conn.contracted_minutes == null) {
-          setMinutesStatus(null);
-          return;
-        }
+        if (!conn || conn.contracted_minutes == null) { setMinutesStatus(null); return; }
         setMinutesStatus({
-          contracted:   conn.contracted_minutes,
-          usedSeconds:  conn.minutes_used_cache ?? 0,
-          blocked:      conn.minutes_blocked ?? false,
-          month:        conn.minutes_cache_month ?? null,
+          contracted:  conn.contracted_minutes,
+          usedSeconds: conn.minutes_used_cache ?? 0,
+          blocked:     conn.minutes_blocked ?? false,
+          month:       conn.minutes_cache_month ?? null,
         });
-        // Check if dismissed for this tenant+month combo
         const month = conn.minutes_cache_month ?? new Date().toISOString().slice(0, 7);
-        const dismissKey = `callx_notif_dismissed_${activeTenantId}_${month}`;
-        setBellDismissed(localStorage.getItem(dismissKey) === "true");
+        const key   = `callx_notif_dismissed_${activeTenantId}_${month}`;
+        setBellDismissed(localStorage.getItem(key) === "true");
       })
       .catch(() => setMinutesStatus(null));
   }, [activeTenantId]);
 
-  // Close bell dropdown on outside click
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
+    const handler = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node))
         setShowBellDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node))
         setShowTenantDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Sync activeTenantId com o tenantId presente na URL — cobre bug #1 e #3:
-  // quando o layout persiste e o pathname muda (back/forward, link direto),
-  // o dropdown e a navbar atualizam para o tenant correto.
   useEffect(() => {
     if (!rolesLoaded || tenants.length === 0) return;
     const match = pathname.match(/\/app\/tenants\/([^/]+)/);
@@ -141,33 +183,21 @@ export default function AppShell({
     }
   }, [pathname, rolesLoaded, tenants]);
 
+  // ── Data functions (all original logic preserved) ─────────────
   async function loadTenants() {
-    const res = await fetch("/api/tenants");
+    const res  = await fetch("/api/tenants");
     const data = await res.json();
     if (data.tenants) {
       const sorted = [...data.tenants].sort((a: Tenant, b: Tenant) =>
         a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" })
       );
       setTenants(sorted);
-
-      // 1. Popular roles ANTES de definir o tenant ativo — elimina race condition
       const roles: Record<string, string> = {};
-      sorted.forEach((t: Tenant & { role?: string }) => {
-        if (t.id && t.role) roles[t.id] = t.role;
-      });
+      sorted.forEach((t: Tenant & { role?: string }) => { if (t.id && t.role) roles[t.id] = t.role; });
       setTenantRoles(roles);
-
-      // 2. Só depois definir o tenant ativo, validando contra a lista real
-      const saved = localStorage.getItem("activeTenantId");
-      const validId = (saved && sorted.find((t: Tenant) => t.id === saved))
-        ? saved
-        : sorted[0]?.id;
-      if (validId) {
-        setActiveTenantId(validId);
-        localStorage.setItem("activeTenantId", validId);
-      }
-
-      // 3. Sinalizar que roles + tenant ativo estão prontos para renderizar o menu
+      const saved   = localStorage.getItem("activeTenantId");
+      const validId = (saved && sorted.find((t: Tenant) => t.id === saved)) ? saved : sorted[0]?.id;
+      if (validId) { setActiveTenantId(validId); localStorage.setItem("activeTenantId", validId); }
       setRolesLoaded(true);
     }
   }
@@ -178,30 +208,20 @@ export default function AppShell({
     setShowTenantDropdown(false);
     setTenantSearch("");
     if (navigate) {
-      // Usar snapshot passado ou tenantRoles atual — evita ler state stale
       const resolvedRoles = rolesSnapshot ?? tenantRoles;
-      const role = resolvedRoles[id] ?? "member";
-      const canAccessAll = isAdmin || role === "owner" || role === "admin";
-
-      // Preservar a seção atual (ex: /queues, /leads, /calls…) ao trocar de tenant
-      const knownSections = ["queues", "leads", "calls", "assistants", "analytics", "members", "vapi"];
-      // Normalizar sub-rotas de analytics para "analytics" ao trocar de tenant
-      const normalizeSection = (s: string) => s === "dossie" ? "analytics" : s;
-      const sectionMatch = pathname.match(/\/app\/tenants\/[^/]+\/([^/]+)/);
-      const rawSection = sectionMatch?.[1] ?? null;
-      const currentSection = rawSection ? normalizeSection(rawSection) : null;
-      const keepSection = currentSection && knownSections.includes(currentSection)
-        // Garante que member não caia em seção restrita ao trocar de tenant
-        && (canAccessAll || !["vapi", "assistants", "analytics", "members"].includes(currentSection))
-        ? currentSection
-        : null;
-
-      const destination = keepSection
+      const role          = resolvedRoles[id] ?? "member";
+      const canAccessAll  = isAdmin || role === "owner" || role === "admin";
+      const knownSections = ["queues","leads","calls","assistants","analytics","members","vapi"];
+      const normSection   = (s: string) => s === "dossie" ? "analytics" : s;
+      const sectionMatch  = pathname.match(/\/app\/tenants\/[^/]+\/([^/]+)/);
+      const rawSection    = sectionMatch?.[1] ?? null;
+      const currentSection = rawSection ? normSection(rawSection) : null;
+      const keepSection   = currentSection && knownSections.includes(currentSection)
+        && (canAccessAll || !["vapi","assistants","analytics","members"].includes(currentSection))
+        ? currentSection : null;
+      const destination   = keepSection
         ? `/app/tenants/${id}/${keepSection}`
-        : canAccessAll
-          ? `/app/tenants/${id}/vapi`
-          : `/app/tenants/${id}/queues`;
-
+        : canAccessAll ? `/app/tenants/${id}/vapi` : `/app/tenants/${id}/queues`;
       router.push(destination);
     }
   }
@@ -214,14 +234,13 @@ export default function AppShell({
 
   async function createTenant() {
     if (!newTenantName.trim()) return;
-    const res = await fetch("/api/tenants", {
+    const res  = await fetch("/api/tenants", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newTenantName }),
     });
     const data = await res.json();
     if (data.tenant) {
-      // Novo tenant sempre tem role "owner" para quem criou
       const newRoles = { ...tenantRoles, [data.tenant.id]: "owner" };
       setTenantRoles(newRoles);
       setTenants((prev) =>
@@ -230,8 +249,7 @@ export default function AppShell({
         )
       );
       selectTenant(data.tenant.id, false, newRoles);
-      setNewTenantName("");
-      setShowCreateTenant(false);
+      setNewTenantName(""); setShowCreateTenant(false);
       showToast(`Organização "${data.tenant.name}" criada com sucesso!`);
     }
   }
@@ -256,316 +274,361 @@ export default function AppShell({
 
   function dismissBellNotification() {
     if (!minutesStatus?.month || !activeTenantId) return;
-    const dismissKey = `callx_notif_dismissed_${activeTenantId}_${minutesStatus.month}`;
-    localStorage.setItem(dismissKey, "true");
+    const key = `callx_notif_dismissed_${activeTenantId}_${minutesStatus.month}`;
+    localStorage.setItem(key, "true");
     setBellDismissed(true);
     setShowBellDropdown(false);
   }
 
-  // Bell notification derived state
-  const usedMinutes = minutesStatus ? Math.ceil(minutesStatus.usedSeconds / 60) : 0;
-  const minutesPct  = minutesStatus?.contracted ? Math.round((usedMinutes / minutesStatus.contracted) * 100) : 0;
-  const showBellBadge = minutesStatus != null && minutesPct >= 80 && (!bellDismissed || minutesStatus.blocked);
+  // ── Derived state ────────────────────────────────────────────
+  const usedMinutes     = minutesStatus ? Math.ceil(minutesStatus.usedSeconds / 60) : 0;
+  const minutesPct      = minutesStatus?.contracted ? Math.round((usedMinutes / minutesStatus.contracted) * 100) : 0;
+  const showBellBadge   = minutesStatus != null && minutesPct >= 80 && (!bellDismissed || minutesStatus.blocked);
+  const activeTenant    = tenants.find((t) => t.id === activeTenantId);
+  const activeRole      = tenantRoles[activeTenantId] ?? "member";
+  const isAdminOrOwner  = rolesLoaded && (isAdmin || activeRole === "owner" || activeRole === "admin");
+  const userInitials    = user.email ? user.email.substring(0, 2).toUpperCase() : "??";
 
-  useEffect(() => {
-    const saved = localStorage.getItem("sidebar_collapsed");
-    if (saved === "true") setIsSidebarCollapsed(true);
-  }, []);
+  const navItems = (activeTenantId && rolesLoaded) ? [
+    { label: "Relatórios",       href: `/app/tenants/${activeTenantId}/analytics`,        icon: BarChart2    },
+    { label: "Lista de Leads",   href: `/app/tenants/${activeTenantId}/leads`,            icon: Users        },
+    { label: "Campanhas",        href: `/app/tenants/${activeTenantId}/queues`,           icon: ListOrdered  },
+    { label: "Chamadas",         href: `/app/tenants/${activeTenantId}/calls`,            icon: PhoneCall    },
+    { label: "Assistentes",      href: `/app/tenants/${activeTenantId}/assistants`,       icon: Bot          },
+    { label: "Membros",          href: `/app/tenants/${activeTenantId}/members`,          icon: UserCheck    },
+    ...(isAdminOrOwner ? [
+      { label: "Dossiê Comercial", href: `/app/tenants/${activeTenantId}/analytics/dossie`, icon: FileBarChart2 },
+      { label: "Configurações",    href: `/app/tenants/${activeTenantId}/vapi`,              icon: Settings2     },
+    ] : []),
+  ] : [];
 
-  const toggleSidebar = () => {
-    const newVal = !isSidebarCollapsed;
-    setIsSidebarCollapsed(newVal);
-    localStorage.setItem("sidebar_collapsed", String(newVal));
-  };
+  const sidebarW = collapsed ? SIDEBAR_W_COL : SIDEBAR_W;
 
-  const activeTenant = tenants.find((t) => t.id === activeTenantId);
-
-  const activeRole = tenantRoles[activeTenantId] ?? "member";
-  // isAdmin (global) sempre tem acesso de owner; role por tenant como fallback
-  const isAdminOrOwner = rolesLoaded && (isAdmin || activeRole === "owner" || activeRole === "admin");
-
-  // navItems só é populado após roles estarem prontos — evita renderizar menu incompleto
-  const navItems = (activeTenantId && rolesLoaded)
-    ? [
-        {
-          label: "Relatórios",
-          href: `/app/tenants/${activeTenantId}/analytics`,
-          icon: BarChart2,
-        },
-        {
-          label: "Lista de Leads",
-          href: `/app/tenants/${activeTenantId}/leads`,
-          icon: Users,
-        },
-        {
-          label: "Campanhas",
-          href: `/app/tenants/${activeTenantId}/queues`,
-          icon: ListOrdered,
-        },
-        {
-          label: "Chamadas",
-          href: `/app/tenants/${activeTenantId}/calls`,
-          icon: PhoneCall,
-        },
-        {
-          label: "Assistentes",
-          href: `/app/tenants/${activeTenantId}/assistants`,
-          icon: Bot,
-        },
-        {
-          label: "Membros",
-          href: `/app/tenants/${activeTenantId}/members`,
-          icon: UserCheck,
-        },
-        ...(isAdminOrOwner ? [
-          {
-            label: "Dossiê Comercial",
-            href: `/app/tenants/${activeTenantId}/analytics/dossie`,
-            icon: FileBarChart2,
-          },
-          {
-            label: "Configurações",
-            href: `/app/tenants/${activeTenantId}/vapi`,
-            icon: Settings2,
-          },
-        ] : []),
-      ]
-    : [];
-
-  const userInitials = user.email
-    ? user.email.substring(0, 2).toUpperCase()
-    : "??";
-
+  // ── Render ───────────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex bg-gray-50 overflow-hidden">
-      {/* ── Sidebar ── */}
-      <aside className={`sidebar z-40 ${isSidebarCollapsed ? "collapsed" : ""}`}>
+    <div style={{ minHeight: "100vh", display: "flex", background: "#060608", position: "relative" }}>
 
-        {/* Logo */}
-        <div className="sidebar-logo">
-          {!isSidebarCollapsed && (
-            <div className="flex items-center gap-1.5 overflow-hidden animate-fadeIn">
-              <span className="text-[20px] font-black text-white tracking-[-0.5px]">CALL</span>
-              <span className="text-[24px] font-black text-[#E8002D] tracking-[-0.5px]">X</span>
-              <span className="text-[10px] text-white/30 font-bold tracking-[1px] ml-1 mt-1">by MX3</span>
-            </div>
-          )}
-          <button 
-            onClick={toggleSidebar}
-            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all bg-white/5 border border-white/10 hover:bg-[#E8002D]/20 hover:text-[#E8002D] hover:border-[#E8002D]/30"
+      {/* ── Gradient background ──────────────────────────────── */}
+      <div aria-hidden style={{
+        position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none",
+        background: `
+          radial-gradient(ellipse 80% 60% at 10% 0%,   rgba(232,0,45,0.10) 0%, transparent 60%),
+          radial-gradient(ellipse 60% 50% at 90% 20%,  rgba(0,194,255,0.06) 0%, transparent 55%),
+          radial-gradient(ellipse 55% 45% at 50% 100%, rgba(168,85,247,0.06) 0%, transparent 55%)
+        `,
+      }}/>
+
+      {/* ════ SIDEBAR ══════════════════════════════════════════ */}
+      <aside style={{
+        width:            sidebarW,
+        minWidth:         sidebarW,
+        height:           "100vh",
+        position:         "fixed",
+        left:             0,
+        top:              0,
+        zIndex:           40,
+        display:          "flex",
+        flexDirection:    "column",
+        background:       T.sidebar,
+        backdropFilter:   "blur(24px) saturate(180%)",
+        WebkitBackdropFilter: "blur(24px) saturate(180%)",
+        borderRight:      `1px solid ${T.glassBorder}`,
+        transition:       TRANSITION,
+        overflow:         "hidden",
+      }}>
+
+        {/* Top glow */}
+        <div aria-hidden style={{
+          position: "absolute", top: 0, left: 0, right: 0, height: 160,
+          background: "linear-gradient(180deg, rgba(232,0,45,0.06) 0%, transparent 100%)",
+          pointerEvents: "none",
+        }}/>
+
+        {/* ── Logo + Toggle ──────────────────────────────────── */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: collapsed ? "0 16px" : "0 14px",
+          minHeight: 64, borderBottom: `1px solid ${T.glassBorder}`,
+          justifyContent: collapsed ? "center" : "space-between",
+          transition: `padding 0.28s ${EASE}`,
+        }}>
+          <LogoSVG collapsed={collapsed} />
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            title={collapsed ? "Expandir menu" : "Colapsar menu"}
+            style={{
+              flexShrink:    0,
+              width:         32, height: 32,
+              borderRadius:  9,
+              background:    T.glass,
+              border:        `1px solid ${T.glassBorder}`,
+              display:       "flex",
+              alignItems:    "center",
+              justifyContent:"center",
+              cursor:        "pointer",
+              color:         T.text2,
+              transition:    "background 0.15s, color 0.15s, border-color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = T.redLo;
+              (e.currentTarget as HTMLElement).style.borderColor = "rgba(232,0,45,0.30)";
+              (e.currentTarget as HTMLElement).style.color = T.red;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = T.glass;
+              (e.currentTarget as HTMLElement).style.borderColor = T.glassBorder;
+              (e.currentTarget as HTMLElement).style.color = T.text2;
+            }}
           >
-            <Zap className={`w-4 h-4 transition-transform ${isSidebarCollapsed ? "" : "rotate-12"}`} />
+            <SidebarIcon />
           </button>
         </div>
 
-        {/* Tenant Selector */}
-        <div className="px-4 py-4" style={{ borderBottom: "1px solid #222222" }}>
-          <p className="sidebar-section-label">Organização</p>
-
-          {/* Dropdown */}
-          <div className="relative" ref={dropdownRef}>
-            <button
-              onClick={() => setShowTenantDropdown(!showTenantDropdown)}
-              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-sm transition-all bg-white/5 border border-white/10 text-white hover:bg-white/10"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-lg bg-[#E8002D]/20 flex items-center justify-center shrink-0">
-                  <Building2 className="w-3.5 h-3.5" style={{ color: "#E8002D" }} />
-                </div>
-                {!isSidebarCollapsed && (
-                  <span className="truncate font-semibold animate-fadeIn">
-                    {activeTenant?.name ?? "Selecionar tenant"}
-                  </span>
-                )}
-              </div>
-              {!isSidebarCollapsed && (
-                <ChevronDown
-                  className={`w-4 h-4 shrink-0 transition-transform animate-fadeIn ${showTenantDropdown ? "rotate-180" : ""}`}
-                  style={{ color: "rgba(255,255,255,0.3)" }}
-                />
-              )}
-            </button>
-
-            {showTenantDropdown && (
-              <div
-                className="absolute top-full mt-1 left-0 right-0 rounded-lg overflow-hidden shadow-xl z-50 animate-fadeIn"
+        {/* ── Tenant Selector ────────────────────────────────── */}
+        {!collapsed && (
+          <div style={{ padding: "12px 10px 8px", borderBottom: `1px solid ${T.glassBorder}` }}>
+            <p className="sidebar-section-label">Organização</p>
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setShowTenantDropdown(!showTenantDropdown)}
                 style={{
-                  background: "#111111",
-                  border: "1px solid #2a2a2a",
+                  width: "100%", display: "flex", alignItems: "center",
+                  justifyContent: "space-between", gap: 8,
+                  padding: "10px 12px", borderRadius: 12,
+                  background: T.glass, border: `1px solid ${T.glassBorder}`,
+                  color: T.text1, cursor: "pointer", fontSize: 13,
+                  transition: "background 0.15s, border-color 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = T.glass2;
+                  (e.currentTarget as HTMLElement).style.borderColor = "rgba(232,0,45,0.25)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = T.glass;
+                  (e.currentTarget as HTMLElement).style.borderColor = T.glassBorder;
                 }}
               >
-                {/* Campo de busca */}
-                <div className="px-2 pt-2 pb-1" style={{ borderBottom: "1px solid #1e1e1e" }}>
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: "hsl(220, 9%, 40%)" }} />
-                    <input
-                      type="text"
-                      placeholder="Buscar organização..."
-                      value={tenantSearch}
-                      onChange={(e) => setTenantSearch(e.target.value)}
-                      className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md"
-                      style={{
-                        background: "#1a1a1a",
-                        border: "1px solid #2a2a2a",
-                        color: "hsl(220, 14%, 80%)",
-                        outline: "none",
-                      }}
-                      autoFocus
-                    />
-                  </div>
-                </div>
-                {/* Lista filtrada com scroll */}
-                <div style={{ maxHeight: "240px", overflowY: "auto" }}>
-                {tenants
-                  .filter((t) =>
-                    !tenantSearch.trim() ||
-                    t.name.toLowerCase().includes(tenantSearch.trim().toLowerCase())
-                  )
-                  .map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => selectTenant(t.id, true)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 text-sm text-left transition-colors"
-                    style={{
-                      color: t.id === activeTenantId ? "#FF1A1A" : "hsl(220, 14%, 70%)",
-                      background:
-                        t.id === activeTenantId ? "#1a0000" : "transparent",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (t.id !== activeTenantId)
-                        (e.currentTarget as HTMLElement).style.background = "#1a1a1a";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (t.id !== activeTenantId)
-                        (e.currentTarget as HTMLElement).style.background = "transparent";
-                    }}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Building2 className="w-3.5 h-3.5" />
-                      <span className="truncate">{t.name}</span>
-                    </span>
-                    {t.id === activeTenantId && <Check className="w-3.5 h-3.5" />}
-                  </button>
-                ))}
-                </div>
+                <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, overflow: "hidden" }}>
+                  <Building2 style={{ width: 14, height: 14, flexShrink: 0, color: T.red }}/>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {activeTenant?.name ?? "Selecionar tenant"}
+                  </span>
+                </span>
+                <ChevronDown
+                  style={{
+                    width: 14, height: 14, flexShrink: 0, color: T.text3,
+                    transform: showTenantDropdown ? "rotate(180deg)" : "none",
+                    transition: "transform 0.2s",
+                  }}
+                />
+              </button>
 
-                <div style={{ borderTop: "1px solid #222222" }}>
-                  {isAdmin && !showCreateTenant ? (
-                    <button
-                      onClick={() => setShowCreateTenant(true)}
-                      className="w-full flex items-center gap-2 px-3 py-2.5 text-sm transition-colors"
-                      style={{ color: "hsl(220, 9%, 50%)" }}
-                      onMouseEnter={(e) => {
-                        (e.currentTarget as HTMLElement).style.color = "hsl(220, 14%, 80%)";
-                        (e.currentTarget as HTMLElement).style.background = "#1a1a1a";
-                      }}
-                      onMouseLeave={(e) => {
-                        (e.currentTarget as HTMLElement).style.color = "hsl(220, 9%, 50%)";
-                        (e.currentTarget as HTMLElement).style.background = "transparent";
-                      }}
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      Criar nova organização
-                    </button>
-                  ) : isAdmin && showCreateTenant ? (
-                    <div className="p-2 space-y-2">
+              {showTenantDropdown && (
+                <div className="animate-fadeIn" style={{
+                  position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+                  borderRadius: 12, overflow: "hidden",
+                  background: "rgba(10,10,14,0.95)",
+                  backdropFilter: "blur(16px)",
+                  border: `1px solid ${T.glassBorder}`,
+                  boxShadow: "0 16px 48px rgba(0,0,0,0.50)",
+                  zIndex: 50,
+                }}>
+                  {/* Search */}
+                  <div style={{ padding: "8px 8px 6px", borderBottom: `1px solid ${T.glassBorder}` }}>
+                    <div style={{ position: "relative" }}>
+                      <Search style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", width: 13, height: 13, color: T.text3 }}/>
                       <input
-                        type="text"
-                        placeholder="Nome da organização"
-                        value={newTenantName}
-                        onChange={(e) => setNewTenantName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && createTenant()}
-                        className="w-full px-2.5 py-2 text-sm rounded-lg"
+                        type="text" placeholder="Buscar organização..."
+                        value={tenantSearch} onChange={(e) => setTenantSearch(e.target.value)}
                         style={{
-                          background: "#1a1a1a",
-                          border: "1px solid #2a2a2a",
-                          color: "hsl(220, 14%, 90%)",
-                          outline: "none",
+                          width: "100%", paddingLeft: 28, paddingRight: 8,
+                          paddingTop: 6, paddingBottom: 6,
+                          fontSize: 12, borderRadius: 8,
+                          background: T.glass, border: `1px solid ${T.glassBorder}`,
+                          color: T.text1, outline: "none",
                         }}
                         autoFocus
                       />
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={createTenant}
-                          className="flex-1 py-1.5 text-xs rounded-lg font-medium"
-                          style={{
-                            background: "#FF1A1A",
-                            color: "white",
-                          }}
-                        >
-                          Criar
-                        </button>
-                        <button
-                          onClick={() => { setShowCreateTenant(false); setNewTenantName(""); }}
-                          className="flex-1 py-1.5 text-xs rounded-lg"
-                          style={{
-                            background: "#1a1a1a",
-                            color: "hsl(220, 9%, 60%)",
-                          }}
-                        >
-                          Cancelar
-                        </button>
-                      </div>
                     </div>
-                  ) : null}
+                  </div>
+                  {/* List */}
+                  <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                    {tenants
+                      .filter((t) => !tenantSearch.trim() || t.name.toLowerCase().includes(tenantSearch.trim().toLowerCase()))
+                      .map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => selectTenant(t.id, true)}
+                          style={{
+                            width: "100%", display: "flex", alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "10px 12px", fontSize: 13, cursor: "pointer",
+                            background:  t.id === activeTenantId ? "rgba(232,0,45,0.12)" : "transparent",
+                            color:       t.id === activeTenantId ? T.red : T.text2,
+                            transition:  "background 0.12s",
+                          }}
+                          onMouseEnter={(e) => { if (t.id !== activeTenantId) (e.currentTarget as HTMLElement).style.background = T.glass2; }}
+                          onMouseLeave={(e) => { if (t.id !== activeTenantId) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                        >
+                          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <Building2 style={{ width: 13, height: 13 }}/>
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
+                          </span>
+                          {t.id === activeTenantId && <Check style={{ width: 13, height: 13 }}/>}
+                        </button>
+                      ))}
+                  </div>
+                  {/* Create */}
+                  <div style={{ borderTop: `1px solid ${T.glassBorder}` }}>
+                    {isAdmin && !showCreateTenant && (
+                      <button
+                        onClick={() => setShowCreateTenant(true)}
+                        style={{
+                          width: "100%", display: "flex", alignItems: "center", gap: 8,
+                          padding: "10px 12px", fontSize: 13, cursor: "pointer",
+                          color: T.text3, background: "transparent", transition: "all 0.12s",
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLElement).style.color = T.text1;
+                          (e.currentTarget as HTMLElement).style.background = T.glass;
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLElement).style.color = T.text3;
+                          (e.currentTarget as HTMLElement).style.background = "transparent";
+                        }}
+                      >
+                        <Plus style={{ width: 13, height: 13 }}/> Criar nova organização
+                      </button>
+                    )}
+                    {isAdmin && showCreateTenant && (
+                      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                        <input
+                          type="text" placeholder="Nome da organização"
+                          value={newTenantName} onChange={(e) => setNewTenantName(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && createTenant()}
+                          style={{
+                            width: "100%", padding: "8px 10px", fontSize: 13, borderRadius: 8,
+                            background: T.glass, border: `1px solid ${T.glassBorder}`,
+                            color: T.text1, outline: "none",
+                          }}
+                          autoFocus
+                        />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={createTenant} style={{
+                            flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, borderRadius: 8,
+                            background: `linear-gradient(135deg, ${T.red}, #c8001f)`, color: "#fff", cursor: "pointer",
+                          }}>Criar</button>
+                          <button onClick={() => { setShowCreateTenant(false); setNewTenantName(""); }} style={{
+                            flex: 1, padding: "6px 0", fontSize: 12, borderRadius: 8,
+                            background: T.glass, color: T.text2, border: `1px solid ${T.glassBorder}`, cursor: "pointer",
+                          }}>Cancelar</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-1">
-          <p className="sidebar-section-label">Menu</p>
+        {/* ── Navigation ─────────────────────────────────────── */}
+        <nav style={{ flex: 1, padding: "8px 8px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+          {!collapsed && (
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+                        color: T.text3, padding: "8px 8px 4px" }}>
+              Menu
+            </p>
+          )}
+
           {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href;
+            const Icon     = item.icon;
+            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
                 key={item.label}
                 href={item.href}
-                className={`sidebar-nav-item relative group ${isActive ? "active" : ""}`}
-                title={isSidebarCollapsed ? item.label : ""}
+                title={collapsed ? item.label : undefined}
+                style={{
+                  display:       "flex",
+                  alignItems:    "center",
+                  gap:           collapsed ? 0 : 10,
+                  padding:       collapsed ? "9px 0" : "9px 10px",
+                  justifyContent: collapsed ? "center" : "flex-start",
+                  borderRadius:  12,
+                  fontSize:      13,
+                  fontWeight:    500,
+                  textDecoration:"none",
+                  color:         isActive ? "#fff" : T.text2,
+                  background:    isActive
+                    ? "linear-gradient(135deg, rgba(232,0,45,0.25), rgba(232,0,45,0.12))"
+                    : "transparent",
+                  border:        isActive ? "1px solid rgba(232,0,45,0.30)" : "1px solid transparent",
+                  boxShadow:     isActive ? "0 4px 20px rgba(232,0,45,0.12)" : "none",
+                  transition:    "all 0.15s",
+                  whiteSpace:    "nowrap",
+                  overflow:      "hidden",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLElement).style.background = T.glass2;
+                    (e.currentTarget as HTMLElement).style.color = T.text1;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) {
+                    (e.currentTarget as HTMLElement).style.background = "transparent";
+                    (e.currentTarget as HTMLElement).style.color = T.text2;
+                  }
+                }}
               >
-                <div className={`nav-icon w-5 h-5 flex items-center justify-center shrink-0 ${isSidebarCollapsed ? "mx-auto" : ""}`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-                {!isSidebarCollapsed && (
-                   <span className="animate-fadeIn">{item.label}</span>
-                )}
-                {isSidebarCollapsed && isActive && (
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#E8002D] rounded-l-full shadow-[0_0_10px_#E8002D]" />
-                )}
+                <Icon style={{ width: 16, height: 16, flexShrink: 0 }}/>
+                {!collapsed && <span>{item.label}</span>}
               </Link>
             );
           })}
 
-          {navItems.length === 0 && (
-            <p className="px-3 py-2 text-xs" style={{ color: "hsl(220, 9%, 40%)" }}>
+          {navItems.length === 0 && !collapsed && (
+            <p style={{ padding: "8px 10px", fontSize: 12, color: T.text3 }}>
               Selecione ou crie um tenant para navegar.
             </p>
           )}
 
-          {/* Admin section — visível apenas para admins do sistema (ADMIN_EMAILS) */}
+          {/* Admin section */}
           {isAdmin && (
-            <div className="mt-4 pt-4" style={{ borderTop: "1px solid #222222" }}>
-              <p className="sidebar-section-label" style={{ color: "#FF1A1A", marginTop: "16px" }}>Admin</p>
+            <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${T.glassBorder}` }}>
+              {!collapsed && (
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase",
+                            color: "rgba(232,0,45,0.6)", padding: "4px 8px 8px" }}>
+                  Admin
+                </p>
+              )}
               {[
-                { label: "Visão Geral",  href: "/app/admin",                  icon: LayoutDashboard },
-                { label: "Analytics",    href: "/app/admin/analytics",        icon: BarChart2       },
-                { label: "Sandbox",      href: "/app/admin/sandbox",          icon: FlaskConical    },
+                { label: "Visão Geral", href: "/app/admin",            icon: LayoutDashboard, color: T.yellow },
+                { label: "Analytics",   href: "/app/admin/analytics",  icon: BarChart2,       color: T.red    },
+                { label: "Sandbox",     href: "/app/admin/sandbox",    icon: FlaskConical,    color: T.green  },
               ].map((item) => {
-                const Icon = item.icon;
+                const Icon     = item.icon;
                 const isActive = pathname === item.href;
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`sidebar-nav-item ${isActive ? "active" : ""}`}
-                    style={isActive ? {} : { color: "hsl(45, 80%, 55%)" }}
+                  <Link key={item.href} href={item.href}
+                    title={collapsed ? item.label : undefined}
+                    style={{
+                      display:       "flex", alignItems: "center", gap: collapsed ? 0 : 10,
+                      padding:       collapsed ? "9px 0" : "9px 10px",
+                      justifyContent: collapsed ? "center" : "flex-start",
+                      borderRadius:  12, fontSize: 13, fontWeight: 500,
+                      textDecoration:"none",
+                      color:         isActive ? "#fff" : item.color,
+                      background:    isActive ? `linear-gradient(135deg, rgba(232,0,45,0.25), rgba(232,0,45,0.12))` : "transparent",
+                      border:        isActive ? "1px solid rgba(232,0,45,0.30)" : "1px solid transparent",
+                      transition:    "all 0.15s", whiteSpace: "nowrap", overflow: "hidden",
+                    }}
+                    onMouseEnter={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = T.glass2; }}
+                    onMouseLeave={(e) => { if (!isActive) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
                   >
-                    <Icon className="nav-icon w-4 h-4 shrink-0" />
-                    <span>{item.label}</span>
+                    <Icon style={{ width: 16, height: 16, flexShrink: 0, color: isActive ? "#fff" : item.color }}/>
+                    {!collapsed && <span>{item.label}</span>}
                   </Link>
                 );
               })}
@@ -573,162 +636,182 @@ export default function AppShell({
           )}
         </nav>
 
-        {/* Footer */}
-        <div className={`mt-auto border-t border-white/5 bg-black/20 p-4 transition-all ${isSidebarCollapsed ? "flex flex-col items-center gap-4" : ""}`}>
-          <div className="flex items-center gap-3 w-full overflow-hidden">
-            <div
-              className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shrink-0 transition-all ${
-                isSidebarCollapsed ? "mx-auto" : ""
-              }`}
-              style={{
-                background: "linear-gradient(135deg, #E8002D, #FF4D6D)",
-                color: "white",
-                boxShadow: "0 0 15px rgba(232,0,45,0.4)"
-              }}
-            >
-              {userInitials}
-            </div>
-            {!isSidebarCollapsed && (
-              <div className="flex-1 min-w-0 animate-fadeIn">
-                <p className="text-[11px] font-black text-white truncate uppercase tracking-tight">
-                  {user.email?.split('@')[0]}
-                </p>
-                <p className="text-[9px] text-[#00D68F] font-bold flex items-center gap-1 uppercase tracking-widest">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#00D68F] shadow-[0_0_5px_#00D68F]" /> Online
-                </p>
-              </div>
-            )}
-             {!isSidebarCollapsed && (
-              <button
-                onClick={handleLogout}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-white hover:bg-white/5 transition-all"
-                title="Sair"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            )}
+        {/* ── Footer ─────────────────────────────────────────── */}
+        <div style={{
+          padding:    collapsed ? "12px 0" : "12px 10px",
+          borderTop:  `1px solid ${T.glassBorder}`,
+          display:    "flex",
+          alignItems: "center",
+          gap:        10,
+          justifyContent: collapsed ? "center" : "flex-start",
+        }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: "50%",
+            background: `linear-gradient(135deg, ${T.red}, #ff4d6d)`,
+            boxShadow:  "0 0 12px rgba(232,0,45,0.35)",
+            display:    "flex", alignItems: "center", justifyContent: "center",
+            fontSize:   11, fontWeight: 700, color: "#fff", flexShrink: 0,
+          }}>
+            {userInitials}
           </div>
-          
-          {isSidebarCollapsed && (
-            <button
-              onClick={handleLogout}
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-white/20 hover:text-[#E8002D] hover:bg-[#E8002D]/10 transition-all border border-transparent hover:border-[#E8002D]/20"
-              title="Sair"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+
+          {!collapsed && (
+            <>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 11, color: T.text2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {user.email}
+                </p>
+                <p style={{ fontSize: 10, color: T.green }}>● Conta ativa</p>
+              </div>
+              <button onClick={handleLogout} title="Sair" style={{
+                width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: T.text3, background: "transparent", cursor: "pointer",
+                transition: "color 0.15s, background 0.15s",
+              }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.color = T.red;
+                  (e.currentTarget as HTMLElement).style.background = T.redLo;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.color = T.text3;
+                  (e.currentTarget as HTMLElement).style.background = "transparent";
+                }}
+              >
+                <LogOut style={{ width: 15, height: 15 }}/>
+              </button>
+            </>
           )}
         </div>
       </aside>
 
-      {/* ── Main content ── */}
-      <main className={`flex-1 min-h-screen transition-all duration-300 relative z-10 ${isSidebarCollapsed ? "ml-[66px]" : "ml-[242px]"}`}>
-        {/* ── Top bar (sempre visível) ── */}
-        <header
-          className="sticky top-0 z-20 flex items-center justify-between px-6 backdrop-blur-md bg-white/5 border-b border-white/5"
-          style={{ height: "64px" }}
-        >
-          <div className="flex items-center gap-4">
-            <button
-               onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-               className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-white hover:bg-white/5 transition-all lg:flex hidden"
-               title={isSidebarCollapsed ? "Expandir Menu" : "Recolher Menu"}
-            >
-               <div className="relative w-4 h-3.5 flex flex-col justify-between">
-                 <div className={`h-[2px] bg-white rounded-full transition-all duration-300 ${isSidebarCollapsed ? "w-4" : "w-2.5"}`} />
-                 <div className="h-[2px] w-4 bg-white rounded-full" />
-                 <div className={`h-[2px] bg-white rounded-full transition-all duration-300 ${isSidebarCollapsed ? "w-4" : "w-1.5 ml-auto"}`} />
-               </div>
-            </button>
+      {/* ════ MAIN ════════════════════════════════════════════ */}
+      <main style={{
+        flex:           1,
+        marginLeft:     sidebarW,
+        minHeight:      "100vh",
+        display:        "flex",
+        flexDirection:  "column",
+        position:       "relative",
+        zIndex:         1,
+        transition:     MARGIN_TRANS,
+      }}>
 
-            <div className="h-6 w-px bg-white/5 hidden lg:block" />
-
-            <div className="flex flex-col">
-              <h2 className="text-lg font-black tracking-tight text-white leading-none">MX3 CallX</h2>
-              <p className="text-[11px] text-white/40 font-bold tracking-widest mt-0.5 uppercase">Panorama Report</p>
-            </div>
-          </div>
+        {/* ── Topbar ─────────────────────────────────────────── */}
+        <header style={{
+          position:       "sticky",
+          top:            0,
+          zIndex:         20,
+          height:         56,
+          display:        "flex",
+          alignItems:     "center",
+          justifyContent: "flex-end",
+          padding:        "0 28px",
+          background:     T.topbar,
+          backdropFilter: "blur(20px) saturate(150%)",
+          WebkitBackdropFilter: "blur(20px) saturate(150%)",
+          borderBottom:   `1px solid ${T.glassBorder}`,
+        }}>
           {activeTenantId && (
-            <div className="relative" ref={bellRef}>
+            <div style={{ position: "relative" }} ref={bellRef}>
               <button
                 onClick={() => setShowBellDropdown(!showBellDropdown)}
                 title="Notificações"
-                className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors relative text-white/30 hover:text-white hover:bg-white/5"
+                style={{
+                  width: 36, height: 36, borderRadius: 10, position: "relative",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: T.text2, background: T.glass, border: `1px solid ${T.glassBorder}`,
+                  cursor: "pointer", transition: "all 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = T.glass2;
+                  (e.currentTarget as HTMLElement).style.color = T.text1;
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.background = T.glass;
+                  (e.currentTarget as HTMLElement).style.color = T.text2;
+                }}
               >
-                <Bell className="w-4 h-4" />
+                <Bell style={{ width: 15, height: 15 }}/>
                 {showBellBadge && (
-                  <span
-                    className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full border-2 border-[#060608]"
-                    style={{ background: minutesStatus?.blocked ? "#E8002D" : "#FFB800" }}
-                  />
+                  <span style={{
+                    position: "absolute", top: 6, right: 6,
+                    width: 8, height: 8, borderRadius: "50%",
+                    border: "2px solid #060608",
+                    background: minutesStatus?.blocked ? "#dc2626" : T.yellow,
+                  }}/>
                 )}
               </button>
 
               {showBellDropdown && (
-                <div className="absolute top-full mt-2 right-0 w-80 shadow-2xl z-50 overflow-hidden gc border-white/10 animate-slideIn">
+                <div className="animate-fadeIn" style={{
+                  position: "absolute", top: "calc(100% + 8px)", right: 0, width: 280,
+                  borderRadius: 14, overflow: "hidden",
+                  background: "rgba(10,10,14,0.95)",
+                  backdropFilter: "blur(16px)",
+                  border: `1px solid ${T.glassBorder}`,
+                  boxShadow: "0 16px 48px rgba(0,0,0,0.50)",
+                  zIndex: 50,
+                }}>
                   {showBellBadge ? (
                     <>
-                      {/* Header */}
-                      <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-white/2">
-                        <div className="flex items-center gap-3">
-                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center border border-white/5 ${minutesStatus?.blocked ? "bg-[#E8002D]/20 animate-pulse" : "bg-amber-500/20"}`}>
-                             <Bell className={`w-4 h-4 ${minutesStatus?.blocked ? "text-[#E8002D]" : "text-amber-400"}`} />
-                           </div>
-                          <div>
-                            <p className="text-[10px] font-black text-white uppercase tracking-[1.5px]">Plano de Minutos</p>
-                            <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider">{minutesStatus?.blocked ? "Acesso Suspenso" : "Consumo Mensal"}</p>
-                          </div>
+                      <div style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "12px 16px", borderBottom: `1px solid ${T.glassBorder}`,
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <AlertTriangle style={{ width: 15, height: 15, color: minutesStatus?.blocked ? "#dc2626" : T.yellow }}/>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: T.text1 }}>
+                            {minutesStatus?.blocked ? "Conta bloqueada" : "Aviso de consumo"}
+                          </span>
                         </div>
                         {!minutesStatus?.blocked && (
-                          <button onClick={dismissBellNotification} className="text-white/20 hover:text-white transition-all">
-                            <X className="w-4 h-4" />
+                          <button onClick={dismissBellNotification} style={{ color: T.text3, cursor: "pointer", transition: "color 0.15s" }}
+                            onMouseEnter={(e) => (e.currentTarget as HTMLElement).style.color = T.text1}
+                            onMouseLeave={(e) => (e.currentTarget as HTMLElement).style.color = T.text3}
+                          >
+                            <X style={{ width: 13, height: 13 }}/>
                           </button>
                         )}
                       </div>
-                      {/* Body */}
-                      <div className="p-6 space-y-6">
-                        <p className="text-xs text-white/60 leading-loose font-medium">
+                      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+                        <p style={{ fontSize: 12, color: T.text2, lineHeight: 1.6 }}>
                           {minutesStatus?.blocked
-                            ? "Alerta crítico: Você atingiu 100% dos minutos contratados. As operações automáticas foram suspensas."
-                            : `Aviso: Seu consumo mensal atingiu ${minutesPct}% da cota contratada.`}
+                            ? "Você atingiu 100% dos minutos contratados. Todas as campanhas foram pausadas automaticamente."
+                            : `Você já consumiu ${minutesPct}% dos minutos contratados deste mês.`}
                         </p>
-                        
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                            <span className="text-white/30">Progresso</span>
-                            <span className="text-white font-mono">{minutesPct}%</span>
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: T.text3, marginBottom: 4 }}>
+                            <span>{usedMinutes} min usados</span>
+                            <span>{minutesStatus?.contracted} min contratados</span>
                           </div>
-                          <div className="h-1.5 rounded-full bg-white/5 border border-white/5 overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(255,184,0,0.2)]"
-                              style={{
-                                width: `${Math.min(100, minutesPct)}%`,
-                                background: minutesStatus?.blocked 
-                                  ? "linear-gradient(to right, #E8002D, #FF4D6D)" 
-                                  : minutesPct >= 90 
-                                    ? "linear-gradient(to right, #F97316, #FACC15)" 
-                                    : "linear-gradient(to right, #FACC15, #00D68F)",
-                              }}
-                            />
+                          <div style={{ height: 6, borderRadius: 999, background: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                            <div style={{
+                              height: "100%", borderRadius: 999,
+                              width: `${Math.min(100, minutesPct)}%`,
+                              background: minutesStatus?.blocked ? "#dc2626" : minutesPct >= 90 ? "#f97316" : T.yellow,
+                              boxShadow: "0 0 10px rgba(255,184,0,0.4)",
+                            }}/>
                           </div>
                         </div>
-
                         <button
                           onClick={handleRequestMinutes}
                           disabled={sendingEmail}
-                          className="btn-premium w-full py-2.5"
+                          style={{
+                            width: "100%", padding: "9px 0", fontSize: 13, fontWeight: 600, borderRadius: 10,
+                            background: `linear-gradient(135deg, ${T.red}, #c8001f)`,
+                            color: "#fff", cursor: sendingEmail ? "not-allowed" : "pointer",
+                            opacity: sendingEmail ? 0.6 : 1,
+                            boxShadow: "0 4px 16px rgba(232,0,45,0.30)",
+                          }}
                         >
-                          {sendingEmail ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <Zap className="w-4 h-4" />}
-                          <span className="font-black uppercase tracking-[1.5px] text-[10px]">Upgrade Imediato</span>
+                          {sendingEmail ? "Enviando..." : "Contratar mais minutos"}
                         </button>
                       </div>
                     </>
                   ) : (
-                    <div className="px-4 py-8 text-center bg-white/2">
-                      <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3">
-                        <Check className="w-5 h-5 text-white/20" />
-                      </div>
-                      <p className="text-[10px] font-black text-white/20 uppercase tracking-[2px]">Sem Notificações</p>
+                    <div style={{ padding: "16px", fontSize: 13, color: T.text3, textAlign: "center" }}>
+                      Sem notificações no momento.
                     </div>
                   )}
                 </div>
@@ -737,18 +820,20 @@ export default function AppShell({
           )}
         </header>
 
-        <div style={{ maxWidth: "100%", padding: "32px 40px" }}>{children}</div>
+        {/* ── Page content ───────────────────────────────────── */}
+        <div style={{ flex: 1, padding: "32px 40px", maxWidth: "100%" }}>
+          {children}
+        </div>
       </main>
 
-      {/* ── Toast notifications ── */}
+      {/* ════ TOASTS ══════════════════════════════════════════ */}
       <div className="toast-container">
         {toasts.map((t) => (
           <div key={t.id} className={t.type === "success" ? "toast-success" : "toast-error"}>
-            {t.type === "success" ? (
-              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-            ) : (
-              <X className="w-4 h-4 text-red-200 shrink-0" />
-            )}
+            {t.type === "success"
+              ? <Check style={{ width: 15, height: 15, flexShrink: 0 }}/>
+              : <X     style={{ width: 15, height: 15, flexShrink: 0 }}/>
+            }
             <span>{t.message}</span>
           </div>
         ))}
