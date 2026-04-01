@@ -220,37 +220,19 @@ function AdvancedConfigFields({
         )}
       </div>
 
-      {/* Webhook — visível e editável apenas para SuperAdmin */}
-      {isAdmin ? (
-        <div>
-          <label className="form-label flex items-center gap-1">
-            <Link2 className="w-3.5 h-3.5 text-gray-400" />
-            Webhook de saída (opcional)
-            <span className="ml-1 text-xs font-normal px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Admin</span>
-          </label>
-          <input className="form-input font-mono text-sm"
-            placeholder="https://seu-n8n.com/webhook/xxx"
-            value={form.webhook_url ?? ""}
-            onChange={(e) => update("webhook_url", e.target.value)} />
-          <p className="text-xs text-gray-400 mt-1">
-            POST automático com resultado de cada chamada (n8n, Zapier, Make…)
-          </p>
-        </div>
-      ) : (
-        <div>
-          <label className="form-label flex items-center gap-1">
-            <Link2 className="w-3.5 h-3.5 text-gray-400" />
-            Webhook de saída
-          </label>
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-gray-50 border border-gray-200 text-sm text-gray-500">
-            <AlertCircle className="w-4 h-4 text-gray-400 shrink-0" />
-            {form.webhook_url
-              ? <span className="font-mono truncate">{form.webhook_url}</span>
-              : <span>Campanha sem Webhook de Saída configurado — solicite ao Admin</span>
-            }
-          </div>
-        </div>
-      )}
+      <div>
+        <label className="form-label flex items-center gap-1">
+          <Link2 className="w-3.5 h-3.5 text-gray-400" />
+          Webhook de saída (opcional)
+        </label>
+        <input className="form-input font-mono text-sm"
+          placeholder="https://seu-n8n.com/webhook/xxx"
+          value={form.webhook_url ?? ""}
+          onChange={(e) => update("webhook_url", e.target.value)} />
+        <p className="text-xs text-gray-400 mt-1">
+          POST automático com resultado de cada chamada (n8n, Zapier, Make…)
+        </p>
+      </div>
     </div>
   );
 }
@@ -1288,11 +1270,11 @@ export default function CampaignsPage() {
                             }
                             return null;
                           })()}
-                          {isAdmin && q.webhook_url && (
+                          {q.webhook_url && (
                             <>
                               <span className="text-gray-200">·</span>
                               <span className="text-emerald-600 flex items-center gap-1">
-                                <Link2 className="w-3 h-3" /> Webhook ativo
+                                <Link2 className="w-3.5 h-3.5" /> Webhook ativo
                               </span>
                             </>
                           )}
@@ -1512,8 +1494,7 @@ export default function CampaignsPage() {
                           </div>
                         </div>
 
-                        {/* Webhook — visível apenas para SuperAdmin */}
-                        {isAdmin && q.webhook_url && (
+                        {q.webhook_url && (
                           <div className="space-y-1.5">
                             <div className="flex items-center gap-2">
                               <Zap className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
@@ -1585,7 +1566,7 @@ export default function CampaignsPage() {
                         })()}
 
                         {/* Empty overview */}
-                        {!(isAdmin && q.webhook_url) && !diagnoseResults[q.id] && (
+                        {!q.webhook_url && !diagnoseResults[q.id] && (
                           <p className="text-sm text-gray-400 text-center py-4">
                             Use o botão <strong>Diagnosticar</strong> para verificar o estado desta campanha.
                           </p>
