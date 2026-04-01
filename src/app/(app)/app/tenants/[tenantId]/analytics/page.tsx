@@ -69,6 +69,10 @@ function formatDurationShort(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function fmtCurrency(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
+
 function pct(part: number, total: number): string {
   if (total === 0) return "0%";
   return `${Math.round((part / total) * 100)}%`;
