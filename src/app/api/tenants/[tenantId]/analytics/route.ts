@@ -87,14 +87,17 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   // ── 3. Métricas de Leads (Tabela de Leads) ──
   // Fast COUNT head requests since they touch another table and are quick
-  let qLeads = service.from("leads").select("*", { head: true, count: "exact" }).eq("tenant_id", tenantId);
-  if (queueId) {
-    const listId = campaignsRaw?.find(q => q.id === queueId)?.lead_list_id;
-    if (listId) qLeads = qLeads.eq("list_id", listId);
-  } else if (filteredQueueIds) {
-    const listIds = campaignsRaw?.filter(q => filteredQueueIds.includes(q.id)).map(q => q.lead_list_id).filter(Boolean);
-    if (listIds && listIds.length > 0) qLeads = qLeads.in("list_id", listIds);
-  }
+  const getLeadsQuery = () => {
+    let q = service.from("leads").select("*", { head: true, count: "exact" }).eq("tenant_id", tenantId);
+    if (queueId) {
+      const listId = campaignsRaw?.find((c) => c.id === queueId)?.lead_list_id;
+      if (listId) q = q.eq("list_id", listId);
+    } else if (filteredQueueIds) {
+      const listIds = campaignsRaw?.filter((c) => filteredQueueIds.includes(c.id)).map((c) => c.lead_list_id).filter(Boolean);
+      if (listIds && listIds.length > 0) q = q.in("list_id", listIds);
+    }
+    return q;
+  };
 
   const [
     { count: totalLeads },
@@ -102,10 +105,10 @@ export async function GET(req: NextRequest, { params }: Params) {
     { count: leadsFailed },
     { count: leadsNeverAnswered }
   ] = await Promise.all([
-    qLeads,
-    qLeads.eq("status", "pending"),
-    qLeads.eq("status", "failed"),
-    qLeads.in("status", ["busy", "voicemail", "no-answer"])
+    getLeadsQuery(),
+    getLeadsQuery().eq("status", "pending"),
+    getLeadsQuery().eq("status", "failed"),
+    getLeadsQuery().in("status", ["busy", "voicemail", "no-answer"])
   ]);
 
   return NextResponse.json({
@@ -128,11 +131,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     durationBuckets: metrics.durationBuckets ?? {},
 
     answeredCalls: metrics.answeredCalls ?? 0,
-    notAnsweredCalls: metrics.notAnsweredCalls ?? 0,
+    notAnsweredCalls: Math.max(0, (metrics.totalCalls ?? 0) - (metrics.answeredCalls ?? 0)),
     statusBreakdown: metrics.statusBreakdown ?? {},
     endedReasonRaw: metrics.endedReasonRaw ?? {},
 
-    structuredWithOutput: 0, // deprecado, mantido pro TS do frontend não chorar
+    structuredWithOutput: metrics.withOutputsCount ?? (metrics.answeredCalls ?? 0),
     structuredSuccessCalls: metrics.conversionCalls ?? 0,
     structuredOutputsConfigured: !!contextSuccessField,
     costPerConversion: metrics.costPerConversion ?? null,

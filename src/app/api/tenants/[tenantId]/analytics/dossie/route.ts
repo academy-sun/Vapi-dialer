@@ -18,6 +18,15 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   const service = createServiceClient();
 
+  // Buscar todas as campanhas para o dropdown
+  const { data: campaignsRaw } = await service
+    .from("dial_queues")
+    .select("id, name, assistant_id")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: false });
+
+  const campaigns = campaignsRaw?.map((c) => ({ id: c.id, name: c.name, assistantId: c.assistant_id })) || [];
+
   // Filtrar queues pelo assistantId (se aplicável)
   let filteredQueueIds: string[] | null = null;
   if (assistantId && !queueId) {
@@ -42,6 +51,7 @@ export async function GET(req: NextRequest, { params }: Params) {
           performanceScore: { avg: 0, min: 0, max: 0, count: 0, distribution: {} },
           endedReasonBreakdown: {},
         },
+        campaigns,
       });
     }
   }
@@ -59,5 +69,5 @@ export async function GET(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Erro ao gerar dossiê analítico" }, { status: 500 });
   }
 
-  return NextResponse.json({ data: dossie });
+  return NextResponse.json({ data: dossie, campaigns });
 }
