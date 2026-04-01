@@ -573,37 +573,50 @@ export default function AppShell({
         </nav>
 
         {/* Footer */}
-        <div className="sidebar-footer p-4 border-t border-white/5 bg-black/20">
-          <div className="flex items-center gap-3">
+        <div className={`mt-auto border-t border-white/5 bg-black/20 p-4 transition-all ${isSidebarCollapsed ? "flex flex-col items-center gap-4" : ""}`}>
+          <div className="flex items-center gap-3 w-full overflow-hidden">
             <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 shadow-[0_0_15px_rgba(232,0,45,0.4)]`}
+              className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shrink-0 transition-all ${
+                isSidebarCollapsed ? "mx-auto" : ""
+              }`}
               style={{
                 background: "linear-gradient(135deg, #E8002D, #FF4D6D)",
                 color: "white",
+                boxShadow: "0 0 15px rgba(232,0,45,0.4)"
               }}
             >
               {userInitials}
             </div>
             {!isSidebarCollapsed && (
               <div className="flex-1 min-w-0 animate-fadeIn">
-                <p className="text-[12px] font-semibold text-white truncate">
-                  {user.email}
+                <p className="text-[11px] font-black text-white truncate uppercase tracking-tight">
+                  {user.email?.split('@')[0]}
                 </p>
-                <p className="text-[10px] text-white/40 flex items-center gap-1">
-                  <span className="w-1 h-1 rounded-full bg-[#00D68F]" /> Conta ativa
+                <p className="text-[9px] text-[#00D68F] font-bold flex items-center gap-1 uppercase tracking-widest">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00D68F] shadow-[0_0_5px_#00D68F]" /> Online
                 </p>
               </div>
             )}
-            {!isSidebarCollapsed && (
+             {!isSidebarCollapsed && (
               <button
                 onClick={handleLogout}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/20 hover:text-white hover:bg-white/5 transition-all"
                 title="Sair"
-                className="w-8 h-8 rounded-lg flex items-center justify-center transition-all text-white/30 hover:text-[#E8002D] hover:bg-[#E8002D]/10"
               >
                 <LogOut className="w-4 h-4" />
               </button>
             )}
           </div>
+          
+          {isSidebarCollapsed && (
+            <button
+              onClick={handleLogout}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-white/20 hover:text-[#E8002D] hover:bg-[#E8002D]/10 transition-all border border-transparent hover:border-[#E8002D]/20"
+              title="Sair"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </aside>
 
@@ -611,88 +624,110 @@ export default function AppShell({
       <main className={`flex-1 min-h-screen transition-all duration-300 relative z-10 ${isSidebarCollapsed ? "ml-[66px]" : "ml-[242px]"}`}>
         {/* ── Top bar (sempre visível) ── */}
         <header
-          className="sticky top-0 z-20 flex items-center justify-between px-8 backdrop-blur-md bg-white/5 border-b border-white/5"
+          className="sticky top-0 z-20 flex items-center justify-between px-6 backdrop-blur-md bg-white/5 border-b border-white/5"
           style={{ height: "64px" }}
         >
-          <div className="flex flex-col">
-            <h2 className="text-lg font-black tracking-tight text-white leading-none">MX3 CallX</h2>
-            <p className="text-[11px] text-white/40 font-medium tracking-wide mt-1 uppercase">Plataforma Analítica Superior</p>
+          <div className="flex items-center gap-4">
+            <button
+               onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+               className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-white hover:bg-white/5 transition-all lg:flex hidden"
+               title={isSidebarCollapsed ? "Expandir Menu" : "Recolher Menu"}
+            >
+               <div className="relative w-4 h-3.5 flex flex-col justify-between">
+                 <div className={`h-[2px] bg-white rounded-full transition-all duration-300 ${isSidebarCollapsed ? "w-4" : "w-2.5"}`} />
+                 <div className="h-[2px] w-4 bg-white rounded-full" />
+                 <div className={`h-[2px] bg-white rounded-full transition-all duration-300 ${isSidebarCollapsed ? "w-4" : "w-1.5 ml-auto"}`} />
+               </div>
+            </button>
+
+            <div className="h-6 w-px bg-white/5 hidden lg:block" />
+
+            <div className="flex flex-col">
+              <h2 className="text-lg font-black tracking-tight text-white leading-none">MX3 CallX</h2>
+              <p className="text-[11px] text-white/40 font-bold tracking-widest mt-0.5 uppercase">Panorama Report</p>
+            </div>
           </div>
           {activeTenantId && (
             <div className="relative" ref={bellRef}>
               <button
                 onClick={() => setShowBellDropdown(!showBellDropdown)}
                 title="Notificações"
-                className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors relative"
-                style={{ color: "#888888", background: "transparent" }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#f5f5f5"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                className="w-9 h-9 rounded-lg flex items-center justify-center transition-colors relative text-white/30 hover:text-white hover:bg-white/5"
               >
                 <Bell className="w-4 h-4" />
                 {showBellBadge && (
                   <span
-                    className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full border-2 border-white"
-                    style={{ background: minutesStatus?.blocked ? "#dc2626" : "#f59e0b" }}
+                    className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full border-2 border-[#060608]"
+                    style={{ background: minutesStatus?.blocked ? "#E8002D" : "#FFB800" }}
                   />
                 )}
               </button>
 
               {showBellDropdown && (
-                <div
-                  className="absolute top-full mt-2 right-0 w-72 rounded-xl shadow-2xl z-50 overflow-hidden"
-                  style={{ background: "#111111", border: "1px solid #2a2a2a" }}
-                >
+                <div className="absolute top-full mt-2 right-0 w-80 shadow-2xl z-50 overflow-hidden gc border-white/10 animate-slideIn">
                   {showBellBadge ? (
                     <>
                       {/* Header */}
-                      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: "1px solid #222222" }}>
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className={`w-4 h-4 ${minutesStatus?.blocked ? "text-red-500" : "text-amber-400"}`} />
-                          <span className="text-sm font-semibold text-white">
-                            {minutesStatus?.blocked ? "Conta bloqueada" : "Aviso de consumo"}
-                          </span>
+                      <div className="flex items-center justify-between px-5 py-4 border-b border-white/5 bg-white/2">
+                        <div className="flex items-center gap-3">
+                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center border border-white/5 ${minutesStatus?.blocked ? "bg-[#E8002D]/20 animate-pulse" : "bg-amber-500/20"}`}>
+                             <Bell className={`w-4 h-4 ${minutesStatus?.blocked ? "text-[#E8002D]" : "text-amber-400"}`} />
+                           </div>
+                          <div>
+                            <p className="text-[10px] font-black text-white uppercase tracking-[1.5px]">Plano de Minutos</p>
+                            <p className="text-[11px] text-white/40 font-bold uppercase tracking-wider">{minutesStatus?.blocked ? "Acesso Suspenso" : "Consumo Mensal"}</p>
+                          </div>
                         </div>
                         {!minutesStatus?.blocked && (
-                          <button onClick={dismissBellNotification} className="text-gray-500 hover:text-gray-300 transition-colors">
-                            <X className="w-3.5 h-3.5" />
+                          <button onClick={dismissBellNotification} className="text-white/20 hover:text-white transition-all">
+                            <X className="w-4 h-4" />
                           </button>
                         )}
                       </div>
                       {/* Body */}
-                      <div className="px-4 py-3 space-y-3">
-                        <p className="text-sm text-gray-300 leading-relaxed">
+                      <div className="p-6 space-y-6">
+                        <p className="text-xs text-white/60 leading-loose font-medium">
                           {minutesStatus?.blocked
-                            ? "Você atingiu 100% dos minutos contratados. Todas as campanhas foram pausadas automaticamente."
-                            : `Você já consumiu ${minutesPct}% dos minutos contratados deste mês.`}
+                            ? "Alerta crítico: Você atingiu 100% dos minutos contratados. As operações automáticas foram suspensas."
+                            : `Aviso: Seu consumo mensal atingiu ${minutesPct}% da cota contratada.`}
                         </p>
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-xs text-gray-400">
-                            <span>{usedMinutes} min usados</span>
-                            <span>{minutesStatus?.contracted} min contratados</span>
+                        
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                            <span className="text-white/30">Progresso</span>
+                            <span className="text-white font-mono">{minutesPct}%</span>
                           </div>
-                          <div className="h-2 rounded-full overflow-hidden" style={{ background: "#2a2a2a" }}>
+                          <div className="h-1.5 rounded-full bg-white/5 border border-white/5 overflow-hidden">
                             <div
-                              className="h-full rounded-full transition-all"
+                              className="h-full rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(255,184,0,0.2)]"
                               style={{
                                 width: `${Math.min(100, minutesPct)}%`,
-                                background: minutesStatus?.blocked ? "#dc2626" : minutesPct >= 90 ? "#f97316" : "#f59e0b",
+                                background: minutesStatus?.blocked 
+                                  ? "linear-gradient(to right, #E8002D, #FF4D6D)" 
+                                  : minutesPct >= 90 
+                                    ? "linear-gradient(to right, #F97316, #FACC15)" 
+                                    : "linear-gradient(to right, #FACC15, #00D68F)",
                               }}
                             />
                           </div>
                         </div>
+
                         <button
                           onClick={handleRequestMinutes}
                           disabled={sendingEmail}
-                          className="w-full py-2 text-sm font-semibold rounded-lg transition-colors"
-                          style={{ background: "#FF1A1A", color: "white" }}
+                          className="btn-premium w-full py-2.5"
                         >
-                          {sendingEmail ? "Enviando..." : "Contratar mais minutos"}
+                          {sendingEmail ? <Loader2 className="w-4 h-4 animate-spin text-white" /> : <Zap className="w-4 h-4" />}
+                          <span className="font-black uppercase tracking-[1.5px] text-[10px]">Upgrade Imediato</span>
                         </button>
                       </div>
                     </>
                   ) : (
-                    <div className="px-4 py-4 text-sm text-gray-400 text-center">
-                      Sem notificações no momento.
+                    <div className="px-4 py-8 text-center bg-white/2">
+                      <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3">
+                        <Check className="w-5 h-5 text-white/20" />
+                      </div>
+                      <p className="text-[10px] font-black text-white/20 uppercase tracking-[2px]">Sem Notificações</p>
                     </div>
                   )}
                 </div>

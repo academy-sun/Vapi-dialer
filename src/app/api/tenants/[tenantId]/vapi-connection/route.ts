@@ -18,7 +18,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     .select("id, label, is_active, created_at, updated_at, assistant_id, success_field, success_value, concurrency_limit, encrypted_public_key, contracted_minutes, minutes_used_cache, minutes_cache_month, minutes_blocked")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
-    .single();
+    .maybeSingle();
 
   if (error && error.code === "PGRST116") {
     return NextResponse.json({ connection: null });
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       success_value: successValue ?? null,
     })
     .select("id, label, is_active, created_at, assistant_id, success_field, success_value")
-    .single();
+    .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -107,7 +107,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
           .select("minutes_used_cache, minutes_blocked")
           .eq("tenant_id", tenantId)
           .eq("is_active", true)
-          .single();
+          .maybeSingle();
         if (current?.minutes_blocked && Math.ceil((current.minutes_used_cache ?? 0) / 60) < newLimit) {
           updates.minutes_blocked = false;
         }
@@ -136,7 +136,7 @@ export async function getActiveVapiKey(tenantId: string): Promise<string | null>
     .select("encrypted_private_key")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
-    .single();
+    .maybeSingle();
 
   if (!data) return null;
   return decrypt(data.encrypted_private_key);

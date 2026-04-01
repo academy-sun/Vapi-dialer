@@ -596,180 +596,171 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Filtros */}
+      <div className="gc p-5 mb-8 no-print border-white/5">
+        <div className="flex items-center gap-6 flex-wrap">
+          <div className="flex items-center gap-2 text-[10px] font-black text-white/30 uppercase tracking-[2px]">
+            <Filter className="w-3.5 h-3.5" />
+            Parâmetros de Filtro
+          </div>
+
+          <div className="h-4 w-px bg-white/10 hidden sm:block" />
+
+          {/* Assistant Select */}
+          <div className="flex-1 min-w-[200px]">
+            <div className="flex items-center gap-2 group">
+              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-all">
+                <Bot className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              </div>
+              <select
+                className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors w-full"
+                value={selectedAssistant || ""}
+                onChange={(e) => setFilter("assistantId", e.target.value)}
+              >
+                <option value="" className="bg-[#0A0A0E]">Todos os Assistentes</option>
+                {data?.assistants.map((a) => (
+                  <option key={a.id} value={a.id} className="bg-[#0A0A0E]">{a.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="h-4 w-px bg-white/10 hidden sm:block" />
+
+          {/* Campaign Select */}
+          <div className="flex-1 min-w-[200px]">
+            <div className="flex items-center gap-2 group">
+              <div className="w-7 h-7 rounded-lg bg-[#E8002D]/10 flex items-center justify-center border border-[#E8002D]/20 group-hover:bg-[#E8002D]/20 transition-all">
+                <PhoneCall className="w-3.5 h-3.5 text-[#E8002D] shrink-0" />
+              </div>
+              <select
+                className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors w-full"
+                value={selectedQueue || ""}
+                onChange={(e) => setFilter("queueId", e.target.value)}
+              >
+                <option value="" className="bg-[#0A0A0E]">Todas as Campanhas</option>
+                {visibleCampaigns.map((c) => (
+                  <option key={c.id} value={c.id} className="bg-[#0A0A0E]">{c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="h-4 w-px bg-white/10 hidden lg:block" />
+
+          {/* Período */}
+          <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/5 no-print">
+            {[7, 30, 90].map((d) => (
+              <button
+                key={d}
+                onClick={() => setFilter("days", String(d))}
+                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                  selectedDays === String(d) 
+                    ? "bg-[#E8002D] text-white shadow-[0_0_15px_rgba(232,0,45,0.3)]" 
+                    : "text-white/30 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                {d}D
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
       {/* Barra de minutos contratados */}
       {minutesData && (
-        <div className={`card p-4 mb-6 ${minutesData.blocked ? "border-red-300" : minutesPct >= 80 ? "border-orange-300" : ""}`}
-          style={minutesData.blocked ? { borderColor: "#fca5a5", background: "#fff7f7" } : minutesPct >= 80 ? { borderColor: "#fdba74", background: "#fffbf5" } : {}}>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2">
-                {(minutesData.blocked || minutesPct >= 80) && (
-                  <AlertTriangle className={`w-4 h-4 shrink-0 ${minutesData.blocked ? "text-red-500" : "text-orange-500"}`} />
-                )}
-                <span className="text-sm font-semibold text-gray-800">
-                  Minutos contratados — {minutesData.month ?? new Date().toISOString().slice(0, 7)}
-                </span>
+        <div className="gc p-6 mb-8 relative overflow-hidden group border-white/5">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/2 rounded-bl-full -z-0 group-hover:scale-110 transition-transform duration-500" />
+          
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center border border-white/5 ${minutesData.blocked ? "bg-[#E8002D]/20 animate-pulse text-[#E8002D]" : "bg-white/5 text-white/40"}`}>
+                <Zap className="w-6 h-6" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-white/30 uppercase tracking-[2px] mb-1">Consumo de Minutos</p>
+                <h3 className="text-xl font-black text-white tracking-tight">
+                  {usedMinutes} <span className="text-white/20 text-sm font-bold uppercase tracking-widest mx-1">de</span> {minutesData.contracted} min
+                </h3>
                 {minutesData.blocked && (
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700">Conta bloqueada</span>
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-[#E8002D] uppercase tracking-wider mt-2">
+                    <AlertTriangle className="w-3 h-3" />
+                    Conta Suspensa • Esgotado
+                  </span>
                 )}
               </div>
-              <span className="text-sm font-bold" style={{ color: barColor }}>
-                {usedMinutes} / {minutesData.contracted} min ({minutesPct}%)
-              </span>
             </div>
 
-            {/* Progress bar */}
-            <div className="h-3 rounded-full overflow-hidden bg-gray-100">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, minutesPct)}%`, background: barColor }}
-              />
-            </div>
-
-            {/* Aviso e botão */}
-            {(minutesPct >= 80) && (
-              <div className="flex items-center justify-between flex-wrap gap-3">
-                <p className="text-sm" style={{ color: minutesData.blocked ? "#dc2626" : "#92400e" }}>
-                  {minutesData.blocked
-                    ? "Limite atingido. Todas as campanhas foram pausadas. Entre em contato para contratar mais minutos."
-                    : `Você já consumiu ${minutesPct}% dos minutos contratados deste mês.`}
-                </p>
-                <button
-                  onClick={handleRequestMinutes}
-                  disabled={sendingEmail}
-                  className="shrink-0 text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-                  style={{ background: "#FF1A1A", color: "white" }}
-                >
-                  {sendingEmail ? "Enviando..." : "Contratar mais minutos"}
-                </button>
+            <div className="flex-1 max-w-md space-y-4">
+              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                <span className="text-white/30">Progresso Mensal</span>
+                <span className="text-white font-mono">{minutesPct}%</span>
               </div>
-            )}
+              <div className="h-2 rounded-full bg-white/5 border border-white/5 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-1000"
+                  style={{
+                    width: `${Math.min(100, minutesPct)}%`,
+                    background: minutesData.blocked 
+                      ? "linear-gradient(to right, #E8002D, #FF4D6D)" 
+                      : minutesPct >= 90 
+                        ? "linear-gradient(to right, #F97316, #FACC15)" 
+                        : "linear-gradient(to right, #00D68F, #00C2D6)",
+                    boxShadow: `0 0 10px ${minutesData.blocked ? "rgba(232,0,45,0.2)" : "rgba(0,214,143,0.1)"}`
+                  }}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleRequestMinutes}
+              disabled={sendingEmail}
+              className={`btn-premium px-6 py-3 ${minutesData.blocked ? "scale-105" : ""}`}
+            >
+              {sendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+              <span className="font-black uppercase tracking-[1.5px] text-[10px]">Solicitar Upgrade</span>
+            </button>
           </div>
         </div>
       )}
-
-      {/* Filters */}
-      <div className="gc p-5 mb-8">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2 text-[10px] font-black text-white/30 uppercase tracking-[1.5px]">
-            <Filter className="w-3.5 h-3.5" />
-            Configuração de Vista
-          </div>
-
-          <div className="h-4 w-px bg-white/10 mx-2 hidden sm:block" />
-
-          {/* Assistant filter */}
-          <div className="flex items-center gap-2 group">
-            <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-all">
-              <Bot className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            </div>
-            <select
-              className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors"
-              value={selectedAssistant}
-              onChange={(e) => setFilter("assistantId", e.target.value)}
-              style={{ minWidth: "140px" }}
-            >
-              <option value="" className="bg-[#0A0A0E]">Todos assistentes</option>
-              {(data?.assistants ?? []).map((a) => (
-                <option key={a.id} value={a.id} className="bg-[#0A0A0E]">
-                  {assistantNames[a.id] ?? a.name ?? `Assistente ${a.id.slice(0, 8)}…`}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Campaign filter */}
-          <div className="flex items-center gap-2 group">
-            <div className="w-7 h-7 rounded-lg bg-[#E8002D]/10 flex items-center justify-center border border-[#E8002D]/20 group-hover:bg-[#E8002D]/20 transition-all">
-              <PhoneCall className="w-3.5 h-3.5 text-[#E8002D] shrink-0" />
-            </div>
-            <select
-              className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors"
-              value={selectedQueue}
-              onChange={(e) => setFilter("queueId", e.target.value)}
-              style={{ minWidth: "160px" }}
-            >
-              <option value="" className="bg-[#0A0A0E]">Todas campanhas</option>
-              {visibleCampaigns.map((c) => (
-                <option key={c.id} value={c.id} className="bg-[#0A0A0E]">{c.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Period filter */}
-          <div className="flex items-center gap-2 group">
-             <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20 group-hover:bg-amber-500/20 transition-all">
-              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            </div>
-            <select
-              className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors"
-              value={selectedDays}
-              onChange={(e) => setFilter("days", e.target.value)}
-            >
-              <option value="7" className="bg-[#0A0A0E]">7 dias</option>
-              <option value="30" className="bg-[#0A0A0E]">30 dias</option>
-              <option value="90" className="bg-[#0A0A0E]">90 dias</option>
-              <option value="365" className="bg-[#0A0A0E]">365 dias</option>
-            </select>
-          </div>
-
-          {hasFilters && (
-            <button
-              onClick={() => { setFilter("assistantId", ""); }}
-              className="text-[10px] font-bold text-[#E8002D] hover:text-[#FF1744] uppercase tracking-wider ml-auto animate-fadeIn"
-            >
-              Limpar visão
-            </button>
-          )}
-        </div>
-      </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
           <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
         </div>
       ) : !data ? (
-        <div className="card">
-          <div className="empty-state">
-            <p className="empty-state-title">Sem dados disponíveis</p>
-            <p className="empty-state-desc">Inicie uma campanha de discagem para ver métricas aqui.</p>
+        <div className="gc p-12 text-center">
+          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4 border border-white/5">
+            <Activity className="w-8 h-8 text-white/10" />
           </div>
+          <h3 className="text-lg font-black text-white uppercase tracking-widest mb-2">Sem Dados Analíticos</h3>
+          <p className="text-sm text-white/30 font-medium">Inicie uma campanha para gerar insights neste dashboard.</p>
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* Stat Cards row 1 */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="space-y-8 animate-fadeIn">
+          {/* Top Row: Core Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <StatCard title="Total de Leads" value={data.totalLeads.toLocaleString("pt-BR")} icon={Users} color="text-indigo-400" bg="bg-indigo-500/10" />
             <StatCard title="Total de Chamadas" value={data.totalCalls.toLocaleString("pt-BR")} icon={PhoneCall} color="text-cyan-400" bg="bg-cyan-500/10" />
-            <StatCard title="Chamadas Atendidas" value={data.answeredCalls.toLocaleString("pt-BR")} sub={`${answeredPct}% do total`} icon={Phone} color="text-[#00D68F]" bg="bg-[#00D68F]/10" />
-            <StatCard title="Não Atendidas" value={data.notAnsweredCalls.toLocaleString("pt-BR")} sub={pct(data.notAnsweredCalls, data.totalCalls) + " do total"} icon={PhoneOff} color="text-[#E8002D]" bg="bg-[#E8002D]/10" />
-          </div>
-
-          {/* Stat Cards row 2 */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {data.userRole !== "member" && (
-              <StatCard title="Gasto Total" value={`$${data.totalCost.toFixed(4)}`} icon={DollarSign} color="text-amber-400" bg="bg-amber-500/10" />
-            )}
-            <StatCard title="Tempo Total" value={formatDurationLong(data.totalDurationSec)} icon={Clock} color="text-purple-400" bg="bg-purple-500/10" />
-            <StatCard title="Tempo Médio" value={formatDurationShort(data.avgDurationSec)} sub="Apenas atendidas" icon={Timer} color="text-cyan-400" bg="bg-cyan-500/10" />
+            <StatCard title="Taxa de Atendimento" value={`${answeredPct}%`} sub={`${data.answeredCalls.toLocaleString()} atendidas`} icon={Activity} color="text-[#00D68F]" bg="bg-[#00D68F]/10" />
             <StatCard
               title="Conversões"
               value={data.structuredOutputsConfigured ? (successPct != null ? `${successPct}%` : "—") : "—"}
-              sub={data.structuredOutputsConfigured ? `${data.structuredSuccessCalls}/${data.structuredWithOutput}` : "Não configurado"}
+              sub={data.structuredOutputsConfigured ? `${data.structuredSuccessCalls}/${data.structuredWithOutput}` : "Offline"}
               icon={CheckCircle2}
               color="text-[#00D68F]"
               bg="bg-[#00D68F]/10"
             />
           </div>
 
-          {/* ROI card — only when configured and user is not a member */}
-          {!isMember && data.costPerConversion != null && (
-            <div className="card p-5 border-l-4 border-indigo-500">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Custo por Conversão (ROI)</p>
-              <p className="text-3xl font-bold text-gray-900">${data.costPerConversion.toFixed(2)}</p>
-              <p className="text-xs text-gray-500 mt-1">por lead convertido · {data.structuredSuccessCalls} conversões no período</p>
-            </div>
-          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {!isMember && data.totalCost != null && (
+              <StatCard title="Investimento Total" value={fmtCurrency(data.totalCost)} icon={DollarSign} color="text-amber-400" bg="bg-amber-500/10" />
+            )}
+            <StatCard title="Tempo Médio (AOD)" value={formatDurationShort(data.avgDurationSec)} sub="Apenas chamadas produtivas" icon={Timer} color="text-purple-400" bg="bg-purple-500/10" />
+            {!isMember && data.costPerConversion != null && (
+              <StatCard title="Custo por Conversão" value={fmtCurrency(data.costPerConversion)} icon={TrendingUp} color="text-emerald-400" bg="bg-emerald-500/10" />
+            )}
+          </div>
 
           {/* Progress bars + Cost */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

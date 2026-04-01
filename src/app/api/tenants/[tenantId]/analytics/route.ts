@@ -22,12 +22,17 @@ export async function GET(req: NextRequest, { params }: Params) {
   const service = createServiceClient();
 
   // Buscar configurações e tabelas de referência
-  const [{ data: vapiConn }, { data: assistantConfigsRaw }, { data: campaignsRaw }, { data: tenantInfo }] = await Promise.all([
-    service.from("vapi_connections").select("success_field, success_value").eq("tenant_id", tenantId).eq("is_active", true).single(),
+  const [vapiConnRes, assistantConfigsRes, campaignsRes, tenantInfoRes] = await Promise.all([
+    service.from("vapi_connections").select("success_field, success_value").eq("tenant_id", tenantId).eq("is_active", true).maybeSingle(),
     service.from("assistant_configs").select("assistant_id, name, success_field, success_value").eq("tenant_id", tenantId),
     service.from("dial_queues").select("id, name, lead_list_id, assistant_id").eq("tenant_id", tenantId).order("created_at", { ascending: false }),
-    service.from("tenants").select("timezone").eq("id", tenantId).single()
+    service.from("tenants").select("timezone").eq("id", tenantId).maybeSingle()
   ]);
+
+  const vapiConn = vapiConnRes.data;
+  const assistantConfigsRaw = assistantConfigsRes.data;
+  const campaignsRaw = campaignsRes.data;
+  const tenantInfo = tenantInfoRes.data;
 
   const tz = tenantInfo?.timezone ?? "America/Sao_Paulo";
 
