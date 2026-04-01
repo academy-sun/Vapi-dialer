@@ -326,7 +326,7 @@ export default function CallsPage() {
   const [searchCallId, setSearchCallId] = useState("");
   const [shortDurationMode, setShortDurationMode] = useState(false);
   const [maxDuration, setMaxDuration] = useState("30");
-  const [filterInteresse, setFilterInteresse] = useState<"all" | "sucesso" | "fracasso" | "none">("all");
+  const [filterInteresse, setFilterInteresse] = useState<string>("all");
   const [showRetrabalhoModal, setShowRetrabalhoModal] = useState(false);
   const [retrabalhoName, setRetrabalhoName] = useState("");
   const [retrabalhoLoading, setRetrabalhoLoading] = useState(false);
@@ -445,10 +445,10 @@ export default function CallsPage() {
       const val = result ? getInteresseValue(result) : undefined;
       if (filterInteresse === "none") {
         matchInteresse = val === undefined || val === null;
-      } else if (filterInteresse === "sucesso") {
-        matchInteresse = val !== undefined && val !== null && isSuccessValue(val);
-      } else if (filterInteresse === "fracasso") {
-        matchInteresse = val !== undefined && val !== null && isFailureValue(val);
+      } else {
+        // Match exact value (case-insensitive) — covers "Interessado", "Sucesso", "Sim", etc.
+        matchInteresse = val !== undefined && val !== null &&
+          String(val).toLowerCase() === filterInteresse.toLowerCase();
       }
     }
     return matchReason && matchPhone && matchCallId && matchInteresse;
@@ -482,24 +482,18 @@ export default function CallsPage() {
     new Set(calls.map((c) => c.ended_reason).filter(Boolean) as string[])
   ).sort();
 
-  // Label dinâmico do critério de sucesso baseado na config do assistente da campanha selecionada
-  const successLabel = useMemo(() => {
-    if (filterQueue !== "all") {
-      const queue = queues.find((q) => q.id === filterQueue);
-      const config = queue?.assistant_id
-        ? assistantConfigs.find((c) => c.assistant_id === queue.assistant_id)
-        : null;
-      if (config?.success_value) return config.success_value;
-    } else {
-      // Todas as campanhas: coleta valores únicos configurados
-      const values = [
-        ...new Set(assistantConfigs.map((c) => c.success_value).filter(Boolean) as string[]),
-      ];
-      if (values.length === 1) return values[0];
-      if (values.length > 1)   return values.join(" / ");
+  // Valores únicos do campo de interesse/critério de sucesso presentes nos dados
+  const uniqueInteresseValues = useMemo(() => {
+    const seen = new Set<string>();
+    for (const call of calls) {
+      if (!call.structured_outputs) continue;
+      const result = extractResult(call.structured_outputs);
+      if (!result) continue;
+      const val = getInteresseValue(result);
+      if (val != null && String(val).trim() !== "") seen.add(String(val));
     }
-    return "Sucesso";
-  }, [filterQueue, queues, assistantConfigs]);
+    return Array.from(seen).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [calls]);
 
   return (
     <div>
@@ -594,12 +588,13 @@ export default function CallsPage() {
           <select
             className="select-native text-sm py-2.5"
             value={filterInteresse}
-            onChange={(e) => setFilterInteresse(e.target.value as typeof filterInteresse)}
+            onChange={(e) => setFilterInteresse(e.target.value)}
           >
             <option value="all">Qualquer critério de sucesso</option>
-            <option value="sucesso">✅ {successLabel}</option>
-            <option value="fracasso">❌ Fracasso</option>
             <option value="none">— Sem avaliação</option>
+            {uniqueInteresseValues.map((v) => (
+              <option key={v} value={v}>{v}</option>
+            ))}
           </select>
 
           {(hasActiveFilters || filterInteresse !== "all") && (

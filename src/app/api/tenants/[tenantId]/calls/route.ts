@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 type Params = { params: Promise<{ tenantId: string }> };
 
-// GET /api/tenants/:tenantId/calls?queueId=&leadId=&sort_by=&sort_dir=&max_duration=&answered_only=
+// GET /api/tenants/:tenantId/calls?queueId=&leadId=&sort_by=&sort_dir=&max_duration=&answered_only=&page=&page_size=
 export async function GET(req: NextRequest, { params }: Params) {
   const { tenantId } = await params;
   const { response } = await requireTenantAccess(tenantId);
@@ -24,12 +24,12 @@ export async function GET(req: NextRequest, { params }: Params) {
     : "created_at";
   const ascending = url.searchParams.get("sort_dir") === "asc";
 
-  const service = createServiceClient();
+  // Pagination: single request, configurable size up to 5000
+  const page     = Math.max(1, parseInt(url.searchParams.get("page") ?? "1"));
+  const pageSize = Math.min(5000, Math.max(15, parseInt(url.searchParams.get("page_size") ?? "5000")));
+  const from = (page - 1) * pageSize;
 
-  // Batch pagination: loop 1000 rows at a time (PostgREST max-rows default = 1000)
-  // Cap at 5 000 rows total to keep memory reasonable
-  const MAX_ROWS = 5000;
-  const BATCH    = 1000;
+  const service = createServiceClient();
 
   type CallRow = {
     id: string; vapi_call_id: string; status: string | null;
@@ -38,32 +38,24 @@ export async function GET(req: NextRequest, { params }: Params) {
     leads: { phone_e164: string; data_json: Record<string, string>; next_attempt_at: string | null } | null;
   };
 
-  const calls: CallRow[] = [];
-  let from = 0;
+  let q = service
+    .from("call_records")
+    .select(
+      `id, vapi_call_id, status, ended_reason, cost, summary, duration_seconds, structured_outputs, created_at,
+       leads!inner(phone_e164, data_json, next_attempt_at)`,
+      { count: "exact" }
+    )
+    .eq("tenant_id", tenantId)
+    .order(sortBy, { ascending, nullsFirst: false })
+    .range(from, from + pageSize - 1);
 
-  while (calls.length < MAX_ROWS) {
-    let q = service
-      .from("call_records")
-      .select(
-        `id, vapi_call_id, status, ended_reason, cost, summary, duration_seconds, structured_outputs, created_at,
-         leads!inner(phone_e164, data_json, next_attempt_at)`
-      )
-      .eq("tenant_id", tenantId)
-      .order(sortBy, { ascending })
-      .range(from, from + BATCH - 1);
+  if (queueId)       q = q.eq("dial_queue_id", queueId);
+  if (leadId)        q = q.eq("lead_id", leadId);
+  if (answeredOnly)  q = q.in("ended_reason", ["customer-ended-call", "assistant-ended-call"]);
+  if (maxDuration != null) q = q.lte("duration_seconds", maxDuration);
 
-    if (queueId)       q = q.eq("dial_queue_id", queueId);
-    if (leadId)        q = q.eq("lead_id", leadId);
-    if (answeredOnly)  q = q.in("ended_reason", ["customer-ended-call", "assistant-ended-call"]);
-    if (maxDuration != null) q = q.lte("duration_seconds", maxDuration);
+  const { data, error, count } = await q;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const { data: batch, error } = await q;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    if (!batch || batch.length === 0) break;
-    calls.push(...(batch as unknown as CallRow[]));
-    if (batch.length < BATCH) break;
-    from += BATCH;
-  }
-
-  return NextResponse.json({ calls, total: calls.length });
+  return NextResponse.json({ calls: (data ?? []) as unknown as CallRow[], total: count ?? 0 });
 }

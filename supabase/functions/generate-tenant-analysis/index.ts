@@ -1,11 +1,11 @@
 // Edge Function: generate-tenant-analysis
-// Analisa gargalos de chamadas curtas (10-40s) usando OpenAI gpt-4o-mini
-// verify_jwt: false → configurado em config.toml para evitar CORS no pre-flight
+// Usa call_records_flat para análise eficiente com filtros aplicados no SQL
+// verify_jwt: false → configurado em config.toml
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY")!;
-const SUPABASE_URL   = Deno.env.get("SUPABASE_URL")!;
+const OPENAI_API_KEY            = Deno.env.get("OPENAI_API_KEY")!;
+const SUPABASE_URL              = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const corsHeaders = {
@@ -13,14 +13,69 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface Filters {
+  durationMin?:  number | null;
+  durationMax?:  number | null;
+  endedReason?:  string | null;
+  engagement?:   string | null;
+  scoreMin?:     number | null;
+  scoreMax?:     number | null;
+}
+
+interface FlatRow {
+  ended_reason:      string | null;
+  duration_seconds:  number | null;
+  cost:              number | null;
+  score:             number | null;
+  interesse:         string | null;
+  resultado:         string | null;
+  estagio_atingido:  string | null;
+  nivel_engajamento: string | null;
+  qualidade_tecnica: string | null;
+  dor_identificada:  string | null;
+  objecao_principal: string | null;
+  outputs_flat:      Record<string, unknown> | null;
+}
+
+function countDist(rows: FlatRow[], field: keyof FlatRow): Record<string, number> {
+  const dist: Record<string, number> = {};
+  for (const r of rows) {
+    const v = r[field];
+    if (v == null) continue;
+    const k = String(v);
+    dist[k] = (dist[k] ?? 0) + 1;
+  }
+  return dist;
+}
+
+function avgField(rows: FlatRow[], field: keyof FlatRow): number | null {
+  const nums = rows.map((r) => r[field]).filter((v) => typeof v === "number") as number[];
+  if (nums.length === 0) return null;
+  return Math.round(nums.reduce((s, n) => s + n, 0) / nums.length * 10) / 10;
+}
+
+function buildFilterDescription(filters: Filters): string {
+  const parts: string[] = [];
+  if (filters.durationMin != null || filters.durationMax != null) {
+    const min = filters.durationMin != null ? `${filters.durationMin}s` : "0";
+    const max = filters.durationMax != null ? `${filters.durationMax}s` : "sem limite";
+    parts.push(`duração entre ${min} e ${max}`);
+  }
+  if (filters.endedReason) parts.push(`motivo de encerramento: "${filters.endedReason}"`);
+  if (filters.engagement)  parts.push(`engajamento: "${filters.engagement}"`);
+  if (filters.scoreMin != null) parts.push(`score mínimo: ${filters.scoreMin}`);
+  if (filters.scoreMax != null) parts.push(`score máximo: ${filters.scoreMax}`);
+  return parts.length > 0 ? parts.join(", ") : "nenhum filtro adicional (análise geral)";
+}
+
 Deno.serve(async (req) => {
-  // Responder pre-flight CORS
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { tenantId, queueId } = await req.json();
+    const body = await req.json();
+    const { tenantId, queueId, filters = {} }: { tenantId: string; queueId: string; filters: Filters } = body;
 
     if (!tenantId || !queueId) {
       return new Response(
@@ -31,7 +86,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // ── Buscar nome da campanha ──
+    // ── Nome da campanha ──────────────────────────────────────────────────────
     const { data: queueData } = await supabase
       .from("dial_queues")
       .select("name")
@@ -40,147 +95,153 @@ Deno.serve(async (req) => {
 
     const campaignName = queueData?.name ?? "Campanha desconhecida";
 
-    // ── Buscar chamadas dos últimos 90 dias ──
+    // ── Query na tabela flat com filtros aplicados no SQL ─────────────────────
     const since = new Date(Date.now() - 90 * 86_400_000).toISOString();
 
-    const { data: allCalls, error: callsError } = await supabase
-      .from("call_records")
-      .select("id, duration_seconds, ended_reason, cost, structured_outputs, created_at")
+    let query = supabase
+      .from("call_records_flat")
+      .select([
+        "ended_reason", "duration_seconds", "cost", "score",
+        "interesse", "resultado", "estagio_atingido", "nivel_engajamento",
+        "qualidade_tecnica", "dor_identificada", "objecao_principal", "outputs_flat",
+      ].join(", "))
       .eq("tenant_id", tenantId)
       .eq("dial_queue_id", queueId)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
-      .limit(2000);
+      .limit(1000);
 
-    if (callsError) {
-      throw new Error(`Erro ao buscar call_records: ${callsError.message}`);
-    }
+    if (filters.durationMin != null) query = query.gte("duration_seconds", filters.durationMin);
+    if (filters.durationMax != null) query = query.lte("duration_seconds", filters.durationMax);
+    if (filters.endedReason)         query = query.eq("ended_reason", filters.endedReason);
+    if (filters.engagement)          query = query.eq("nivel_engajamento", filters.engagement);
+    if (filters.scoreMin != null)    query = query.gte("score", filters.scoreMin);
+    if (filters.scoreMax != null)    query = query.lte("score", filters.scoreMax);
 
-    const calls = allCalls ?? [];
-    const totalCalls = calls.length;
+    const { data: rawRows, error: queryError } = await query;
 
-    if (totalCalls === 0) {
+    if (queryError) throw new Error(`Erro ao consultar call_records_flat: ${queryError.message}`);
+
+    const rows = (rawRows ?? []) as FlatRow[];
+
+    if (rows.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Nenhuma chamada encontrada para esta campanha no período de 90 dias." }),
+        JSON.stringify({ error: "Nenhuma chamada encontrada com os filtros aplicados no período de 90 dias." }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // ── Métricas gerais ──
-    const answered = calls.filter(
-      (c) => c.ended_reason === "customer-ended-call" || c.ended_reason === "assistant-ended-call"
-    );
-    const answerRate = totalCalls > 0 ? Math.round((answered.length / totalCalls) * 100) : 0;
+    // ── Agregações em JS ──────────────────────────────────────────────────────
+    const totalRows   = rows.length;
+    const totalCost   = rows.reduce((s, r) => s + (r.cost ?? 0), 0);
+    const avgDuration = avgField(rows, "duration_seconds");
+    const avgScore    = avgField(rows, "score");
 
-    // Distribuição por faixas de duração
-    const buckets: Record<string, number> = {
+    // Distribuição duração em buckets
+    const durationBuckets: Record<string, number> = {
       "0-10s": 0, "10-30s": 0, "30-60s": 0, "1-3min": 0, "3-5min": 0, "5min+": 0,
     };
-    for (const c of answered) {
-      const d = c.duration_seconds ?? 0;
-      if (d < 10)       buckets["0-10s"]++;
-      else if (d < 30)  buckets["10-30s"]++;
-      else if (d < 60)  buckets["30-60s"]++;
-      else if (d < 180) buckets["1-3min"]++;
-      else if (d < 300) buckets["3-5min"]++;
-      else              buckets["5min+"]++;
+    for (const r of rows) {
+      const d = r.duration_seconds ?? 0;
+      if (d < 10)       durationBuckets["0-10s"]++;
+      else if (d < 30)  durationBuckets["10-30s"]++;
+      else if (d < 60)  durationBuckets["30-60s"]++;
+      else if (d < 180) durationBuckets["1-3min"]++;
+      else if (d < 300) durationBuckets["3-5min"]++;
+      else              durationBuckets["5min+"]++;
     }
 
-    // Ended reason breakdown
-    const reasonBreakdown: Record<string, number> = {};
-    for (const c of calls) {
-      const r = c.ended_reason ?? "desconhecido";
-      reasonBreakdown[r] = (reasonBreakdown[r] ?? 0) + 1;
+    const endedReasonDist  = countDist(rows, "ended_reason");
+    const engagementDist   = countDist(rows, "nivel_engajamento");
+    const resultadoDist    = countDist(rows, "resultado");
+    const estagioDist      = countDist(rows, "estagio_atingido");
+    const qualidadeDist    = countDist(rows, "qualidade_tecnica");
+    const dorDist          = countDist(rows, "dor_identificada");
+    const objecaoDist      = countDist(rows, "objecao_principal");
+
+    // Score distribution
+    const scores = rows.map((r) => r.score).filter((s): s is number => s != null);
+    const scoreDist = { "0-30": 0, "31-60": 0, "61-80": 0, "81-100": 0 };
+    for (const s of scores) {
+      if (s <= 30) scoreDist["0-30"]++;
+      else if (s <= 60) scoreDist["31-60"]++;
+      else if (s <= 80) scoreDist["61-80"]++;
+      else scoreDist["81-100"]++;
     }
 
-    // Custo total
-    const totalCost = calls.reduce((s, c) => s + (c.cost ?? 0), 0);
+    // Amostra de até 50 linhas para análise qualitativa
+    const sampleSize = Math.min(50, rows.length);
+    const step       = Math.max(1, Math.floor(rows.length / sampleSize));
+    const samples    = rows
+      .filter((_, i) => i % step === 0)
+      .slice(0, sampleSize)
+      .map((r) => ({
+        duracao_segundos: r.duration_seconds,
+        motivo_termino:   r.ended_reason,
+        score:            r.score,
+        interesse:        r.interesse,
+        resultado:        r.resultado,
+        estagio_atingido: r.estagio_atingido,
+        nivel_engajamento: r.nivel_engajamento,
+        qualidade_tecnica: r.qualidade_tecnica,
+        dor_identificada:  r.dor_identificada,
+        objecao_principal: r.objecao_principal,
+      }));
 
-    // ── Amostra de chamadas curtas (10-40s) para análise qualitativa ──
-    const shortCalls = answered.filter(
-      (c) => (c.duration_seconds ?? 0) >= 10 && (c.duration_seconds ?? 0) <= 40
-    );
-    const shortCallsPct = answered.length > 0
-      ? Math.round((shortCalls.length / answered.length) * 100)
-      : 0;
-
-    // Pega até 50 amostras com structured_outputs
-    const withOutputs = shortCalls
-      .filter((c) => c.structured_outputs != null)
-      .slice(0, 50);
-
-    const outputSamples = withOutputs.map((c) => {
-      const so = c.structured_outputs as Record<string, unknown>;
-      // Achata outputs aninhados (formato Vapi v2)
-      const flat: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(so)) {
-        if (v && typeof v === "object" && !Array.isArray(v)) {
-          const nested = v as Record<string, unknown>;
-          const result = nested.result;
-          if (result && typeof result === "object") {
-            Object.assign(flat, result);
-          } else {
-            for (const [nk, nv] of Object.entries(nested)) {
-              if (nk !== "name" && nv !== null && nv !== undefined && typeof nv !== "object") {
-                flat[nk] = nv;
-              }
-            }
-          }
-        } else {
-          flat[k] = v;
-        }
-      }
-      return { duration_seconds: c.duration_seconds, ...flat };
-    });
-
-    // ── Montar contexto para a IA ──
+    // ── Contexto para a IA ────────────────────────────────────────────────────
     const contextData = {
       campanha: campaignName,
       periodo_dias: 90,
-      total_chamadas: totalCalls,
-      taxa_atendimento: `${answerRate}%`,
-      custo_total_usd: Math.round(totalCost * 100) / 100,
-      distribuicao_duracao_chamadas_atendidas: buckets,
-      motivos_termino_top: Object.entries(reasonBreakdown)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
-        .reduce((acc, [k, v]) => ({ ...acc, [k]: v }), {}),
-      chamadas_curtas_10_40s: {
-        quantidade: shortCalls.length,
-        percentual_do_total_atendidas: `${shortCallsPct}%`,
-      },
-      amostras_structured_outputs_chamadas_curtas: outputSamples,
+      filtros_ativos: buildFilterDescription(filters),
+      total_chamadas_no_filtro: totalRows,
+      custo_total_usd: Math.round(totalCost * 1000) / 1000,
+      duracao_media_segundos: avgDuration,
+      score_medio: avgScore,
+      distribuicao_duracao: durationBuckets,
+      distribuicao_score: scores.length > 0 ? scoreDist : null,
+      motivos_encerramento: endedReasonDist,
+      nivel_engajamento: engagementDist,
+      resultado_chamadas: resultadoDist,
+      estagio_atingido: estagioDist,
+      qualidade_tecnica: qualidadeDist,
+      principais_dores: dorDist,
+      principais_objecoes: objecaoDist,
+      amostra_chamadas: samples,
     };
+
+    const filterNote = buildFilterDescription(filters) !== "nenhum filtro adicional (análise geral)"
+      ? `\n\n**ATENÇÃO:** Esta análise considera apenas chamadas com os seguintes filtros: ${buildFilterDescription(filters)}. Mencione isso no diagnóstico.`
+      : "";
 
     const prompt = `Você é um especialista em análise de campanhas de discagem automática com IA de voz.
 
-Analise os dados abaixo de uma campanha real e produza um **Relatório de Análise de Gargalo** focado em entender por que leads desligam logo no início da chamada (10-40s).
+Analise os dados abaixo e produza um **Relatório de Análise de Gargalo** focado em identificar por que leads desligam precocemente e o que pode ser melhorado.${filterNote}
 
 ## Dados da Campanha
 \`\`\`json
 ${JSON.stringify(contextData, null, 2)}
 \`\`\`
 
-## Sua análise deve conter (em Markdown):
+## Estrutura do Relatório (Markdown):
 
 ### 1. Diagnóstico do Gargalo Principal
-Identifique o principal problema que faz leads desligarem cedo. Seja direto e específico.
+Qual é o principal problema identificado nos dados? Seja específico com números.
 
-### 2. Padrões Identificados
-Liste os 3-5 padrões mais relevantes encontrados nos dados (motivos de término, duração, outputs estruturados).
+### 2. Padrões Críticos
+Liste 3-5 padrões relevantes encontrados (use os dados de distribuição, score, engajamento, estágio).
 
-### 3. Hipóteses de Causa Raiz
-Para cada padrão, explique a causa provável (problema de script, timing, voz, objeção não tratada, etc.).
+### 3. Causas Raiz
+Para cada padrão, explique a causa provável (script, timing, objeção não tratada, qualidade técnica, etc.).
 
-### 4. Recomendações Priorizadas
-Liste as 3-5 ações concretas mais impactantes para reduzir abandono precoce, em ordem de prioridade.
+### 4. Recomendações (ordenadas por impacto)
+Ações concretas e mensuráveis para melhorar os resultados.
 
-### 5. Métricas de Acompanhamento
-Quais KPIs monitorar para saber se as melhorias estão funcionando?
+### 5. KPIs para Acompanhar
+Métricas específicas para medir o progresso após as melhorias.
 
-Seja objetivo, use dados concretos do relatório. Responda em **português brasileiro**.`;
+Use dados concretos. Responda em **português brasileiro**.`;
 
-    // ── Chamar OpenAI ──
+    // ── OpenAI ────────────────────────────────────────────────────────────────
     const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -190,10 +251,10 @@ Seja objetivo, use dados concretos do relatório. Responda em **português brasi
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: "Você é um especialista em análise de campanhas de discagem automática." },
+          { role: "system", content: "Você é especialista em análise de campanhas de discagem automática com IA de voz." },
           { role: "user", content: prompt },
         ],
-        max_tokens: 1500,
+        max_tokens: 1800,
         temperature: 0.3,
       }),
     });
@@ -206,32 +267,29 @@ Seja objetivo, use dados concretos do relatório. Responda em **português brasi
     const openaiData = await openaiRes.json();
     const content = openaiData.choices?.[0]?.message?.content ?? "";
 
-    if (!content) {
-      throw new Error("OpenAI retornou conteúdo vazio");
-    }
+    if (!content) throw new Error("OpenAI retornou conteúdo vazio");
 
-    // ── Salvar no banco ──
+    // ── Salvar histórico ──────────────────────────────────────────────────────
     const { error: insertError } = await supabase
       .from("tenant_analyses")
       .insert({
-        tenant_id: tenantId,
-        queue_id: queueId,
+        tenant_id:   tenantId,
+        queue_id:    queueId,
         report_type: "campaign",
         content,
         metadata: {
-          period_days: 90,
-          sample_size: withOutputs.length,
-          total_calls: totalCalls,
-          short_calls_count: shortCalls.length,
-          short_calls_pct: shortCallsPct,
-          duration_range: "10-40s",
+          period_days:   90,
+          total_calls:   totalRows,
+          filters:       filters,
+          filter_desc:   buildFilterDescription(filters),
+          avg_score:     avgScore,
+          avg_duration:  avgDuration,
+          sample_size:   sampleSize,
+          campaign_name: campaignName,
         },
       });
 
-    if (insertError) {
-      // Não bloqueia o retorno ao frontend — só loga
-      console.error("Erro ao salvar análise:", insertError.message);
-    }
+    if (insertError) console.error("Erro ao salvar análise:", insertError.message);
 
     return new Response(
       JSON.stringify({ content }),

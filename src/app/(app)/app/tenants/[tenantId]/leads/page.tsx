@@ -1034,6 +1034,11 @@ export default function LeadsPage() {
     setListConfirmed(false);
   }
 
+  function handleConfirmList(id: string) {
+    setSelectedListId(id);
+    setListConfirmed(true);
+  }
+
   useEffect(() => { loadLists(); loadQueues(); }, [tenantId]);
   useEffect(() => { if (selectedListId) loadLeads(searchLead); }, [selectedListId]);
 
@@ -1281,6 +1286,7 @@ export default function LeadsPage() {
                   <div
                     className="px-4 py-4 flex items-center justify-between cursor-pointer"
                     onClick={() => handleSelectList(list.id)}
+                    onDoubleClick={() => handleConfirmList(list.id)}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
@@ -1327,9 +1333,20 @@ export default function LeadsPage() {
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                      <ChevronRight className={`w-4 h-4 ${
-                        list.id === selectedListId ? "text-indigo-500" : "text-gray-300"
-                      }`} />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleConfirmList(list.id);
+                        }}
+                        className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${
+                          list.id === selectedListId
+                            ? "bg-indigo-100 text-indigo-600"
+                            : "hover:bg-gray-200 text-gray-400 hover:text-gray-600"
+                        }`}
+                        title="Abrir lista de leads"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                 )}
