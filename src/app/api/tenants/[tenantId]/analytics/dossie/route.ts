@@ -68,5 +68,12 @@ export async function GET(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Erro ao gerar dossiê analítico" }, { status: 500 });
   }
 
-  return NextResponse.json({ data: dossie, campaigns });
+  // Enriquecer com campaign e period (campos que a página espera mas não vêm do RPC)
+  const enrichedData = dossie ? {
+    ...(dossie as Record<string, unknown>),
+    campaign: queueId ? campaigns.find((c) => c.id === queueId) : undefined,
+    period: { days, since },
+  } : null;
+
+  return NextResponse.json({ data: enrichedData, campaigns });
 }
