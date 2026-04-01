@@ -61,7 +61,6 @@ export async function GET(req: NextRequest, { params }: Params) {
     p_tenant_id: tenantId,
     p_queue_id: queueId,
     p_since: since,
-    p_queue_ids: filteredQueueIds,
   });
 
   if (rpcError) {

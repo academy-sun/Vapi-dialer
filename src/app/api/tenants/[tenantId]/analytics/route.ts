@@ -77,7 +77,9 @@ export async function GET(req: NextRequest, { params }: Params) {
     p_queue_id: queueId,
     p_since: since,
     p_timezone: tz,
-    p_queue_ids: filteredQueueIds
+    p_queue_ids: filteredQueueIds,
+    p_success_field: contextSuccessField,
+    p_success_value: contextSuccessValue,
   });
 
   if (rpcError) {
@@ -91,10 +93,10 @@ export async function GET(req: NextRequest, { params }: Params) {
     let q = service.from("leads").select("*", { head: true, count: "exact" }).eq("tenant_id", tenantId);
     if (queueId) {
       const listId = campaignsRaw?.find((c) => c.id === queueId)?.lead_list_id;
-      if (listId) q = q.eq("list_id", listId);
+      if (listId) q = q.eq("lead_list_id", listId);
     } else if (filteredQueueIds) {
       const listIds = campaignsRaw?.filter((c) => filteredQueueIds.includes(c.id)).map((c) => c.lead_list_id).filter(Boolean);
-      if (listIds && listIds.length > 0) q = q.in("list_id", listIds);
+      if (listIds && listIds.length > 0) q = q.in("lead_list_id", listIds);
     }
     return q;
   };
