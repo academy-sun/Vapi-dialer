@@ -10,16 +10,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (response) return response;
 
   const service = createServiceClient();
-  const { data, error } = await service
-    .from("call_records")
-    .select(`*, leads(phone_e164, data_json, status)`)
-    .eq("id", callRecordId)
-    .eq("tenant_id", tenantId)
-    .single();
+  const [flatRes, rawRes] = await Promise.all([
+    service.from("call_records_flat").select("*").eq("id", callRecordId).eq("tenant_id", tenantId).single(),
+    service.from("call_records").select("transcript, stereo_recording_url, leads(phone_e164, data_json, status, next_attempt_at)").eq("id", callRecordId).eq("tenant_id", tenantId).single()
+  ]);
 
-  if (error || !data) {
+  if (flatRes.error || !flatRes.data) {
     return NextResponse.json({ error: "Registro não encontrado" }, { status: 404 });
   }
 
-  return NextResponse.json({ call: data });
+  const callDetail = {
+    ...flatRes.data,
+    transcript: rawRes.data?.transcript,
+    stereo_recording_url: rawRes.data?.stereo_recording_url,
+    leads: rawRes.data?.leads
+  };
+
+  return NextResponse.json({ call: callDetail });
 }

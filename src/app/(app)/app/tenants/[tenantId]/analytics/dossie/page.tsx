@@ -758,7 +758,7 @@ export default function DossiePage() {
       .eq("queue_id", queueId)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
     if (data) setAiAnalysis(data.content);
   }, [tenantId, supabase]);
 
@@ -785,7 +785,8 @@ export default function DossiePage() {
     loadAi(queueId);
     const res  = await fetch(`/api/tenants/${tenantId}/analytics/dossie?queueId=${queueId}&days=${d}`);
     const json = await res.json();
-    if (json.data) setData(json.data);
+    // Só aceitar se o RPC retornou a estrutura mínima esperada (evita crash com objeto vazio)
+    if (json.data && json.data.overview && json.data.period) setData(json.data);
     setLoading(false);
   }, [tenantId]);
 

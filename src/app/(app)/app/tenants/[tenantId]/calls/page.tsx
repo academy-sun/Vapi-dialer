@@ -43,9 +43,20 @@ interface Call {
   cost: number | null;
   summary: string | null;
   duration_seconds: number | null;
-  structured_outputs: Record<string, unknown> | null;
   created_at: string;
-  leads: { phone_e164: string; data_json: Record<string, string>; next_attempt_at: string | null } | null;
+  lead_phone: string | null;
+  lead_name: string | null;
+  interesse: string | null;
+  performance_score: number | null;
+  success_evaluation: boolean | null;
+  resumo: string | null;
+  pontos_melhoria: string | null;
+  objecoes: string | null;
+  motivos_falha: string | null;
+  proximo_passo: string | null;
+  score: number | null;
+  outputs_flat: Record<string, unknown> | null;
+  leads: { next_attempt_at: string | null } | null;
 }
 
 interface CallDetail extends Call {
@@ -197,40 +208,45 @@ function valueToLabel(v: unknown): string {
 }
 
 /** Badge compacto para a tabela: só Sucesso / Fracasso */
-function InteresseBadge({ outputs }: { outputs: Record<string, unknown> | null }) {
-  if (!outputs) return <span className="text-gray-300 text-xs">—</span>;
-  const result = extractResult(outputs);
-  if (!result) return <span className="text-gray-300 text-xs">—</span>;
-  const val = getInteresseValue(result);
-  if (val === undefined || val === null) return <span className="text-gray-300 text-xs">—</span>;
-
-  if (isSuccessValue(val)) {
+function InteresseBadge({ call }: { call: Call }) {
+  if (call.success_evaluation === true) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
         <CheckCircle2 className="w-3 h-3" /> Sucesso
       </span>
     );
   }
-  if (isFailureValue(val)) {
+  if (call.success_evaluation === false) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700">
         <XCircle className="w-3 h-3" /> Fracasso
       </span>
     );
   }
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
-      {valueToLabel(val)}
-    </span>
-  );
+  if (call.interesse) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
+        {valueToLabel(call.interesse)}
+      </span>
+    );
+  }
+  return <span className="text-gray-300 text-xs">—</span>;
 }
 
 /** Painel de avaliação detalhada no drawer */
-function EvaluationPanel({ outputs }: { outputs: Record<string, unknown> | null }) {
-  const [showTranscript, setShowTranscript] = useState(false);
-  if (!outputs) return null;
-  const result = extractResult(outputs);
-  if (!result || Object.keys(result).length === 0) return null;
+function EvaluationPanel({ call }: { call: CallDetail }) {
+  const result: Record<string, unknown> = {};
+  if (call.outputs_flat) Object.assign(result, call.outputs_flat);
+  
+  if (call.interesse) result["Interesse"] = call.interesse;
+  if (call.success_evaluation != null) result["Avaliação"] = call.success_evaluation ? "Sim" : "Não";
+  if (call.resumo) result["resumo"] = call.resumo;
+  if (call.pontos_melhoria) result["Pontos Melhoria"] = call.pontos_melhoria;
+  if (call.objecoes) result["Lista Objeções"] = call.objecoes;
+  if (call.motivos_falha) result["Possíveis Motivos de Falha"] = call.motivos_falha;
+  if (call.proximo_passo) result["Próximo Passo"] = call.proximo_passo;
+
+  if (Object.keys(result).length === 0) return null;
 
   // Separar campos curtos (badges/valores) dos longos (textos)
   const shortEntries: [string, unknown][] = [];
@@ -238,11 +254,12 @@ function EvaluationPanel({ outputs }: { outputs: Record<string, unknown> | null 
 
   for (const [k, v] of Object.entries(result)) {
     if (v === null || v === undefined || v === "") continue;
+    if (k === "Performance Global Score" || k === "score") continue;
     if (isLongTextField(k, v)) longEntries.push([k, v]);
     else shortEntries.push([k, v]);
   }
 
-  const score = result["Performance Global Score"];
+  const score = call.score ?? call.performance_score ?? result["Performance Global Score"];
 
   return (
     <div className="space-y-3">
@@ -407,8 +424,8 @@ export default function CallsPage() {
     setRetrabalhoLoading(true);
     try {
       const leads = filteredCalls
-        .filter((c) => c.leads?.phone_e164)
-        .map((c) => ({ phone_e164: c.leads!.phone_e164, data_json: c.leads!.data_json ?? {} }));
+        .filter((c) => c.lead_phone)
+        .map((c) => ({ phone_e164: c.lead_phone!, data_json: { nome: c.lead_name ?? "" } }));
       const res = await fetch(`/api/tenants/${tenantId}/lead-lists/from-calls`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -436,17 +453,15 @@ export default function CallsPage() {
   const filteredCalls = calls.filter((c) => {
     const matchReason = filterReason === "all" || c.ended_reason === filterReason;
     const matchPhone  = !searchPhone
-      || (c.leads?.phone_e164 ?? "").includes(searchPhone.replace(/\D/g, ""))
-      || getNomeDisplay(c.leads?.data_json).toLowerCase().includes(searchPhone.trim().toLowerCase());
+      || (c.lead_phone ?? "").includes(searchPhone.replace(/\D/g, ""))
+      || (c.lead_name ?? "").toLowerCase().includes(searchPhone.trim().toLowerCase());
     const matchCallId = !searchCallId || c.vapi_call_id.toLowerCase().includes(searchCallId.trim().toLowerCase());
     let matchInteresse = true;
     if (filterInteresse !== "all") {
-      const result = c.structured_outputs ? extractResult(c.structured_outputs) : null;
-      const val = result ? getInteresseValue(result) : undefined;
+      const val = c.interesse;
       if (filterInteresse === "none") {
         matchInteresse = val === undefined || val === null;
       } else {
-        // Match exact value (case-insensitive) — covers "Interessado", "Sucesso", "Sim", etc.
         matchInteresse = val !== undefined && val !== null &&
           String(val).toLowerCase() === filterInteresse.toLowerCase();
       }
@@ -459,10 +474,7 @@ export default function CallsPage() {
   const sortedCalls = sortBy === "score"
     ? [...filteredCalls].sort((a, b) => {
         const getScore = (c: Call) => {
-          if (!c.structured_outputs) return -1;
-          const r = extractResult(c.structured_outputs);
-          const s = r?.["Performance Global Score"];
-          return s != null ? parseFloat(String(s)) : -1;
+          return c.score ?? c.performance_score ?? -1;
         };
         const diff = getScore(b) - getScore(a);
         return sortDir === "desc" ? diff : -diff;
@@ -486,11 +498,9 @@ export default function CallsPage() {
   const uniqueInteresseValues = useMemo(() => {
     const seen = new Set<string>();
     for (const call of calls) {
-      if (!call.structured_outputs) continue;
-      const result = extractResult(call.structured_outputs);
-      if (!result) continue;
-      const val = getInteresseValue(result);
-      if (val != null && String(val).trim() !== "") seen.add(String(val));
+      if (call.interesse && typeof call.interesse === "string" && call.interesse.trim() !== "") {
+        seen.add(call.interesse.trim());
+      }
     }
     return Array.from(seen).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [calls]);
@@ -762,8 +772,7 @@ export default function CallsPage() {
                   : (REASON_CONFIG[call.ended_reason ?? ""] ?? { label: call.ended_reason ?? "Em andamento", badge: "badge-gray" });
                 const { relative, full } = formatRelativeTime(call.created_at);
                 const isSelected = selected?.id === call.id;
-                const result = call.structured_outputs ? extractResult(call.structured_outputs) : null;
-                const score = result?.["score"] ?? result?.["Score"] ?? result?.["Performance Global Score"];
+                const score = call.score ?? call.performance_score;
                 return (
                   <tr
                     key={call.id}
@@ -771,10 +780,10 @@ export default function CallsPage() {
                     className={`cursor-pointer ${isSelected ? "bg-red-50/40 ring-1 ring-inset ring-red-100" : "hover:bg-gray-50/80"}`}
                   >
                     <td className="font-mono font-medium text-gray-900">
-                      {call.leads ? formatPhone(call.leads.phone_e164) : "—"}
+                      {call.lead_phone ? formatPhone(call.lead_phone) : "—"}
                     </td>
                     <td className="text-sm text-gray-700">
-                      {getNomeDisplay(call.leads?.data_json) || <span className="text-gray-300">—</span>}
+                      {call.lead_name || <span className="text-gray-300">—</span>}
                     </td>
                     <td>
                       <span className={reason.badge}>{reason.label}</span>
@@ -783,7 +792,7 @@ export default function CallsPage() {
                       {formatDuration(call.duration_seconds)}
                     </td>
                     <td>
-                      <InteresseBadge outputs={call.structured_outputs} />
+                      <InteresseBadge call={call} />
                     </td>
                     <td className="text-gray-600 font-mono text-sm">
                       {score != null ? String(score) : "—"}
@@ -901,7 +910,7 @@ export default function CallsPage() {
                 <div>
                   <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">Telefone</p>
                   <p className="font-mono text-base font-semibold text-gray-900">
-                    {selected.leads ? formatPhone(selected.leads.phone_e164) : "—"}
+                    {selected.lead_phone ? formatPhone(selected.lead_phone) : "—"}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
@@ -937,10 +946,10 @@ export default function CallsPage() {
               </div>
 
               {/* Avaliação estruturada */}
-              {selected.structured_outputs && Object.keys(selected.structured_outputs).length > 0 && (
+              {(selected.outputs_flat || selected.interesse || selected.success_evaluation || selected.resumo) && (
                 <div>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Avaliação</p>
-                  <EvaluationPanel outputs={selected.structured_outputs} />
+                  <EvaluationPanel call={selected} />
                 </div>
               )}
 
