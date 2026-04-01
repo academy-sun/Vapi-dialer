@@ -5,7 +5,7 @@ import {
   RefreshCw, Phone, PhoneOff, PhoneCall, DollarSign, Clock,
   Timer, Users, CheckCircle2, BarChart3, Loader2, Bot, Filter,
   Flame, Activity, TrendingUp, AlertTriangle, Sparkles, History,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Zap,
 } from "lucide-react";
 import Markdown from "react-markdown";
 import { createClient } from "@/lib/supabase/browser";
