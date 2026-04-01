@@ -102,13 +102,13 @@ const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2
 type HeatmapMode = "calls" | "answered" | "rate";
 
 function heatColor(val: number, max: number): string {
-  if (max === 0 || val === 0) return "bg-gray-100 text-gray-300";
-  const pct = val / max;
-  if (pct <= 0.15) return "bg-emerald-100 text-emerald-700";
-  if (pct <= 0.35) return "bg-emerald-200 text-emerald-800";
-  if (pct <= 0.55) return "bg-emerald-300 text-emerald-900";
-  if (pct <= 0.75) return "bg-emerald-400 text-white";
-  return "bg-emerald-600 text-white";
+  if (max === 0 || val === 0) return "bg-white/5 text-white/20";
+  const pctValue = val / max;
+  if (pctValue <= 0.15) return "bg-[#00D68F]/10 text-[#00D68F]/70";
+  if (pctValue <= 0.35) return "bg-[#00D68F]/25 text-[#00D68F]/80";
+  if (pctValue <= 0.55) return "bg-[#00D68F]/40 text-white";
+  if (pctValue <= 0.75) return "bg-[#00D68F]/60 text-white";
+  return "bg-[#00D68F] text-[#060608] font-bold";
 }
 
 function HeatmapSection({ data }: { data: AnalyticsData }) {
@@ -156,19 +156,21 @@ function HeatmapSection({ data }: { data: AnalyticsData }) {
   };
 
   return (
-    <div className="card p-5 space-y-4">
+    <div className="gc p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2">
-          <Flame className="w-4 h-4 text-orange-500" />
-          <h3 className="text-sm font-semibold text-gray-700">Heatmap — Dia × Hora</h3>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
+            <Flame className="w-4 h-4 text-orange-500" />
+          </div>
+          <h3 className="text-sm font-bold text-white tracking-tight">Fluxo de Engajamento <span className="text-white/30 font-medium ml-1">— Dia × Hora</span></h3>
         </div>
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
+        <div className="flex p-1 rounded-xl bg-black/40 border border-white/5 text-[11px]">
           {(["calls", "answered", "rate"] as HeatmapMode[]).map((m) => (
             <button key={m}
               onClick={() => setMode(m)}
-              className={`px-3 py-1.5 font-medium transition-colors ${
-                mode === m ? "bg-indigo-600 text-white" : "text-gray-500 hover:bg-gray-50"
+              className={`px-4 py-1.5 rounded-lg font-bold transition-all ${
+                mode === m ? "bg-[#E8002D] text-white shadow-[0_0_15px_rgba(232,0,45,0.4)]" : "text-white/40 hover:text-white"
               }`}>
               {modeLabels[m]}
             </button>
@@ -209,33 +211,37 @@ function HeatmapSection({ data }: { data: AnalyticsData }) {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
-        <span>Menos</span>
-        {["bg-gray-100", "bg-emerald-100", "bg-emerald-200", "bg-emerald-300", "bg-emerald-400", "bg-emerald-600"].map((c) => (
-          <div key={c} className={`w-4 h-4 rounded ${c}`} />
+      <div className="flex items-center gap-2 text-[10px] text-white/30 font-bold uppercase tracking-wider">
+        <span>Baixo</span>
+        {["bg-white/5", "bg-[#00D68F]/20", "bg-[#00D68F]/40", "bg-[#00D68F]/60", "bg-[#00D68F]"].map((c) => (
+          <div key={c} className={`w-3.5 h-3.5 rounded-sm ${c} border border-white/5`} />
         ))}
-        <span>Mais</span>
+        <span>Alto</span>
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 border-t border-gray-100">
-        <div className="rounded-lg bg-gray-50 px-3 py-2">
-          <p className="text-xs text-gray-400">Total tentativas</p>
-          <p className="text-lg font-bold text-gray-900">{totalAttempts.toLocaleString("pt-BR")}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-white/5">
+        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
+          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Total tentativas</p>
+          <p className="text-xl font-black text-white font-mono leading-none">{totalAttempts.toLocaleString("pt-BR")}</p>
         </div>
-        <div className="rounded-lg bg-gray-50 px-3 py-2">
-          <p className="text-xs text-gray-400">Média por hora</p>
-          <p className="text-lg font-bold text-gray-900">{avgPerHour}</p>
+        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
+          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Média por hora</p>
+          <p className="text-xl font-black text-white font-mono leading-none">{avgPerHour}</p>
         </div>
-        <div className="rounded-lg bg-gray-50 px-3 py-2">
-          <p className="text-xs text-gray-400">Hora mais movimentada</p>
-          <p className="text-lg font-bold text-gray-900">{String(peakHour).padStart(2, "0")}h</p>
-          <p className="text-xs text-gray-400">{peakHourVal} chamadas</p>
+        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
+          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Hora Pico</p>
+          <div className="flex items-baseline gap-2">
+            <p className="text-xl font-black text-white font-mono leading-none">{String(peakHour).padStart(2, "0")}h</p>
+            <span className="text-[10px] text-white/30 font-medium">{peakHourVal} chamadas</span>
+          </div>
         </div>
-        <div className="rounded-lg bg-gray-50 px-3 py-2">
-          <p className="text-xs text-gray-400">Dia mais movimentado</p>
-          <p className="text-lg font-bold text-gray-900">{WEEKDAY_LABELS[peakDay]}</p>
-          <p className="text-xs text-gray-400">{peakDayVal} chamadas</p>
+        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
+          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Dia Pico</p>
+          <div className="flex items-baseline gap-2">
+             <p className="text-xl font-black text-white font-mono leading-none">{WEEKDAY_LABELS[peakDay]}</p>
+             <span className="text-[10px] text-white/30 font-medium">{peakDayVal} voos</span>
+          </div>
         </div>
       </div>
     </div>
@@ -260,35 +266,38 @@ function TalkTimeSection({ data }: { data: AnalyticsData }) {
     : null;
 
   return (
-    <div className="card p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <Activity className="w-4 h-4 text-cyan-500" />
-        <h3 className="text-sm font-semibold text-gray-700">Talk Time Breakdown</h3>
+    <div className="gc p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+            <Activity className="w-4 h-4 text-cyan-500" />
+        </div>
+        <h3 className="text-sm font-bold text-white tracking-tight">Talk Time Breakdown</h3>
       </div>
 
       {/* 4 mini stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="rounded-lg bg-gray-50 px-3 py-2">
-          <p className="text-xs text-gray-400">Total em ligação</p>
-          <p className="text-lg font-bold text-gray-900">{formatDurationLong(data.totalDurationSec)}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
+          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Total em ligação</p>
+          <p className="text-xl font-black text-white font-mono leading-none">{formatDurationLong(data.totalDurationSec)}</p>
         </div>
-        <div className="rounded-lg bg-cyan-50 px-3 py-2">
-          <p className="text-xs text-gray-400">Atendidas</p>
-          <p className="text-lg font-bold text-cyan-700">{formatDurationLong(data.totalDurationAnsweredSec ?? 0)}</p>
+        <div className="rounded-xl bg-cyan-500/10 p-4 border border-cyan-500/20">
+          <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-1">Atendidas</p>
+          <p className="text-xl font-black text-cyan-400 font-mono leading-none">{formatDurationLong(data.totalDurationAnsweredSec ?? 0)}</p>
         </div>
-        <div className="rounded-lg bg-gray-50 px-3 py-2">
-          <p className="text-xs text-gray-400">Média (atendidas)</p>
-          <p className="text-lg font-bold text-gray-900">{formatDurationShort(data.avgDurationSec)}</p>
+        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
+          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Média (atendidas)</p>
+          <p className="text-xl font-black text-white font-mono leading-none">{formatDurationShort(data.avgDurationSec)}</p>
         </div>
-        <div className="rounded-lg bg-gray-50 px-3 py-2">
-          <p className="text-xs text-gray-400">Máximo</p>
-          <p className="text-lg font-bold text-gray-900">{formatDurationShort(data.maxDurationSec ?? 0)}</p>
-          {costPerMin != null && !
-            (data.userRole === "member") && (
-            <p className="text-[10px] text-gray-400">
-              ${costPerMin.toFixed(4)}/min
-            </p>
-          )}
+        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
+          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Máximo</p>
+          <div className="flex items-baseline justify-between">
+            <p className="text-xl font-black text-white font-mono leading-none">{formatDurationShort(data.maxDurationSec ?? 0)}</p>
+            {costPerMin != null && data.userRole !== "member" && (
+              <p className="text-[10px] font-bold text-[#00D68F]">
+                ${costPerMin.toFixed(4)}/m
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -361,25 +370,27 @@ function EndReasonsSection({ data }: { data: AnalyticsData }) {
   const maxVal = Math.max(1, ...reasons.map(([, v]) => v));
 
   return (
-    <div className="card p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <TrendingUp className="w-4 h-4 text-indigo-500" />
-        <h3 className="text-sm font-semibold text-gray-700">Motivos de Encerramento</h3>
-        <span className="text-xs text-gray-400 ml-auto">{total} chamadas</span>
+    <div className="gc p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
+          <TrendingUp className="w-4 h-4 text-indigo-500" />
+        </div>
+        <h3 className="text-sm font-bold text-white tracking-tight">Motivos de Encerramento</h3>
+        <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest ml-auto">{total} chamadas</span>
       </div>
       <div className="space-y-2">
         {reasons.map(([key, count]) => {
           const label = END_REASON_PT[key] ?? key;
-          const barColor = END_REASON_COLOR[key] ?? "bg-gray-300";
-          const w = Math.round((count / maxVal) * 100);
+          const barColorToken = END_REASON_COLOR[key] ?? "bg-gray-300";
+          const barWidth = Math.round((count / maxVal) * 100);
           return (
             <div key={key}>
-              <div className="flex justify-between text-xs text-gray-600 mb-1">
-                <span className="font-medium truncate max-w-[200px]" title={key}>{label}</span>
-                <span className="font-semibold shrink-0 ml-2">{count} ({pct(count, total)})</span>
+              <div className="flex justify-between text-[11px] font-bold text-white/60 mb-2">
+                <span className="truncate max-w-[200px] uppercase tracking-wider" title={key}>{label}</span>
+                <span className="text-white font-mono">{count} <span className="text-white/20 ml-1">({pct(count, total)})</span></span>
               </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className={`h-full ${barColor} rounded-full transition-all`} style={{ width: `${w}%` }} />
+              <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                <div className={`h-full ${barColorToken} rounded-full transition-all shadow-[0_0_8px_rgba(255,255,255,0.1)]`} style={{ width: `${barWidth}%` }} />
               </div>
             </div>
           );
@@ -389,18 +400,20 @@ function EndReasonsSection({ data }: { data: AnalyticsData }) {
   );
 }
 
-function StatCard({ title, value, sub, icon: Icon, color = "text-indigo-600", bg = "bg-indigo-50" }: {
+function StatCard({ title, value, sub, icon: Icon, color = "text-white", bg = "bg-white/5" }: {
   title: string; value: string; sub?: string; icon: React.ElementType; color?: string; bg?: string;
 }) {
+  const isRed = color.includes("red") || color.includes("E8002D");
+  
   return (
-    <div className="card p-5">
+    <div className="gc p-5 group hover:border-white/20 transition-all duration-300">
       <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-          {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
+        <div className="min-w-0">
+          <p className="text-[10px] font-black text-white/30 uppercase tracking-[1.5px] mb-2">{title}</p>
+          <p className={`kpi-value ${isRed ? 'grad-red' : 'text-white'}`}>{value}</p>
+          {sub && <p className="text-[10px] font-bold text-white/20 mt-2 uppercase tracking-wide truncate">{sub}</p>}
         </div>
-        <div className={`w-10 h-10 rounded-xl ${bg} flex items-center justify-center shrink-0`}>
+        <div className={`w-10 h-10 rounded-xl ${bg} border border-white/5 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
           <Icon className={`w-5 h-5 ${color}`} />
         </div>
       </div>
@@ -563,15 +576,22 @@ export default function AnalyticsPage() {
   return (
     <div>
       {/* Header */}
-      <div className="page-header">
+      <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="page-title">Analytics</h1>
-          <p className="page-subtitle">Performance das campanhas de discagem</p>
+           <div className="flex items-center gap-2 mb-1">
+             <div className="w-2 h-2 rounded-full bg-[#E8002D] animate-pulse shadow-[0_0_8px_#E8002D]" />
+             <span className="text-[10px] font-black text-white/30 uppercase tracking-[2px]">Intelligence Unit</span>
+           </div>
+          <h1 className="text-3xl font-black text-white tracking-tight">Analytics</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => load(true)} className="btn-secondary" disabled={refreshing}>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => load(true)} 
+            className="btn-glass px-5 py-2.5" 
+            disabled={refreshing}
+          >
             <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-            Atualizar
+            <span className="font-bold uppercase tracking-wider text-[11px]">Sincronizar</span>
           </button>
         </div>
       </div>
@@ -629,24 +649,29 @@ export default function AnalyticsPage() {
       )}
 
       {/* Filters */}
-      <div className="card p-4 mb-6">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+      <div className="gc p-5 mb-8">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2 text-[10px] font-black text-white/30 uppercase tracking-[1.5px]">
             <Filter className="w-3.5 h-3.5" />
-            Filtrar por:
+            Configuração de Vista
           </div>
 
+          <div className="h-4 w-px bg-white/10 mx-2 hidden sm:block" />
+
           {/* Assistant filter */}
-          <div className="flex items-center gap-2">
-            <Bot className="w-4 h-4 text-indigo-400 shrink-0" />
+          <div className="flex items-center gap-2 group">
+            <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-all">
+              <Bot className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            </div>
             <select
-              className="form-input py-1.5 text-sm min-w-[180px]"
+              className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors"
               value={selectedAssistant}
               onChange={(e) => setFilter("assistantId", e.target.value)}
+              style={{ minWidth: "140px" }}
             >
-              <option value="">Todos os assistentes</option>
+              <option value="" className="bg-[#0A0A0E]">Todos assistentes</option>
               {(data?.assistants ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
+                <option key={a.id} value={a.id} className="bg-[#0A0A0E]">
                   {assistantNames[a.id] ?? a.name ?? `Assistente ${a.id.slice(0, 8)}…`}
                 </option>
               ))}
@@ -654,41 +679,46 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Campaign filter */}
-          <div className="flex items-center gap-2">
-            <PhoneCall className="w-4 h-4 text-indigo-400 shrink-0" />
+          <div className="flex items-center gap-2 group">
+            <div className="w-7 h-7 rounded-lg bg-[#E8002D]/10 flex items-center justify-center border border-[#E8002D]/20 group-hover:bg-[#E8002D]/20 transition-all">
+              <PhoneCall className="w-3.5 h-3.5 text-[#E8002D] shrink-0" />
+            </div>
             <select
-              className="form-input py-1.5 text-sm min-w-[200px]"
+              className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors"
               value={selectedQueue}
               onChange={(e) => setFilter("queueId", e.target.value)}
+              style={{ minWidth: "160px" }}
             >
-              <option value="">Todas as campanhas</option>
+              <option value="" className="bg-[#0A0A0E]">Todas campanhas</option>
               {visibleCampaigns.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id} className="bg-[#0A0A0E]">{c.name}</option>
               ))}
             </select>
           </div>
 
           {/* Period filter */}
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
+          <div className="flex items-center gap-2 group">
+             <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center border border-amber-500/20 group-hover:bg-amber-500/20 transition-all">
+              <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            </div>
             <select
-              className="form-input py-1.5 text-sm"
+              className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors"
               value={selectedDays}
               onChange={(e) => setFilter("days", e.target.value)}
             >
-              <option value="7">Últimos 7 dias</option>
-              <option value="30">Últimos 30 dias</option>
-              <option value="90">Últimos 90 dias</option>
-              <option value="365">Último ano</option>
+              <option value="7" className="bg-[#0A0A0E]">7 dias</option>
+              <option value="30" className="bg-[#0A0A0E]">30 dias</option>
+              <option value="90" className="bg-[#0A0A0E]">90 dias</option>
+              <option value="365" className="bg-[#0A0A0E]">365 dias</option>
             </select>
           </div>
 
           {hasFilters && (
             <button
               onClick={() => { setFilter("assistantId", ""); }}
-              className="text-xs text-gray-400 hover:text-gray-600 underline"
+              className="text-[10px] font-bold text-[#E8002D] hover:text-[#FF1744] uppercase tracking-wider ml-auto animate-fadeIn"
             >
-              Limpar filtros
+              Limpar visão
             </button>
           )}
         </div>
@@ -709,30 +739,26 @@ export default function AnalyticsPage() {
         <div className="space-y-6">
           {/* Stat Cards row 1 */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard title="Total de Leads" value={data.totalLeads.toLocaleString("pt-BR")} icon={Users} color="text-indigo-600" bg="bg-indigo-50" />
-            <StatCard title="Total de Chamadas" value={data.totalCalls.toLocaleString("pt-BR")} icon={PhoneCall} color="text-blue-600" bg="bg-blue-50" />
-            <StatCard title="Chamadas Atendidas" value={data.answeredCalls.toLocaleString("pt-BR")} sub={`${answeredPct}% do total`} icon={Phone} color="text-emerald-600" bg="bg-emerald-50" />
-            <StatCard title="Não Atendidas" value={data.notAnsweredCalls.toLocaleString("pt-BR")} sub={pct(data.notAnsweredCalls, data.totalCalls) + " do total"} icon={PhoneOff} color="text-red-500" bg="bg-red-50" />
+            <StatCard title="Total de Leads" value={data.totalLeads.toLocaleString("pt-BR")} icon={Users} color="text-indigo-400" bg="bg-indigo-500/10" />
+            <StatCard title="Total de Chamadas" value={data.totalCalls.toLocaleString("pt-BR")} icon={PhoneCall} color="text-cyan-400" bg="bg-cyan-500/10" />
+            <StatCard title="Chamadas Atendidas" value={data.answeredCalls.toLocaleString("pt-BR")} sub={`${answeredPct}% do total`} icon={Phone} color="text-[#00D68F]" bg="bg-[#00D68F]/10" />
+            <StatCard title="Não Atendidas" value={data.notAnsweredCalls.toLocaleString("pt-BR")} sub={pct(data.notAnsweredCalls, data.totalCalls) + " do total"} icon={PhoneOff} color="text-[#E8002D]" bg="bg-[#E8002D]/10" />
           </div>
 
-      {/* Stat Cards row 2 */}
+          {/* Stat Cards row 2 */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {!isMember && (
-              <StatCard title="Gasto Total" value={`$${data.totalCost.toFixed(4)}`} icon={DollarSign} color="text-amber-600" bg="bg-amber-50" />
+            {data.userRole !== "member" && (
+              <StatCard title="Gasto Total" value={`$${data.totalCost.toFixed(4)}`} icon={DollarSign} color="text-amber-400" bg="bg-amber-500/10" />
             )}
-            <StatCard title="Tempo Total em Chamada" value={formatDurationLong(data.totalDurationSec)} icon={Clock} color="text-purple-600" bg="bg-purple-50" />
-            <StatCard title="Tempo Médio (Atendidas)" value={formatDurationShort(data.avgDurationSec)} sub="Apenas chamadas atendidas" icon={Timer} color="text-cyan-600" bg="bg-cyan-50" />
+            <StatCard title="Tempo Total" value={formatDurationLong(data.totalDurationSec)} icon={Clock} color="text-purple-400" bg="bg-purple-500/10" />
+            <StatCard title="Tempo Médio" value={formatDurationShort(data.avgDurationSec)} sub="Apenas atendidas" icon={Timer} color="text-cyan-400" bg="bg-cyan-500/10" />
             <StatCard
               title="Conversões"
               value={data.structuredOutputsConfigured ? (successPct != null ? `${successPct}%` : "—") : "—"}
-              sub={
-                data.structuredOutputsConfigured
-                  ? `${data.structuredSuccessCalls}/${data.structuredWithOutput} avaliados`
-                  : "Configure o campo de sucesso em Configurações"
-              }
+              sub={data.structuredOutputsConfigured ? `${data.structuredSuccessCalls}/${data.structuredWithOutput}` : "Não configurado"}
               icon={CheckCircle2}
-              color="text-emerald-600"
-              bg="bg-emerald-50"
+              color="text-[#00D68F]"
+              bg="bg-[#00D68F]/10"
             />
           </div>
 

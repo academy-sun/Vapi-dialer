@@ -57,6 +57,7 @@ export default function AppShell({
   const [newTenantName, setNewTenantName] = useState("");
   const [tenantSearch, setTenantSearch] = useState("");
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // ── Bell de notificações de minutos ──
   const [minutesStatus, setMinutesStatus] = useState<{
@@ -265,6 +266,17 @@ export default function AppShell({
   const minutesPct  = minutesStatus?.contracted ? Math.round((usedMinutes / minutesStatus.contracted) * 100) : 0;
   const showBellBadge = minutesStatus != null && minutesPct >= 80 && (!bellDismissed || minutesStatus.blocked);
 
+  useEffect(() => {
+    const saved = localStorage.getItem("sidebar_collapsed");
+    if (saved === "true") setIsSidebarCollapsed(true);
+  }, []);
+
+  const toggleSidebar = () => {
+    const newVal = !isSidebarCollapsed;
+    setIsSidebarCollapsed(newVal);
+    localStorage.setItem("sidebar_collapsed", String(newVal));
+  };
+
   const activeTenant = tenants.find((t) => t.id === activeTenantId);
 
   const activeRole = tenantRoles[activeTenantId] ?? "member";
@@ -324,43 +336,25 @@ export default function AppShell({
     : "??";
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
+    <div className="min-h-screen flex bg-gray-50 overflow-hidden">
       {/* ── Sidebar ── */}
-      <aside className="sidebar z-30">
+      <aside className={`sidebar z-40 ${isSidebarCollapsed ? "collapsed" : ""}`}>
 
         {/* Logo */}
         <div className="sidebar-logo">
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <span style={{
-              fontFamily: "Inter, sans-serif",
-              fontSize: "18px",
-              fontWeight: 700,
-              color: "#FFFFFF",
-              letterSpacing: "-0.5px",
-              lineHeight: 1,
-            }}>
-              CALL
-            </span>
-            <span style={{
-              fontFamily: "Inter, sans-serif",
-              fontSize: "22px",
-              fontWeight: 700,
-              color: "#FF1A1A",
-              letterSpacing: "-0.5px",
-              lineHeight: 1,
-            }}>
-              X
-            </span>
-          </div>
-          <div style={{
-            fontSize: "10px",
-            fontWeight: 400,
-            color: "#555555",
-            letterSpacing: "1.5px",
-            marginTop: "2px",
-          }}>
-            by MX3
-          </div>
+          {!isSidebarCollapsed && (
+            <div className="flex items-center gap-1.5 overflow-hidden animate-fadeIn">
+              <span className="text-[20px] font-black text-white tracking-[-0.5px]">CALL</span>
+              <span className="text-[24px] font-black text-[#E8002D] tracking-[-0.5px]">X</span>
+              <span className="text-[10px] text-white/30 font-bold tracking-[1px] ml-1 mt-1">by MX3</span>
+            </div>
+          )}
+          <button 
+            onClick={toggleSidebar}
+            className="w-8 h-8 rounded-lg flex items-center justify-center transition-all bg-white/5 border border-white/10 hover:bg-[#E8002D]/20 hover:text-[#E8002D] hover:border-[#E8002D]/30"
+          >
+            <Zap className={`w-4 h-4 transition-transform ${isSidebarCollapsed ? "" : "rotate-12"}`} />
+          </button>
         </div>
 
         {/* Tenant Selector */}
@@ -371,23 +365,24 @@ export default function AppShell({
           <div className="relative" ref={dropdownRef}>
             <button
               onClick={() => setShowTenantDropdown(!showTenantDropdown)}
-              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg text-sm transition-all"
-              style={{
-                background: "#1a1a1a",
-                color: "#FFFFFF",
-                border: "1px solid #2a2a2a",
-              }}
+              className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-sm transition-all bg-white/5 border border-white/10 text-white hover:bg-white/10"
             >
-              <span className="flex items-center gap-2 min-w-0">
-                <Building2 className="w-4 h-4 shrink-0" style={{ color: "#FF1A1A" }} />
-                <span className="truncate">
-                  {activeTenant?.name ?? "Selecionar tenant"}
-                </span>
-              </span>
-              <ChevronDown
-                className={`w-4 h-4 shrink-0 transition-transform ${showTenantDropdown ? "rotate-180" : ""}`}
-                style={{ color: "hsl(220, 9%, 50%)" }}
-              />
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-lg bg-[#E8002D]/20 flex items-center justify-center shrink-0">
+                  <Building2 className="w-3.5 h-3.5" style={{ color: "#E8002D" }} />
+                </div>
+                {!isSidebarCollapsed && (
+                  <span className="truncate font-semibold animate-fadeIn">
+                    {activeTenant?.name ?? "Selecionar tenant"}
+                  </span>
+                )}
+              </div>
+              {!isSidebarCollapsed && (
+                <ChevronDown
+                  className={`w-4 h-4 shrink-0 transition-transform animate-fadeIn ${showTenantDropdown ? "rotate-180" : ""}`}
+                  style={{ color: "rgba(255,255,255,0.3)" }}
+                />
+              )}
             </button>
 
             {showTenantDropdown && (
@@ -528,10 +523,18 @@ export default function AppShell({
               <Link
                 key={item.label}
                 href={item.href}
-                className={`sidebar-nav-item ${isActive ? "active" : ""}`}
+                className={`sidebar-nav-item relative group ${isActive ? "active" : ""}`}
+                title={isSidebarCollapsed ? item.label : ""}
               >
-                <Icon className="nav-icon w-4 h-4 shrink-0" />
-                <span>{item.label}</span>
+                <div className={`nav-icon w-5 h-5 flex items-center justify-center shrink-0 ${isSidebarCollapsed ? "mx-auto" : ""}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                {!isSidebarCollapsed && (
+                   <span className="animate-fadeIn">{item.label}</span>
+                )}
+                {isSidebarCollapsed && isActive && (
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-[#E8002D] rounded-l-full shadow-[0_0_10px_#E8002D]" />
+                )}
               </Link>
             );
           })}
@@ -570,57 +573,51 @@ export default function AppShell({
         </nav>
 
         {/* Footer */}
-        <div className="sidebar-footer">
+        <div className="sidebar-footer p-4 border-t border-white/5 bg-black/20">
           <div className="flex items-center gap-3">
-            {/* Avatar */}
             <div
-              className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+              className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0 shadow-[0_0_15px_rgba(232,0,45,0.4)]`}
               style={{
-                background: "linear-gradient(135deg, #FF1A1A, #cc0000)",
+                background: "linear-gradient(135deg, #E8002D, #FF4D6D)",
                 color: "white",
               }}
             >
               {userInitials}
             </div>
-            <div className="flex-1 min-w-0">
-              <p
-                className="text-xs font-medium truncate"
-                style={{ color: "#FFFFFF" }}
+            {!isSidebarCollapsed && (
+              <div className="flex-1 min-w-0 animate-fadeIn">
+                <p className="text-[12px] font-semibold text-white truncate">
+                  {user.email}
+                </p>
+                <p className="text-[10px] text-white/40 flex items-center gap-1">
+                  <span className="w-1 h-1 rounded-full bg-[#00D68F]" /> Conta ativa
+                </p>
+              </div>
+            )}
+            {!isSidebarCollapsed && (
+              <button
+                onClick={handleLogout}
+                title="Sair"
+                className="w-8 h-8 rounded-lg flex items-center justify-center transition-all text-white/30 hover:text-[#E8002D] hover:bg-[#E8002D]/10"
               >
-                {user.email}
-              </p>
-              <p className="text-xs" style={{ color: "#666666" }}>
-                Conta ativa
-              </p>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              title="Sair"
-              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0"
-              style={{ color: "hsl(220, 9%, 50%)" }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.color = "#FF1A1A";
-                (e.currentTarget as HTMLElement).style.background = "#1a0000";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.color = "hsl(220, 9%, 50%)";
-                (e.currentTarget as HTMLElement).style.background = "transparent";
-              }}
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
       </aside>
 
       {/* ── Main content ── */}
-      <main className="flex-1 ml-64 min-h-screen">
+      <main className={`flex-1 min-h-screen transition-all duration-300 relative z-10 ${isSidebarCollapsed ? "ml-[66px]" : "ml-[242px]"}`}>
         {/* ── Top bar (sempre visível) ── */}
         <header
-          className="sticky top-0 z-20 flex items-center justify-end px-8"
-          style={{ height: "52px", background: "#ffffff", borderBottom: "1px solid #f0f0f0" }}
+          className="sticky top-0 z-20 flex items-center justify-between px-8 backdrop-blur-md bg-white/5 border-b border-white/5"
+          style={{ height: "64px" }}
         >
+          <div className="flex flex-col">
+            <h2 className="text-lg font-black tracking-tight text-white leading-none">MX3 CallX</h2>
+            <p className="text-[11px] text-white/40 font-medium tracking-wide mt-1 uppercase">Plataforma Analítica Superior</p>
+          </div>
           {activeTenantId && (
             <div className="relative" ref={bellRef}>
               <button

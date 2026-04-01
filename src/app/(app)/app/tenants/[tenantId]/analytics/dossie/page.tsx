@@ -128,48 +128,58 @@ function HeroMetrics({ overview, durationAvg }: {
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-        <PhoneCall className="w-4 h-4 text-indigo-500" />
-        Visão Geral
-      </h2>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-1.5 h-4 bg-[#00D68F] rounded-full" />
+        <h2 className="text-sm font-black text-white uppercase tracking-widest">Performance de Atendimento</h2>
+      </div>
 
       {/* Hero row — métricas críticas em destaque */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         {/* Atenderam */}
-        <div className="rounded-2xl p-5 flex flex-col justify-between" style={{ background: "linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)", border: "1px solid #6ee7b7" }}>
-          <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">Atenderam</p>
-          <p className="text-5xl font-black text-emerald-700 leading-none">{overview.answerRate}%</p>
-          <p className="text-sm text-emerald-600 mt-2 font-medium">
-            {overview.answeredCalls.toLocaleString("pt-BR")} de {overview.totalCalls.toLocaleString("pt-BR")} chamadas
-          </p>
+        <div className="gc p-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#00D68F]/10 rounded-bl-full -z-0 group-hover:scale-110 transition-transform duration-500" />
+          <div className="relative z-10">
+            <p className="text-[10px] font-black text-[#00D68F] uppercase tracking-[2px] mb-2">Taxa de Atendimento</p>
+            <p className="text-6xl font-black text-white font-mono leading-none tracking-tighter">{overview.answerRate}<span className="text-white/20 text-4xl">%</span></p>
+            <div className="flex items-center gap-2 mt-4 text-xs font-bold text-white/40">
+              <span className="text-white">{overview.answeredCalls.toLocaleString("pt-BR")}</span>
+              <span>de</span>
+              <span>{overview.totalCalls.toLocaleString("pt-BR")} chamadas</span>
+            </div>
+          </div>
         </div>
 
         {/* Não atenderam */}
-        <div className="rounded-2xl p-5 flex flex-col justify-between" style={{ background: "linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)", border: "1px solid #fca5a5" }}>
-          <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">Não atenderam</p>
-          <p className="text-5xl font-black text-red-600 leading-none">{notAnsweredPct}%</p>
-          <p className="text-sm text-red-500 mt-2 font-medium">
-            {notAnsweredCount.toLocaleString("pt-BR")} de {overview.totalCalls.toLocaleString("pt-BR")} chamadas
-          </p>
+        <div className="gc p-6 relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#E8002D]/10 rounded-bl-full -z-0 group-hover:scale-110 transition-transform duration-500" />
+          <div className="relative z-10">
+            <p className="text-[10px] font-black text-[#E8002D] uppercase tracking-[2px] mb-2">Taxa de Abandono</p>
+            <p className="text-6xl font-black text-white font-mono leading-none tracking-tighter">{notAnsweredPct}<span className="text-white/20 text-4xl">%</span></p>
+             <div className="flex items-center gap-2 mt-4 text-xs font-bold text-white/40">
+              <span className="text-white">{notAnsweredCount.toLocaleString("pt-BR")}</span>
+              <span>de</span>
+              <span>{overview.totalCalls.toLocaleString("pt-BR")} chamadas</span>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Supporting metrics row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
-          { label: "Total", value: overview.totalCalls.toLocaleString("pt-BR"), icon: PhoneCall, color: "#6366f1" },
-          { label: "Duração média", value: fmtDuration(durationAvg), icon: Clock, color: "#f59e0b" },
-          { label: "Custo total", value: fmtCurrency(overview.totalCost), icon: DollarSign, color: "#8b5cf6" },
-          { label: "Custo / call", value: fmtCurrency(overview.avgCostPerCall), icon: DollarSign, color: "#8b5cf6" },
-          { label: "Com inteligência", value: `${overview.structuredOutputsRate}%`, icon: BarChart3, color: "#14b8a6" },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="card p-3 flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + "18" }}>
-              <Icon className="w-3.5 h-3.5" style={{ color }} />
+          { label: "Total", value: overview.totalCalls.toLocaleString("pt-BR"), icon: PhoneCall, color: "text-indigo-400", bg: "bg-indigo-500/10" },
+          { label: "Duração média", value: fmtDuration(durationAvg), icon: Clock, color: "text-amber-400", bg: "bg-amber-500/10" },
+          { label: "Custo total", value: fmtCurrency(overview.totalCost), icon: DollarSign, color: "text-purple-400", bg: "bg-purple-500/10" },
+          { label: "Custo / call", value: fmtCurrency(overview.avgCostPerCall), icon: DollarSign, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+          { label: "AI Structured", value: `${overview.structuredOutputsRate}%`, icon: Sparkles, color: "text-[#00D68F]", bg: "bg-[#00D68F]/10" },
+        ].map(({ label, value, icon: Icon, color, bg }) => (
+          <div key={label} className="gc p-3.5 flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center shrink-0 border border-white/5`}>
+              <Icon className={`w-4 h-4 ${color}`} />
             </div>
             <div className="min-w-0">
-              <p className="text-xs text-gray-400 leading-tight">{label}</p>
-              <p className="text-sm font-bold text-gray-900 leading-tight">{value}</p>
+              <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider leading-tight">{label}</p>
+              <p className="text-[13px] font-black text-white font-mono leading-tight">{value}</p>
             </div>
           </div>
         ))}
@@ -182,7 +192,8 @@ function HeroMetrics({ overview, durationAvg }: {
 
 function AbandonmentChart({ durationAnalysis }: { durationAnalysis: DossieData["durationAnalysis"] }) {
   const BUCKET_ORDER  = ["0–10s", "10–30s", "30–60s", "1–3min", "3–5min", "5min+"];
-  const BUCKET_COLORS = ["#ef4444", "#f97316", "#f59e0b", "#84cc16", "#10b981", "#6366f1"];
+  // CallX Palette
+  const BUCKET_COLORS = ["#E8002D", "#F97316", "#FACC15", "#A3E635", "#00D68F", "#22D3EE"];
 
   const buckets = BUCKET_ORDER.map((k, i) => ({
     label: k,
@@ -199,67 +210,54 @@ function AbandonmentChart({ durationAnalysis }: { durationAnalysis: DossieData["
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-        <TrendingDown className="w-4 h-4 text-red-500" />
-        Mapa de Abandono — quando os leads desligam
-      </h2>
-      <p className="text-xs text-gray-400 mb-3">
-        Distribuição de {total.toLocaleString("pt-BR")} chamadas atendidas por duração.
-      </p>
-      <div className="card p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-1.5 h-4 bg-[#E8002D] rounded-full" />
+        <h2 className="text-sm font-black text-white uppercase tracking-widest">Mapa de Engajamento Temporário</h2>
+      </div>
+
+      <div className="gc p-6">
         {total === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">Nenhuma chamada atendida no período.</p>
+          <p className="text-sm text-white/20 text-center py-8 font-bold italic uppercase tracking-widest">Nenhuma chamada processada</p>
         ) : (
           <>
             {durationAnalysis.voicemailCount > 0 && (
-              <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
-                <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-700">
-                  <strong>{durationAnalysis.voicemailCount} chamadas</strong> foram para caixa postal e estão excluídas deste gráfico.
+              <div className="mb-6 flex items-start gap-3 rounded-xl bg-amber-500/5 border border-amber-500/20 px-4 py-3">
+                <div className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center shrink-0">
+                  <Info className="w-3.5 h-3.5 text-amber-500" />
+                </div>
+                <p className="text-xs text-amber-200/60 leading-relaxed">
+                  <strong className="text-amber-400 font-black uppercase tracking-tight">{durationAnalysis.voicemailCount} chamadas</strong> foram identificadas como caixa postal e removidas desta análise de retenção humana.
                 </p>
               </div>
             )}
 
-            {/* Barras verticais com pico anotado */}
-            <div className="flex items-end gap-2" style={{ height: "180px" }}>
+            {/* Barras verticais */}
+            <div className="flex items-end gap-3" style={{ height: "200px" }}>
               {buckets.map((b, i) => {
-                const barH   = maxValue > 0 ? Math.max(Math.round((b.value / maxValue) * 150), b.value > 0 ? 6 : 0) : 0;
+                const barH    = maxValue > 0 ? Math.max(Math.round((b.value / maxValue) * 160), b.value > 0 ? 4 : 0) : 0;
                 const callPct = total > 0 ? Math.round((b.value / total) * 100) : 0;
                 const isPeak  = i === peakIdx && b.value > 0;
 
                 return (
-                  <div key={b.label} className="flex-1 flex flex-col items-center justify-end" style={{ height: "180px" }}>
-                    {/* Anotação do pico */}
-                    {isPeak ? (
-                      <div className="mb-1 flex flex-col items-center">
-                        <span
-                          className="text-xs font-bold text-white px-2 py-0.5 rounded-full"
-                          style={{ background: b.color }}
-                        >
-                          {callPct}% ▲ pico
-                        </span>
-                      </div>
-                    ) : (
-                      b.value > 0 && (
-                        <span className="text-xs font-semibold text-gray-600 mb-1">{callPct}%</span>
-                      )
-                    )}
+                  <div key={b.label} className="flex-1 flex flex-col items-center justify-end group" style={{ height: "200px" }}>
+                    <div className={`mb-2 transition-all duration-300 ${isPeak ? "opacity-100 scale-100" : "opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100"}`}>
+                       <span className="text-[10px] font-black text-white bg-white/10 px-2 py-0.5 rounded-full border border-white/10 whitespace-nowrap">
+                         {callPct}% {isPeak ? "▲ PICO" : ""}
+                       </span>
+                    </div>
 
-                    {/* Barra */}
                     <div
-                      className="w-full rounded-t-lg transition-all"
+                      className="w-full rounded-t-xl transition-all duration-500 group-hover:brightness-125"
                       style={{
                         height: `${barH}px`,
-                        background: isPeak ? b.color : b.color + "99",
-                        minHeight: b.value > 0 ? "6px" : "0",
-                        boxShadow: isPeak ? `0 0 0 2px ${b.color}40` : "none",
+                        background: `linear-gradient(to top, ${b.color}40, ${b.color})`,
+                        boxShadow: isPeak ? `0 0 20px -5px ${b.color}` : "none",
                       }}
                     />
 
-                    {/* Label + count */}
-                    <div className="mt-1.5 text-center">
-                      <p className="text-xs text-gray-600 font-medium leading-tight">{b.label}</p>
-                      <p className="text-xs text-gray-400">{b.value}</p>
+                    <div className="mt-3 text-center">
+                      <p className="text-[10px] text-white/40 font-black uppercase tracking-widest leading-tight mb-1">{b.label}</p>
+                      <p className="text-xs text-white font-mono">{b.value}</p>
                     </div>
                   </div>
                 );
@@ -267,26 +265,35 @@ function AbandonmentChart({ durationAnalysis }: { durationAnalysis: DossieData["
             </div>
 
             {/* Diagnóstico automático */}
-            <div className={`mt-4 flex items-start gap-2 rounded-lg px-3 py-2.5 ${
+            <div className={`mt-8 flex items-start gap-3 rounded-xl p-4 border transition-all ${
               earlyPct > 40
-                ? "bg-red-50 border border-red-100"
+                ? "bg-[#E8002D]/5 border-[#E8002D]/20"
                 : earlyPct > 20
-                  ? "bg-amber-50 border border-amber-100"
-                  : "bg-emerald-50 border border-emerald-100"
+                  ? "bg-amber-500/5 border-amber-500/20"
+                  : "bg-[#00D68F]/5 border-[#00D68F]/20"
             }`}>
-              <AlertCircle className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
-                earlyPct > 40 ? "text-red-500" : earlyPct > 20 ? "text-amber-500" : "text-emerald-500"
-              }`} />
-              <p className={`text-xs ${
-                earlyPct > 40 ? "text-red-700" : earlyPct > 20 ? "text-amber-700" : "text-emerald-700"
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-white/5 ${
+                earlyPct > 40 ? "bg-[#E8002D]/20 animate-pulse" : earlyPct > 20 ? "bg-amber-500/20" : "bg-[#00D68F]/20"
               }`}>
-                {earlyPct > 40
-                  ? <><strong>{earlyPct}% das conversas duram menos de 30s</strong> — avalie o script de abertura e a primeira mensagem do assistente.</>
-                  : earlyPct > 20
-                    ? <><strong>{earlyPct}% das conversas encerram antes de 30s</strong> — considere revisar a abordagem inicial.</>
-                    : <>Perfil de engajamento saudável — maioria das conversas passa de 30s.</>
-                }
-              </p>
+                <AlertCircle className={`w-4 h-4 ${
+                  earlyPct > 40 ? "text-[#E8002D]" : earlyPct > 20 ? "text-amber-500" : "text-[#00D68F]"
+                }`} />
+              </div>
+              <div>
+                <p className={`text-[10px] font-black uppercase tracking-[2px] mb-1 ${
+                  earlyPct > 40 ? "text-[#E8002D]" : earlyPct > 20 ? "text-amber-500" : "text-[#00D68F]"
+                }`}>
+                  Insight do Especialista AI
+                </p>
+                <p className="text-xs text-white/70 leading-relaxed font-medium">
+                  {earlyPct > 40
+                    ? <>Crítico: <strong className="text-white">{earlyPct}% das conversas</strong> morrem em menos de 30s. A abertura do assistente está gerando bloqueio imediato ou falha de identificação.</>
+                    : earlyPct > 20
+                      ? <>Alerta: <strong className="text-white">{earlyPct}% de abandono precoce</strong>. Melhore o gatilho de interesse nos primeiros 15 segundos da conversa.</>
+                      : <>Saudável: Baixo índice de abandono inicial. A introdução e o tom de voz do assistente estão engajando os clientes com sucesso.</>
+                  }
+                </p>
+              </div>
             </div>
           </>
         )}
@@ -309,55 +316,51 @@ function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-        <TrendingDown className="w-4 h-4 text-violet-500" />
-        Funil de Abandono — onde a conversa para
-      </h2>
-      <p className="text-xs text-gray-400 mb-3">
-        Baseado em {funnel.totalWithData.toLocaleString("pt-BR")} chamadas com dados de etapa.
-      </p>
-      <div className="card p-5">
-        <div className="flex flex-col items-center gap-0">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-1.5 h-4 bg-violet-500 rounded-full" />
+        <h2 className="text-sm font-black text-white uppercase tracking-widest">Gargalos por Etapas</h2>
+      </div>
+
+      <div className="gc p-8">
+        <div className="flex flex-col items-center gap-0 max-w-2xl mx-auto">
           {funnel.stages.map((stage, i) => {
-            const barWidth = Math.max(stage.pct, 4);
+            const barWidth = Math.max(stage.pct, 8);
             const isLast   = i === funnel.stages.length - 1;
             const color    = STAGE_COLORS[i] ?? "#6366f1";
 
             return (
               <div key={stage.label} className="w-full flex flex-col items-center">
-                {/* Barra do funil — largura proporcional ao pct */}
+                {/* Barra do funil */}
                 <div className="w-full flex items-center justify-center">
                   <div
-                    className="relative flex items-center justify-center rounded-lg transition-all"
+                    className="relative flex items-center justify-center rounded-xl transition-all duration-500 hover:scale-[1.02] cursor-default border border-white/10"
                     style={{
                       width: `${barWidth}%`,
-                      minWidth: "120px",
-                      height: "44px",
-                      background: color,
+                      minWidth: "160px",
+                      height: "52px",
+                      background: `linear-gradient(to right, ${color}CC, ${color})`,
+                      boxShadow: `0 8px 16px -8px ${color}66`,
                     }}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-white font-black text-lg leading-none">{stage.pct}%</span>
-                      <div className="hidden md:block">
-                        <p className="text-white text-xs font-semibold leading-tight opacity-90">{stage.label}</p>
-                        <p className="text-white text-xs opacity-70">{stage.cumulative.toLocaleString("pt-BR")} calls</p>
+                    <div className="flex items-center gap-4 px-6 w-full justify-between">
+                      <div className="min-w-0">
+                         <p className="text-white text-[10px] font-black uppercase tracking-wider opacity-60 truncate">{stage.label}</p>
+                         <p className="text-white text-xs font-bold opacity-40">{stage.cumulative.toLocaleString("pt-BR")} leads</p>
                       </div>
+                      <span className="text-white font-mono text-xl font-black">{stage.pct}<span className="text-white/20 text-sm">%</span></span>
                     </div>
                   </div>
                 </div>
 
-                {/* Label em mobile */}
-                <div className="md:hidden mt-1 text-center">
-                  <p className="text-xs font-medium text-gray-700">{stage.label}</p>
-                  <p className="text-xs text-gray-400">{stage.cumulative.toLocaleString("pt-BR")} calls</p>
-                </div>
-
-                {/* Seta de perda entre etapas */}
+                {/* Seta de perda */}
                 {!isLast && stage.dropoff !== null && stage.dropoff > 0 && (
-                  <div className="flex items-center gap-2 py-1.5">
-                    <div className="h-px w-8 bg-red-200" />
-                    <span className="text-xs text-red-500 font-semibold">−{stage.dropoff}% perdidos aqui</span>
-                    <div className="h-px w-8 bg-red-200" />
+                  <div className="flex items-center gap-3 py-3">
+                    <div className="h-px w-12 bg-white/10" />
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8002D]/10 border border-[#E8002D]/20">
+                       <TrendingDown className="w-3 h-3 text-[#E8002D]" />
+                       <span className="text-[10px] text-[#E8002D] font-black uppercase tracking-tighter">−{stage.dropoff}% de retenção</span>
+                    </div>
+                    <div className="h-px w-12 bg-white/10" />
                   </div>
                 )}
                 {!isLast && (stage.dropoff === null || stage.dropoff === 0) && (
@@ -369,12 +372,17 @@ function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
         </div>
 
         {worstDropoff && worstDropoff.dropoff !== null && worstDropoff.dropoff > 0 && (
-          <div className="mt-5 flex items-start gap-2 rounded-lg bg-violet-50 border border-violet-100 px-3 py-2.5">
-            <AlertCircle className="w-3.5 h-3.5 text-violet-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-violet-700">
-              <strong>Maior gargalo:</strong> a etapa "{worstDropoff.label}" perde{" "}
-              <strong>{worstDropoff.dropoff}%</strong> das conversas que chegaram até ela. Revise o script neste ponto.
-            </p>
+          <div className="mt-10 flex items-start gap-4 rounded-xl bg-violet-500/5 border border-violet-500/20 p-5 max-w-2xl mx-auto">
+            <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center shrink-0 border border-white/5">
+              <Zap className="w-5 h-5 text-violet-400" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-violet-400 uppercase tracking-[2px] mb-1">Gargalo Estrutural Detectado</p>
+              <p className="text-xs text-white/70 leading-relaxed font-medium">
+                A etapa <strong className="text-white opacity-100">"{worstDropoff.label}"</strong> apresenta a maior taxa de evasão do fluxo, perdendo 
+                <strong className="text-[#E8002D] ml-1">{worstDropoff.dropoff}%</strong> das oportunidades. Revise a pergunta ou o trigger de resposta de IA nesta fase específica.
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -388,14 +396,18 @@ function QualityScorecard({ fields }: { fields: FieldAnalysis[] }) {
   if (fields.length === 0) return null;
 
   return (
-    <div className="card p-4">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-        <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
-        Painel de Saúde da Ligação
-        <span className="ml-auto text-gray-300 font-normal normal-case">{fields[0]?.count ?? 0} registros</span>
-      </h4>
+    <div className="gc p-6">
+      <div className="flex items-center gap-2 mb-6 border-b border-white/5 pb-4">
+        <div className="w-8 h-8 rounded-lg bg-[#00D68F]/20 flex items-center justify-center shrink-0">
+          <ShieldCheck className="w-4 h-4 text-[#00D68F]" />
+        </div>
+        <div>
+          <h4 className="text-xs font-black text-white uppercase tracking-[1.5px]">Checklist de Qualidade</h4>
+          <p className="text-[10px] text-white/30 font-bold uppercase tracking-wider">{fields[0]?.count ?? 0} chamadas auditadas</p>
+        </div>
+      </div>
 
-      <div className="space-y-3">
+      <div className="space-y-5">
         {fields.map((field) => {
           const yes  = field.trueCount  ?? 0;
           const no   = field.falseCount ?? 0;
@@ -404,22 +416,23 @@ function QualityScorecard({ fields }: { fields: FieldAnalysis[] }) {
           const isGood = yesPct >= 50;
 
           return (
-            <div key={field.key}>
-              <div className="flex items-center gap-2 mb-1">
-                {isGood
-                  ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  : <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                }
-                <span className="text-xs font-medium text-gray-700 flex-1 truncate">{field.key}</span>
-                <span className={`text-xs font-bold ${isGood ? "text-emerald-600" : "text-red-500"}`}>
-                  {yesPct}% sim
-                </span>
-                <span className="text-xs text-gray-400">{100 - yesPct}% não</span>
+            <div key={field.key} className="group">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-1.5 h-1.5 rounded-full ${isGood ? "bg-[#00D68F]" : "bg-[#E8002D]"} shadow-[0_0_8px_currentColor]`} />
+                  <span className="text-xs font-bold text-white/80 group-hover:text-white transition-colors truncate max-w-[200px]">{field.key}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                   <div className="text-right">
+                      <span className={`text-[11px] font-black font-mono ${isGood ? "text-[#00D68F]" : "text-[#E8002D]"}`}>{yesPct}%</span>
+                      <span className="text-[10px] text-white/20 font-bold ml-1 uppercase">SIM</span>
+                   </div>
+                </div>
               </div>
-              <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+              <div className="h-1.5 rounded-full overflow-hidden bg-white/5 border border-white/5">
                 <div
-                  className="h-full rounded-full"
-                  style={{ width: `${yesPct}%`, background: isGood ? "#10b981" : "#ef4444" }}
+                  className={`h-full rounded-full transition-all duration-700 shadow-[0_0_10px_rgba(255,255,255,0.05)]`}
+                  style={{ width: `${yesPct}%`, background: isGood ? "#00D68F" : "#E8002D" }}
                 />
               </div>
             </div>
@@ -445,25 +458,26 @@ function EnumCard({ field }: { field: FieldAnalysis }) {
   ];
 
   return (
-    <div className="card p-4">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-        <BarChart3 className="w-3.5 h-3.5" />
-        {field.key}
-        <span className="ml-auto text-gray-300 font-normal normal-case">{field.count} registros</span>
-      </h4>
-      <div className="space-y-2">
+    <div className="gc p-5 group hover:border-white/2 transition-all">
+      <div className="flex items-center justify-between mb-4">
+        <h4 className="text-[10px] font-black text-white/40 uppercase tracking-[1.5px] truncate max-w-[70%]">
+          {field.key}
+        </h4>
+        <span className="text-[10px] font-mono text-white/20">{field.count} DATA</span>
+      </div>
+      <div className="space-y-3">
         {sorted.map(([label, count], i) => {
-          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+          const pctValue = total > 0 ? Math.round((count / total) * 100) : 0;
           return (
             <div key={label}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-700 font-medium truncate max-w-[60%]">{label}</span>
-                <span className="text-xs text-gray-500 shrink-0">{count} ({pct}%)</span>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[11px] text-white/70 font-bold truncate max-w-[65%]">{label}</span>
+                <span className="text-[11px] text-white/40 font-mono">{count} <span className="opacity-40">({pctValue}%)</span></span>
               </div>
-              <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+              <div className="h-1 bg-white/5 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${pct}%`, background: COLORS[i % COLORS.length] }}
+                  className="h-full rounded-full transition-all duration-1000"
+                  style={{ width: `${pctValue}%`, background: COLORS[i % COLORS.length] }}
                 />
               </div>
             </div>
@@ -476,24 +490,22 @@ function EnumCard({ field }: { field: FieldAnalysis }) {
 
 function NumberCard({ field }: { field: FieldAnalysis }) {
   return (
-    <div className="card p-4">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-        <BarChart3 className="w-3.5 h-3.5" />
-        {field.key}
-        <span className="ml-auto text-gray-300 font-normal normal-case">{field.count} registros</span>
-      </h4>
-      <div className="flex gap-3">
-        <div className="flex-1 text-center">
-          <p className="text-2xl font-bold text-indigo-600">{field.avg}</p>
-          <p className="text-xs text-gray-500">Média</p>
+    <div className="gc p-5 group hover:border-white/20 transition-all">
+       <h4 className="text-[10px] font-black text-white/40 uppercase tracking-[1.5px] mb-4">
+          {field.key}
+        </h4>
+      <div className="grid grid-cols-3 gap-2">
+        <div className="text-center p-3 bg-white/5 rounded-xl border border-white/5">
+          <p className="text-xl font-black text-white font-mono leading-none">{field.avg}</p>
+          <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest mt-1.5">Média</p>
         </div>
-        <div className="flex-1 text-center">
-          <p className="text-xl font-semibold text-gray-700">{field.min}</p>
-          <p className="text-xs text-gray-500">Mínimo</p>
+        <div className="text-center p-3">
+          <p className="text-sm font-black text-white/60 font-mono leading-none">{field.min}</p>
+          <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest mt-1.5">Mín</p>
         </div>
-        <div className="flex-1 text-center">
-          <p className="text-xl font-semibold text-gray-700">{field.max}</p>
-          <p className="text-xs text-gray-500">Máximo</p>
+        <div className="text-center p-3">
+          <p className="text-sm font-black text-white/60 font-mono leading-none">{field.max}</p>
+          <p className="text-[9px] font-bold text-white/20 uppercase tracking-widest mt-1.5">Máx</p>
         </div>
       </div>
     </div>
@@ -547,9 +559,9 @@ function TabbedFieldAnalysis({ fieldAnalysis, structuredCount }: {
   const tabs = (
     [
       { id: "enum"    as FieldTab, label: "Distribuições", count: enums.length },
-      { id: "boolean" as FieldTab, label: "Saúde",         count: booleans.length },
-      { id: "number"  as FieldTab, label: "Números",       count: numbers.length },
-      { id: "text"    as FieldTab, label: "Análises",      count: texts.length },
+      { id: "boolean" as FieldTab, label: "Scorecard",     count: booleans.length },
+      { id: "number"  as FieldTab, label: "Métricas",      count: numbers.length },
+      { id: "text"    as FieldTab, label: "Qualitativo",   count: texts.length },
     ] as { id: FieldTab; label: string; count: number }[]
   ).filter((t) => t.count > 0);
 
@@ -559,32 +571,28 @@ function TabbedFieldAnalysis({ fieldAnalysis, structuredCount }: {
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-        <BarChart3 className="w-4 h-4 text-indigo-500" />
-        Inteligência dos Dados — Structured Outputs
-      </h2>
-      <p className="text-xs text-gray-400 mb-3">
-        Baseado em {structuredCount.toLocaleString("pt-BR")} chamadas com dados estruturados.
-      </p>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-4 bg-indigo-500 rounded-full" />
+          <h2 className="text-sm font-black text-white uppercase tracking-widest">Inteligência Estruturada</h2>
+        </div>
+         <span className="text-[10px] font-bold text-white/20 uppercase tracking-widest">Auditoria de {structuredCount} chamadas</span>
+      </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-3 border-b border-gray-100 pb-0">
+      <div className="flex gap-2 mb-6 p-1 bg-white/5 rounded-2xl border border-white/5 w-fit">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-2 text-xs font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
+            className={`px-5 py-2 text-[10px] font-black uppercase tracking-[1.5px] rounded-xl transition-all ${
               activeTab === tab.id
-                ? "border-indigo-500 text-indigo-700 bg-indigo-50"
-                : "border-transparent text-gray-500 hover:text-gray-700"
+                ? "bg-white/10 text-white shadow-[0_0_15px_rgba(255,255,255,0.05)] border border-white/10"
+                : "text-white/30 hover:text-white/60"
             }`}
           >
             {tab.label}
-            <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
-              activeTab === tab.id ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"
-            }`}>
-              {tab.count}
-            </span>
+            <span className="ml-2 font-mono opacity-50">{tab.count}</span>
           </button>
         ))}
       </div>
@@ -593,19 +601,19 @@ function TabbedFieldAnalysis({ fieldAnalysis, structuredCount }: {
       {activeTab === "boolean" && <QualityScorecard fields={booleans} />}
 
       {activeTab === "enum" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {enums.map((f) => <EnumCard key={f.key} field={f} />)}
         </div>
       )}
 
       {activeTab === "number" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {numbers.map((f) => <NumberCard key={f.key} field={f} />)}
         </div>
       )}
 
       {activeTab === "text" && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {texts.map((f) => <TextAccordion key={f.key} field={f} />)}
         </div>
       )}
@@ -628,50 +636,63 @@ function OpportunitiesSection({
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-        <Zap className="w-4 h-4 text-amber-500" />
-        Oportunidades Não Trabalhadas
-      </h2>
-      <div className="card p-4 border-l-4 border-amber-400">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <p className="text-xs text-gray-500 mb-1">Chamadas com falha técnica</p>
-            <p className="text-3xl font-bold text-amber-600">{card.techIssueCount}</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {card.techIssuePct}% do total · erro de infraestrutura, não rejeição de conteúdo
-            </p>
-            <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-              Estas ligações falharam por problemas técnicos (pipeline, transporte ou latência),
-              não por falta de interesse do lead. São elegíveis para nova tentativa.
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-1.5 h-4 bg-amber-500 rounded-full" />
+        <h2 className="text-sm font-black text-white uppercase tracking-widest">Oportunidades de Recuperação</h2>
+      </div>
+
+      <div className="gc p-1 overflow-hidden">
+        <div className="flex flex-col lg:flex-row">
+          {/* Main Info */}
+          <div className="flex-1 p-6">
+            <div className="flex items-center gap-2 mb-4">
+               <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center border border-white/5">
+                 <Zap className="w-4 h-4 text-amber-500" />
+               </div>
+               <p className="text-[10px] font-black text-white/40 uppercase tracking-[2px]">Potencial de Rechamada</p>
+            </div>
+            
+            <div className="flex items-baseline gap-2 mb-2">
+               <p className="text-5xl font-black text-white font-mono leading-none tracking-tighter">{card.techIssueCount}</p>
+               <p className="text-sm font-bold text-amber-500/60 uppercase tracking-widest uppercase">Falhas Técnicas</p>
+            </div>
+            
+            <p className="text-xs text-white/40 font-medium leading-relaxed max-w-xl">
+              Identificamos <strong className="text-white">{card.techIssuePct}% das chamadas</strong> com interrupções por transporte (SIP), latência crítica ou erro de pipeline. 
+              Estes leads demonstraram interesse mas a conexão foi perdida.
             </p>
           </div>
 
-          <div className="md:w-56 shrink-0">
+          {/* Financial Impact */}
+          <div className="lg:w-72 shrink-0 bg-white/2 border-l border-white/5 p-6 flex flex-col justify-center relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-bl-full -z-0" />
+             
             {card.hasConfig && card.potentialValue != null ? (
-              <div className="rounded-xl p-4 text-center h-full flex flex-col items-center justify-center" style={{ background: "#f59e0b18" }}>
-                <TrendingUp className="w-5 h-5 text-amber-600 mb-1.5" />
-                <p className="text-xs text-amber-700 font-medium mb-1">Oportunidade estimada</p>
-                <p className="text-2xl font-bold text-amber-700">{fmtBRL(card.potentialValue)}</p>
-                <p className="text-xs text-amber-600 mt-1">
-                  {card.techIssueCount} × {fmtBRL(card.avgDealValue!)} ticket médio
+              <div className="relative z-10 text-center">
+                <p className="text-[10px] font-black text-amber-500 uppercase tracking-[2px] mb-2">Impacto em Vendas</p>
+                 <div className="text-3xl font-black text-white font-mono leading-none mb-2 tracking-tight">
+                   {fmtBRL(card.potentialValue)}
+                 </div>
+                <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider">
+                  Ticket Médio: {fmtBRL(card.avgDealValue!)}
                 </p>
-                <p className="text-xs text-amber-500 mt-2 leading-tight">
-                  Não são vendas perdidas — são leads que merecem nova tentativa
-                </p>
+                <div className="mt-6 flex items-center justify-center">
+                   <div className="px-3 py-1.5 rounded-lg bg-amber-500 text-[#060608] text-[10px] font-black uppercase tracking-widest hover:scale-105 transition-transform cursor-default">
+                     Recuperar Agora
+                   </div>
+                </div>
               </div>
             ) : (
-              <div className="rounded-xl p-4 text-center h-full flex flex-col items-center justify-center border border-dashed border-gray-200 bg-gray-50">
-                <Settings2 className="w-5 h-5 text-gray-400 mb-1.5" />
-                <p className="text-xs text-gray-500 font-medium mb-1">Configure o ticket médio</p>
-                <p className="text-xs text-gray-400 leading-tight mb-3">
-                  Defina o valor de conversão da campanha para calcular o impacto financeiro
-                </p>
+              <div className="relative z-10 text-center flex flex-col items-center">
+                <Settings2 className="w-6 h-6 text-white/10 mb-3" />
+                <p className="text-[10px] font-black text-white/40 uppercase tracking-[1.5px] mb-2 leading-tight">Projeção Financeira Desabilitada</p>
+                <p className="text-[10px] text-white/20 font-medium leading-tight mb-4">Configure o ticket médio nas configurações da campanha para ver o impacto.</p>
                 {campaignId && (
                   <a
                     href={`/app/tenants/${tenantId}/queues`}
-                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                    className="text-[10px] font-black text-indigo-400 hover:text-indigo-300 uppercase tracking-widest flex items-center gap-1 group"
                   >
-                    Ir para Campanhas <ArrowRight className="w-3 h-3" />
+                    CONFIGURAR <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
                   </a>
                 )}
               </div>
@@ -690,37 +711,38 @@ function ICPSection({ correlations }: { correlations: DossieData["correlations"]
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-        <Users className="w-4 h-4 text-amber-500" />
-        Detector de ICP — Engajamento por Segmento
-      </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-1.5 h-4 bg-cyan-400 rounded-full" />
+        <h2 className="text-sm font-black text-white uppercase tracking-widest">Detector de ICP (Persona Ideal)</h2>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {Object.entries(correlations).map(([field, groups]) => {
           const sorted = Object.entries(groups).sort((a, b) => b[1].avgDuration - a[1].avgDuration);
           const maxDur = Math.max(...sorted.map((g) => g[1].avgDuration), 1);
           return (
-            <div key={field} className="card p-4">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                {field} × Duração Média
+            <div key={field} className="gc p-6 border-white/5">
+              <h4 className="text-[10px] font-black text-white/30 uppercase tracking-[2px] mb-5 border-b border-white/5 pb-3">
+                {field} <span className="text-cyan-400/40 ml-1">× ENGAGEMENT</span>
               </h4>
-              <div className="space-y-2.5">
+              <div className="space-y-4">
                 {sorted.map(([label, stats]) => {
                   const pct = Math.round((stats.avgDuration / maxDur) * 100);
                   return (
-                    <div key={label}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-700 truncate max-w-[55%]">{label}</span>
-                        <span className="text-xs text-gray-500 shrink-0">
-                          {fmtDuration(stats.avgDuration)} · {stats.count} calls
-                        </span>
+                    <div key={label} className="group">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-white group-hover:text-cyan-400 transition-colors truncate max-w-[50%]">{label}</span>
+                        <div className="text-right">
+                           <span className="text-[11px] font-black text-white font-mono">{fmtDuration(stats.avgDuration)}</span>
+                           <span className="text-[10px] text-white/20 font-bold ml-2 uppercase tracking-tighter">{stats.count} CALLS</span>
+                        </div>
                       </div>
-                      <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+                      <div className="h-1 rounded-full overflow-hidden bg-white/5">
                         <div
-                          className="h-full rounded-full"
-                          style={{ width: `${pct}%`, background: "#f59e0b" }}
+                          className="h-full rounded-full bg-cyan-400/60 group-hover:bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.2)] transition-all duration-500"
+                          style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{getEngagementLabel(stats.avgDuration)}</p>
                     </div>
                   );
                 })}
@@ -817,15 +839,13 @@ export default function DossiePage() {
       `}</style>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 no-print">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "#6366f118" }}>
-            <FileBarChart2 className="w-5 h-5 text-indigo-600" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">Dossiê Comercial</h1>
-            <p className="text-xs text-gray-500">Raio-X da operação de vendas por campanha</p>
-          </div>
+      <div className="flex items-center justify-between mb-8 no-print">
+        <div>
+           <div className="flex items-center gap-2 mb-1">
+             <div className="w-2 h-2 rounded-full bg-[#00D68F] animate-pulse shadow-[0_0_8px_#00D68F]" />
+             <span className="text-[10px] font-black text-white/30 uppercase tracking-[2px]">Advanced Reporting</span>
+           </div>
+          <h1 className="text-3xl font-black text-white tracking-tight">Dossiê Comercial</h1>
         </div>
 
         {data && (
@@ -833,73 +853,90 @@ export default function DossiePage() {
             <button 
               onClick={handleRunAiAnalysis} 
               disabled={loadingAi}
-              className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 border border-indigo-200"
+              className="btn-premium px-5 py-2.5"
             >
               {loadingAi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {loadingAi ? "Gerando Análise..." : "Analisar Gargalos (10-40s)"}
+              <span className="font-bold uppercase tracking-wider text-[11px]">
+                {loadingAi ? "Gerando Análise..." : "Analisar Gargalos"}
+              </span>
             </button>
-            <button onClick={handlePrint} className="btn-secondary gap-2">
+            <button onClick={handlePrint} className="btn-glass px-5 py-2.5">
               <Printer className="w-4 h-4" />
-              Exportar / Imprimir
+              <span className="font-bold uppercase tracking-wider text-[11px]">Exportar</span>
             </button>
           </div>
         )}
       </div>
 
       {/* Filtros */}
-      <div className="card p-4 mb-6 no-print">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-48">
-            <label className="form-label">Campanha</label>
-            <div className="relative">
+      <div className="gc p-5 mb-8 no-print">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2 text-[10px] font-black text-white/30 uppercase tracking-[1.5px]">
+            <Settings2 className="w-3.5 h-3.5" />
+            Parâmetros de Análise
+          </div>
+
+          <div className="h-4 w-px bg-white/10 mx-2 hidden sm:block" />
+
+          {/* Campaign Select */}
+          <div className="flex-1 min-w-[200px]">
+            <div className="flex items-center gap-2 group">
+              <div className="w-7 h-7 rounded-lg bg-[#E8002D]/10 flex items-center justify-center border border-[#E8002D]/20 group-hover:bg-[#E8002D]/20 transition-all">
+                <PhoneCall className="w-3.5 h-3.5 text-[#E8002D] shrink-0" />
+              </div>
               <select
-                className="form-input pr-8 appearance-none"
+                className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors w-full"
                 value={selectedQueue}
                 onChange={(e) => { setSelectedQueue(e.target.value); load(e.target.value, days); }}
               >
-                {campaigns.length === 0 && <option value="">Nenhuma campanha</option>}
+                {campaigns.length === 0 && <option value="" className="bg-[#0A0A0E]">Nenhuma campanha</option>}
                 {campaigns.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id} className="bg-[#0A0A0E]">{c.name}</option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             </div>
           </div>
 
-          <div>
-            <label className="form-label">Período</label>
-            <div className="flex gap-1.5">
-              {[7, 30, 90, 365].map((d) => (
-                <button
-                  key={d}
-                  onClick={() => { setDays(d); load(selectedQueue, d); }}
-                  className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
-                    days === d
-                      ? "border-indigo-500 bg-indigo-50 text-indigo-700 font-medium"
-                      : "border-gray-200 text-gray-600 hover:border-gray-300"
-                  }`}
-                >
-                  {d === 365 ? "1 ano" : `${d}d`}
-                </button>
-              ))}
-            </div>
+          <div className="h-4 w-px bg-white/10 mx-2 hidden sm:block" />
+
+          {/* Days Select */}
+          <div className="flex items-center gap-1.5 p-1 bg-white/5 rounded-xl border border-white/5">
+            {[7, 30, 90, 365].map((d) => (
+              <button
+                key={d}
+                onClick={() => { setDays(d); load(selectedQueue, d); }}
+                className={`px-4 py-1.5 text-[10px] font-bold rounded-lg transition-all uppercase tracking-wider ${
+                  days === d
+                    ? "bg-[#00D68F] text-[#060608] shadow-[0_0_12px_rgba(0,214,143,0.3)]"
+                    : "text-white/40 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                {d === 365 ? "1 ano" : `${d}D`}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
       {/* Loading */}
       {loading && (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-          <span className="ml-3 text-sm text-gray-500">Analisando dados da campanha...</span>
+        <div className="flex flex-col items-center justify-center py-32 gc">
+          <div className="relative">
+            <div className="absolute inset-0 bg-indigo-500/20 blur-xl rounded-full animate-pulse" />
+            <Loader2 className="w-10 h-10 animate-spin text-white relative z-10" />
+          </div>
+          <span className="mt-6 text-[10px] font-black text-white/40 uppercase tracking-[3px] animate-pulse">Decodificando Inteligência...</span>
         </div>
       )}
 
       {/* Sem dados */}
       {!loading && !data && selectedQueue && (
-        <div className="card p-8 text-center">
-          <AlertCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">Nenhuma chamada encontrada para o período selecionado.</p>
+        <div className="gc p-12 text-center border-dashed border-white/5">
+          <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-8 h-8 text-white/20" />
+          </div>
+          <p className="text-[10px] font-black text-white/40 uppercase tracking-[2px] mb-2">Dados Insuficientes</p>
+          <p className="text-xs text-white/20 max-w-xs mx-auto font-medium">Nenhuma chamada processada nesta campanha para o período selecionado.</p>
         </div>
       )}
 
@@ -920,22 +957,23 @@ export default function DossiePage() {
 
           {/* AI Analysis Card */}
           {aiAnalysis && (
-            <div className="card p-6 bg-gradient-to-br from-indigo-50 to-white border-indigo-100 shadow-sm relative overflow-hidden text-gray-800">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-bl-full -z-0" />
-              <div className="relative z-10 flex items-center gap-2.5 mb-5 border-b border-indigo-100/50 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shadow-inner">
-                  <Bot className="w-4 h-4 text-white" />
+            <div className="gc p-8 relative overflow-hidden text-white group">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-bl-full -z-0 group-hover:scale-110 transition-transform duration-[2s]" />
+              <div className="relative z-10 flex items-center gap-4 mb-8 border-b border-white/5 pb-6">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500 flex items-center justify-center shadow-[0_0_20px_rgba(99,102,241,0.4)]">
+                  <Bot className="w-6 h-6 text-white" />
                 </div>
-                <h3 className="text-base font-bold text-gray-900 tracking-tight">Análise de IA: Gargalos de Retenção</h3>
+                <div>
+                   <p className="text-[10px] font-black text-indigo-400 uppercase tracking-[3px] mb-1">Insight Strategy</p>
+                   <h3 className="text-xl font-black text-white tracking-tight">Análise de IA: Gargalos de Retenção</h3>
+                </div>
               </div>
-              <div className="relative z-10 prose prose-sm prose-indigo max-w-none 
-                prose-headings:text-gray-900 prose-headings:font-bold prose-h2:text-sm prose-h3:text-sm
-                prose-a:text-indigo-600 hover:prose-a:text-indigo-500
-                prose-strong:text-gray-900
-                prose-blockquote:border-l-indigo-300 prose-blockquote:bg-indigo-50/50 prose-blockquote:px-4 prose-blockquote:py-1 prose-blockquote:rounded-r-lg prose-blockquote:font-medium prose-blockquote:text-indigo-900 prose-blockquote:not-italic
-                prose-ul:marker:text-indigo-400
-                prose-li:text-gray-700
-                prose-p:text-gray-700 prose-p:leading-relaxed"
+              <div className="relative z-10 prose prose-invert prose-sm max-w-none 
+                prose-headings:text-white prose-headings:font-black prose-h2:text-sm prose-h2:uppercase prose-h2:tracking-widest
+                prose-strong:text-indigo-300
+                prose-blockquote:border-l-indigo-500 prose-blockquote:bg-white/5 prose-blockquote:px-5 prose-blockquote:py-2 prose-blockquote:rounded-r-xl prose-blockquote:font-bold prose-blockquote:text-indigo-100 prose-blockquote:not-italic
+                prose-li:text-white/70
+                prose-p:text-white/80 prose-p:leading-loose text-[13px]"
               >
                 <Markdown>{aiAnalysis}</Markdown>
               </div>
