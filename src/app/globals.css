@@ -44,28 +44,41 @@
 
 /* ── TEMA CLARO ───────────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg: #EEEEF3;
-  --g1: rgba(232,0,45,0.07);
-  --g2: rgba(0,194,255,0.05);
-  --g3: rgba(168,85,247,0.05);
-  --glass-bg:     rgba(255,255,255,0.55);
-  --glass-bg-2:   rgba(255,255,255,0.72);
-  --glass-border: rgba(0,0,0,0.08);
-  --glass-hi:     rgba(255,255,255,0.9);
-  --sidebar-bg: rgba(248,248,252,0.88);
-  --topbar-bg:  rgba(238,238,243,0.82);
+  --bg: #E8EAF0;
+  --g1: rgba(232,0,45,0.06);
+  --g2: rgba(0,194,255,0.04);
+  --g3: rgba(168,85,247,0.04);
+  --glass-bg:     rgba(255,255,255,0.80);
+  --glass-bg-2:   rgba(255,255,255,0.95);
+  --glass-border: rgba(0,0,0,0.10);
+  --glass-hi:     rgba(255,255,255,1);
+  --sidebar-bg: rgba(245,245,250,0.96);
+  --topbar-bg:  rgba(232,234,240,0.95);
   --text-1: #0A0A12;
-  --text-2: rgba(10,10,18,0.55);
-  --text-3: rgba(10,10,18,0.3);
+  --text-2: rgba(10,10,18,0.58);
+  --text-3: rgba(10,10,18,0.35);
 }
 
 /* ── LIGHT MODE OVERRIDES ─────────────────────────────────────── */
+[data-theme="light"] .gc {
+  background: rgba(255,255,255,0.90);
+  border: 1px solid rgba(0,0,0,0.09);
+  box-shadow: 0 2px 16px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.05);
+}
 [data-theme="light"] .cx-kpi-value.grad-red {
   background: linear-gradient(135deg,#E8002D 0%,#ff4d6d 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 [data-theme="light"] .cx-kpi-value.grad-white {
   background: linear-gradient(135deg,#0A0A12 0%,rgba(10,10,18,0.65) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+[data-theme="light"] .cx-kpi-value.grad-cyan {
+  background: linear-gradient(135deg,#0070cc 0%,#0099ff 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+[data-theme="light"] .cx-kpi-value.grad-green {
+  background: linear-gradient(135deg,#007a50 0%,#00a868 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 [data-theme="light"] .cx-donut-pct {
@@ -77,19 +90,36 @@
   background: linear-gradient(90deg,transparent,rgba(255,255,255,0.7),transparent);
 }
 [data-theme="light"] .cx-hmap-cell.empty { background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.06); }
-[data-theme="light"] .cx-kpi-icon { border-color: rgba(0,0,0,0.08); }
+[data-theme="light"] .cx-kpi-icon { border-color: rgba(0,0,0,0.08); background: rgba(255,255,255,0.8); }
 [data-theme="light"] .cx-rr-bar { background: rgba(0,0,0,0.08); }
 [data-theme="light"] .cx-mot-bar { background: rgba(0,0,0,0.08); }
 [data-theme="light"] .cx-hmap-stv { color: #0A0A12; }
 [data-theme="light"] .cx-nav-item.active { color: #fff; }
 [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
-[data-theme="light"] .cx-cost-item { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.07); }
+[data-theme="light"] .cx-cost-item { background: rgba(255,255,255,0.85); border-color: rgba(0,0,0,0.08); box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
 [data-theme="light"] .cx-dur-seg { color: rgba(0,0,0,0.75); }
 [data-theme="light"] .cx-topbar-title {
   background: linear-gradient(135deg,#0A0A12 40%,rgba(10,10,18,0.55) 100%);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
 }
 [data-theme="light"] .cx-logo-svg-wrap { color: #0A0A12; }
+[data-theme="light"] .cx-kpi-label { color: rgba(10,10,18,0.45); }
+[data-theme="light"] .cx-kpi-badge { color: rgba(10,10,18,0.45); }
+[data-theme="light"] .cx-card-title { color: #0A0A12; }
+[data-theme="light"] .cx-card-sub   { color: rgba(10,10,18,0.45); }
+[data-theme="light"] .cx-select { color: rgba(10,10,18,0.7); background: rgba(255,255,255,0.8); border-color: rgba(0,0,0,0.12); }
+[data-theme="light"] .cx-select:hover, [data-theme="light"] .cx-select:focus { background: white; color: #0A0A12; }
+[data-theme="light"] .cx-filter-btn { background: rgba(255,255,255,0.8); border-color: rgba(0,0,0,0.12); color: rgba(10,10,18,0.7); }
+[data-theme="light"] .cx-filter-btn:hover { background: white; color: #0A0A12; }
+[data-theme="light"] .cx-period-tab { background: rgba(255,255,255,0.8); border-color: rgba(0,0,0,0.12); color: rgba(10,10,18,0.7); }
+[data-theme="light"] .cx-period-tab:hover { background: white; color: #0A0A12; }
+[data-theme="light"] .cx-sidebar { box-shadow: 2px 0 16px rgba(0,0,0,0.08); }
+[data-theme="light"] .cx-org-selector { background: rgba(255,255,255,0.7); }
+[data-theme="light"] .cx-hmap-stv.accent { color: #E8002D; -webkit-text-fill-color: #E8002D; }
+[data-theme="light"] .cx-tt-val.white { color: #0A0A12; }
+[data-theme="light"] .cx-rr-val { color: #0A0A12; }
+[data-theme="light"] .cx-mot-val { color: #0A0A12; }
+[data-theme="light"] .cx-ci-val { color: #0A0A12; }
 
 /* ── RESET ────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

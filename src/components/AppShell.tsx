@@ -189,17 +189,27 @@ export default function AppShell({
   const userInitials = user.email ? user.email.substring(0, 2).toUpperCase() : "??";
 
   const navItems = (activeTenantId && rolesLoaded) ? [
-    { label: "Relatórios",       href: `/app/tenants/${activeTenantId}/analytics`,       icon: BarChart2      },
-    { label: "Lista de Leads",   href: `/app/tenants/${activeTenantId}/leads`,            icon: Users          },
-    { label: "Campanhas",        href: `/app/tenants/${activeTenantId}/queues`,           icon: ListOrdered    },
-    { label: "Chamadas",         href: `/app/tenants/${activeTenantId}/calls`,            icon: PhoneCall      },
-    { label: "Assistentes",      href: `/app/tenants/${activeTenantId}/assistants`,       icon: Bot            },
-    { label: "Membros",          href: `/app/tenants/${activeTenantId}/members`,          icon: UserCheck      },
+    { label: "Relatórios",       href: `/app/tenants/${activeTenantId}/analytics`,         icon: BarChart2,     sub: "Performance das campanhas de discagem"      },
+    { label: "Lista de Leads",   href: `/app/tenants/${activeTenantId}/leads`,             icon: Users,         sub: "Gerencie e importe seus leads"              },
+    { label: "Campanhas",        href: `/app/tenants/${activeTenantId}/queues`,            icon: ListOrdered,   sub: "Crie e gerencie campanhas de discagem automática" },
+    { label: "Chamadas",         href: `/app/tenants/${activeTenantId}/calls`,             icon: PhoneCall,     sub: "Histórico e detalhes de todas as chamadas"  },
+    { label: "Assistentes",      href: `/app/tenants/${activeTenantId}/assistants`,        icon: Bot,           sub: "Configure seus assistentes de IA"           },
+    { label: "Membros",          href: `/app/tenants/${activeTenantId}/members`,           icon: UserCheck,     sub: "Gerencie membros da organização"             },
     ...(isAdminOrOwner ? [
-      { label: "Dossiê Comercial", href: `/app/tenants/${activeTenantId}/analytics/dossie`, icon: FileBarChart2 },
-      { label: "Configurações",    href: `/app/tenants/${activeTenantId}/vapi`,              icon: Settings2     },
+      { label: "Dossiê Comercial", href: `/app/tenants/${activeTenantId}/analytics/dossie`, icon: FileBarChart2, sub: "Relatório comercial detalhado" },
+      { label: "Configurações",    href: `/app/tenants/${activeTenantId}/vapi`,              icon: Settings2,     sub: "Configurações de integração VAPI" },
     ] : []),
   ] : [];
+
+  const adminItems = [
+    { label: "Visão Geral Admin", href: "/app/admin",           sub: "Painel administrativo geral" },
+    { label: "Analytics Admin",   href: "/app/admin/analytics", sub: "Analytics de toda a plataforma" },
+    { label: "Sandbox",           href: "/app/admin/sandbox",   sub: "Ambiente de testes" },
+  ];
+
+  const activeNavItem = [...navItems, ...adminItems].find(item => pathname === item.href || pathname.startsWith(item.href + "/"));
+  const topbarTitle = activeNavItem?.label ?? "CallX";
+  const topbarSub   = activeNavItem?.sub   ?? "Plataforma de discagem com IA";
 
   return (
     <div className="cx-app">
@@ -377,8 +387,8 @@ export default function AppShell({
         {/* Topbar */}
         <header className="cx-topbar">
           <div>
-            <div className="cx-topbar-title">CallX</div>
-            <div className="cx-topbar-sub">Plataforma de discagem com IA</div>
+            <div className="cx-topbar-title">{topbarTitle}</div>
+            <div className="cx-topbar-sub">{topbarSub}</div>
           </div>
           <div className="cx-topbar-right">
             {/* Theme toggle */}
