@@ -64,14 +64,14 @@ const STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
   stopped:  { label: "Parada",    badge: "badge-red"    },
 };
 
-const LEAD_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  new:               { label: "Novo",             color: "text-blue-600 bg-blue-50"     },
-  queued:            { label: "Aguardando",        color: "text-indigo-600 bg-indigo-50" },
-  calling:           { label: "Em ligação",        color: "text-amber-600 bg-amber-50"  },
-  completed:         { label: "Concluído",         color: "text-emerald-600 bg-emerald-50" },
-  failed:            { label: "Falhou",            color: "text-red-600 bg-red-50"      },
-  doNotCall:         { label: "Não ligar",         color: "text-gray-600 bg-gray-100"   },
-  callbackScheduled: { label: "Callback agendado", color: "text-purple-600 bg-purple-50" },
+const LEAD_STATUS_CONFIG: Record<string, { label: string; badge: string }> = {
+  new:               { label: "Novo",             badge: "badge-blue"   },
+  queued:            { label: "Aguardando",        badge: "badge-purple" },
+  calling:           { label: "Em ligação",        badge: "badge-yellow" },
+  completed:         { label: "Concluído",         badge: "badge-green"  },
+  failed:            { label: "Falhou",            badge: "badge-red"    },
+  doNotCall:         { label: "Não ligar",         badge: "badge-gray"   },
+  callbackScheduled: { label: "Callback agendado", badge: "badge-purple" },
 };
 
 const DAYS_CONFIG = [
@@ -102,42 +102,44 @@ function AdvancedConfigFields({
   const noRestriction = form.allowed_days === "";
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
       {/* Concurrency / attempts / retry */}
-      <div className="grid grid-cols-3 gap-3">
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
         <div>
           <label className="form-label">Concorrência</label>
           <input className="form-input" type="number" min="1" max="5"
             value={form.concurrency}
             onChange={(e) => update("concurrency", String(Math.min(5, Math.max(1, parseInt(e.target.value) || 1))))} />
-          <p className="text-xs text-gray-400 mt-1">Máx. 5 por campanha</p>
+          <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px" }}>Máx. 5 por campanha</p>
         </div>
         <div>
           <label className="form-label">Máx. tentativas</label>
           <input className="form-input" type="number" min="1" max="10"
             value={form.max_attempts} onChange={(e) => update("max_attempts", e.target.value)} />
-          <p className="text-xs text-gray-400 mt-1">Por lead (total)</p>
+          <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px" }}>Por lead (total)</p>
         </div>
         <div>
           <label className="form-label">Intervalo</label>
-          <div className="relative">
-            <input className="form-input pr-12" type="number" min="1"
+          <div style={{ position: "relative" }}>
+            <input className="form-input" type="number" min="1"
+              style={{ paddingRight: "48px" }}
               value={form.retry_delay_minutes ?? "30"}
               onChange={(e) => update("retry_delay_minutes", e.target.value)} />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">min</span>
+            <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "11px", color: "var(--text-3)", pointerEvents: "none" }}>min</span>
           </div>
-          <p className="text-xs text-gray-400 mt-1">Entre tentativas</p>
+          <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px" }}>Entre tentativas</p>
         </div>
       </div>
 
       {/* Daily attempt limit */}
       <div>
         <label className="form-label">Limite de tentativas por dia</label>
-        <div className="flex items-center gap-3">
-          <input className="form-input w-28" type="number" min="1" max="10"
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <input className="form-input" type="number" min="1" max="10"
+            style={{ width: "112px" }}
             value={form.max_daily_attempts ?? "3"}
             onChange={(e) => update("max_daily_attempts", String(Math.min(10, Math.max(1, parseInt(e.target.value) || 1))))} />
-          <p className="text-xs text-gray-400">
+          <p style={{ fontSize: "11px", color: "var(--text-3)" }}>
             Por lead por dia (1–10). Leads que atingirem o limite são
             reagendados para o próximo dia dentro da janela de horário.
           </p>
@@ -146,14 +148,15 @@ function AdvancedConfigFields({
 
       {/* Ticket médio para cálculo de ROI no Dossiê */}
       <div>
-        <label className="form-label flex items-center gap-1">
+        <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
           Ticket Médio de Conversão
-          <span className="ml-1 text-xs font-normal text-gray-400">(opcional)</span>
+          <span style={{ marginLeft: "4px", fontSize: "11px", fontWeight: 400, color: "var(--text-3)" }}>(opcional)</span>
         </label>
-        <div className="relative w-48">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">R$</span>
+        <div style={{ position: "relative", width: "192px" }}>
+          <span style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "11px", color: "var(--text-3)", pointerEvents: "none" }}>R$</span>
           <input
-            className="form-input pl-8"
+            className="form-input"
+            style={{ paddingLeft: "32px" }}
             type="number"
             min="0"
             step="0.01"
@@ -162,50 +165,50 @@ function AdvancedConfigFields({
             onChange={(e) => update("avg_deal_value", e.target.value)}
           />
         </div>
-        <p className="text-xs text-gray-400 mt-1">
+        <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px" }}>
           Usado no Dossiê para calcular oportunidades não trabalhadas
         </p>
       </div>
 
       {/* Time window */}
-      <div className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50/50">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-700">Horário de ligações</label>
-          <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+      <div className="gc" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)" }}>Horário de ligações</label>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "var(--text-2)", cursor: "pointer" }}>
             <input type="checkbox" checked={noRestriction}
               onChange={(e) => update("allowed_days", e.target.checked ? "" : "1,2,3,4,5")}
-              className="rounded" />
+              style={{ borderRadius: "4px" }} />
             Sem restrição (24h / 7 dias)
           </label>
         </div>
         {!noRestriction && (
           <>
-            <div className="flex gap-1.5 flex-wrap">
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
               {DAYS_CONFIG.map((d) => (
                 <button key={d.iso} type="button" onClick={() => toggleDay(d.iso)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    selectedDays.includes(d.iso)
-                      ? "bg-indigo-600 text-white"
-                      : "bg-white border border-gray-200 text-gray-600 hover:border-indigo-300"
-                  }`}>
+                  className={selectedDays.includes(d.iso) ? "cx-filter-btn" : "cx-filter-btn"}
+                  style={selectedDays.includes(d.iso)
+                    ? { background: "var(--red)", color: "#fff", borderColor: "var(--red)" }
+                    : {}
+                  }>
                   {d.label}
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
               <div>
-                <label className="form-label text-xs">Início</label>
-                <input type="time" className="form-input text-sm" value={form.time_start ?? "09:00"}
+                <label className="form-label" style={{ fontSize: "11px" }}>Início</label>
+                <input type="time" className="form-input" style={{ fontSize: "13px" }} value={form.time_start ?? "09:00"}
                   onChange={(e) => update("time_start", e.target.value)} />
               </div>
               <div>
-                <label className="form-label text-xs">Fim</label>
-                <input type="time" className="form-input text-sm" value={form.time_end ?? "18:00"}
+                <label className="form-label" style={{ fontSize: "11px" }}>Fim</label>
+                <input type="time" className="form-input" style={{ fontSize: "13px" }} value={form.time_end ?? "18:00"}
                   onChange={(e) => update("time_end", e.target.value)} />
               </div>
               <div>
-                <label className="form-label text-xs">Fuso horário</label>
-                <select className="select-native text-sm" value={form.timezone ?? "America/Sao_Paulo"}
+                <label className="form-label" style={{ fontSize: "11px" }}>Fuso horário</label>
+                <select className="cx-select" style={{ width: "100%", fontSize: "13px" }} value={form.timezone ?? "America/Sao_Paulo"}
                   onChange={(e) => update("timezone", e.target.value)}>
                   <option value="America/Sao_Paulo">São Paulo (BRT)</option>
                   <option value="America/Manaus">Manaus (AMT)</option>
@@ -221,15 +224,15 @@ function AdvancedConfigFields({
       </div>
 
       <div>
-        <label className="form-label flex items-center gap-1">
-          <Link2 className="w-3.5 h-3.5 text-gray-400" />
+        <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          <Link2 style={{ width: "14px", height: "14px", color: "var(--text-3)" }} />
           Webhook de saída (opcional)
         </label>
-        <input className="form-input font-mono text-sm"
+        <input className="form-input" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "13px" }}
           placeholder="https://seu-n8n.com/webhook/xxx"
           value={form.webhook_url ?? ""}
           onChange={(e) => update("webhook_url", e.target.value)} />
-        <p className="text-xs text-gray-400 mt-1">
+        <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px" }}>
           POST automático com resultado de cada chamada (n8n, Zapier, Make…)
         </p>
       </div>
@@ -335,65 +338,67 @@ function CampaignWizard({
 
   return (
     // NO onClick on this wrapper — modal doesn't close on backdrop click
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-10 pb-8 px-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden">
+    <div className="modal-overlay" style={{ alignItems: "flex-start", paddingTop: "40px", paddingBottom: "32px", paddingLeft: "16px", paddingRight: "16px" }}>
+      <div className="modal" style={{ maxWidth: "42rem", display: "flex", flexDirection: "column", maxHeight: "90vh", overflow: "hidden" }}>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <Megaphone className="w-4 h-4 text-white" />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderBottom: "1px solid var(--glass-border)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ width: "32px", height: "32px", borderRadius: "10px", background: "var(--red-lo)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Megaphone style={{ width: "16px", height: "16px", color: "var(--red)" }} />
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900">Nova Campanha</h2>
-              <p className="text-xs text-gray-400">
+              <h2 style={{ fontWeight: 700, color: "var(--text-1)", fontSize: "15px" }}>Nova Campanha</h2>
+              <p style={{ fontSize: "11px", color: "var(--text-3)" }}>
                 {step === 1 ? "Configurar campanha" : step === 2 ? "Adicionar leads" : "Revisar e criar"}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600">
-            <X className="w-4 h-4" />
+          <button onClick={onClose} className="btn-icon">
+            <X style={{ width: "16px", height: "16px" }} />
           </button>
         </div>
 
         {/* Stepper */}
-        <div className="flex items-center px-6 py-3 border-b border-gray-50 shrink-0">
+        <div style={{ display: "flex", alignItems: "center", padding: "12px 24px", borderBottom: "1px solid var(--glass-border)", flexShrink: 0 }}>
           {[{ n: 1, label: "Configurar" }, { n: 2, label: "Leads" }, { n: 3, label: "Revisar" }].map((s, i) => (
-            <div key={s.n} className="flex items-center flex-1">
-              <div className={`flex items-center gap-2 ${step === s.n ? "text-indigo-600" : step > s.n ? "text-emerald-600" : "text-gray-400"}`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
-                  step > s.n ? "border-emerald-500 bg-emerald-50" :
-                  step === s.n ? "border-indigo-500 bg-indigo-50" : "border-gray-200 bg-white"
-                }`}>
-                  {step > s.n ? <Check className="w-3 h-3" /> : s.n}
+            <div key={s.n} style={{ display: "flex", alignItems: "center", flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: step === s.n ? "var(--red)" : step > s.n ? "var(--green)" : "var(--text-3)" }}>
+                <div style={{
+                  width: "24px", height: "24px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "11px", fontWeight: 700,
+                  border: `2px solid ${step > s.n ? "var(--green)" : step === s.n ? "var(--red)" : "var(--glass-border)"}`,
+                  background: step > s.n ? "rgba(0,214,143,0.12)" : step === s.n ? "var(--red-lo)" : "transparent",
+                }}>
+                  {step > s.n ? <Check style={{ width: "12px", height: "12px" }} /> : s.n}
                 </div>
-                <span className="text-xs font-medium">{s.label}</span>
+                <span style={{ fontSize: "11px", fontWeight: 600 }}>{s.label}</span>
               </div>
-              {i < 2 && <div className={`flex-1 h-0.5 mx-3 ${step > s.n ? "bg-emerald-300" : "bg-gray-100"}`} />}
+              {i < 2 && <div style={{ flex: 1, height: "2px", margin: "0 12px", background: step > s.n ? "var(--green)" : "var(--glass-border)" }} />}
             </div>
           ))}
         </div>
 
         {/* Content (scrollable) */}
-        <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
 
           {/* ── Step 1: Configure ─────────────────────────────────────────── */}
           {step === 1 && (
-            <div className="space-y-4">
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               <div>
                 <label className="form-label">Nome da Campanha *</label>
                 <input className="form-input" placeholder="Ex: Prospecção Janeiro 2026"
                   value={form.name} onChange={(e) => updateForm("name", e.target.value)} autoFocus />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <div>
-                  <label className="form-label flex items-center gap-1.5">
+                  <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     Assistente Vapi *
-                    {vapiLoading && <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />}
+                    {vapiLoading && <Loader2 style={{ width: "12px", height: "12px", color: "var(--red)", animation: "cx-spin .8s linear infinite" }} />}
                   </label>
                   {vapiResources && vapiResources.assistants.length > 0 ? (
-                    <select className="select-native" value={form.assistant_id}
+                    <select className="cx-select" style={{ width: "100%" }} value={form.assistant_id}
                       onChange={(e) => updateForm("assistant_id", e.target.value)}>
                       <option value="">Selecionar assistente…</option>
                       {vapiResources.assistants.map((a) => (
@@ -401,21 +406,21 @@ function CampaignWizard({
                       ))}
                     </select>
                   ) : (
-                    <input className="form-input font-mono text-sm"
+                    <input className="form-input" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "13px" }}
                       placeholder={vapiLoading ? "Carregando…" : "asst_xxx (cole o ID)"}
                       value={form.assistant_id} onChange={(e) => updateForm("assistant_id", e.target.value)} />
                   )}
                   {form.assistant_id && (
-                    <p className="text-xs text-gray-400 mt-1 font-mono truncate">{form.assistant_id}</p>
+                    <p className="mono" style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{form.assistant_id}</p>
                   )}
                 </div>
                 <div>
-                  <label className="form-label flex items-center gap-1.5">
+                  <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     Número de Telefone *
-                    {vapiLoading && <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />}
+                    {vapiLoading && <Loader2 style={{ width: "12px", height: "12px", color: "var(--red)", animation: "cx-spin .8s linear infinite" }} />}
                   </label>
                   {vapiResources && vapiResources.phoneNumbers.length > 0 ? (
-                    <select className="select-native" value={form.phone_number_id}
+                    <select className="cx-select" style={{ width: "100%" }} value={form.phone_number_id}
                       onChange={(e) => updateForm("phone_number_id", e.target.value)}>
                       <option value="">Selecionar número…</option>
                       {vapiResources.phoneNumbers.map((p) => (
@@ -425,32 +430,32 @@ function CampaignWizard({
                       ))}
                     </select>
                   ) : (
-                    <input className="form-input font-mono text-sm"
+                    <input className="form-input" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "13px" }}
                       placeholder={vapiLoading ? "Carregando…" : "pn_xxx (cole o ID)"}
                       value={form.phone_number_id} onChange={(e) => updateForm("phone_number_id", e.target.value)} />
                   )}
                   {form.phone_number_id && (
-                    <p className="text-xs text-gray-400 mt-1 font-mono truncate">{form.phone_number_id}</p>
+                    <p className="mono" style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{form.phone_number_id}</p>
                   )}
                 </div>
               </div>
 
               {/* Advanced settings (collapsible) */}
-              <div className="border border-gray-100 rounded-xl overflow-hidden">
+              <div className="gc" style={{ overflow: "hidden" }}>
                 <button type="button" onClick={() => setShowAdvanced((v) => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                  <span className="flex items-center gap-2">
-                    <Settings2 className="w-4 h-4 text-gray-400" />
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", fontSize: "13px", fontWeight: 600, color: "var(--text-1)", cursor: "pointer" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Settings2 style={{ width: "16px", height: "16px", color: "var(--text-3)" }} />
                     Configurações avançadas
-                    <span className="text-xs font-normal text-gray-400">
+                    <span style={{ fontSize: "11px", fontWeight: 400, color: "var(--text-3)" }}>
                       (concorrência, horários, webhook…)
                     </span>
                   </span>
-                  {showAdvanced ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                  {showAdvanced ? <ChevronUp style={{ width: "16px", height: "16px", color: "var(--text-3)" }} /> : <ChevronDown style={{ width: "16px", height: "16px", color: "var(--text-3)" }} />}
                 </button>
                 {showAdvanced && (
-                  <div className="px-4 pb-4 border-t border-gray-100">
-                    <div className="pt-4">
+                  <div style={{ padding: "0 16px 16px", borderTop: "1px solid var(--glass-border)" }}>
+                    <div style={{ paddingTop: "16px" }}>
                       <AdvancedConfigFields form={form} update={updateForm} isAdmin={isAdmin} />
                     </div>
                   </div>
@@ -461,20 +466,20 @@ function CampaignWizard({
 
           {/* ── Step 2: Leads ─────────────────────────────────────────────── */}
           {step === 2 && (
-            <div className="space-y-4">
-              <p className="text-sm text-gray-500">Escolha a lista de leads que será vinculada a esta campanha:</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <p style={{ fontSize: "13px", color: "var(--text-2)" }}>Escolha a lista de leads que será vinculada a esta campanha:</p>
 
               {/* Existing list */}
               {leadLists.length === 0 ? (
-                <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                  <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">Nenhuma lista de leads criada ainda.</p>
-                  <p className="text-xs text-gray-400 mt-1">Acesse &quot;Listas de Leads&quot; no menu para criar uma nova.</p>
+                <div className="gc" style={{ textAlign: "center", padding: "32px", border: "1px dashed var(--glass-border)" }}>
+                  <Users style={{ width: "32px", height: "32px", color: "var(--text-3)", margin: "0 auto 8px" }} />
+                  <p style={{ fontSize: "13px", color: "var(--text-2)" }}>Nenhuma lista de leads criada ainda.</p>
+                  <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px" }}>Acesse &quot;Listas de Leads&quot; no menu para criar uma nova.</p>
                 </div>
               ) : (
                 <div>
                   <label className="form-label">Selecionar lista *</label>
-                  <select className="select-native" value={selectedListId}
+                  <select className="cx-select" style={{ width: "100%" }} value={selectedListId}
                     onChange={(e) => setSelectedListId(e.target.value)}>
                     <option value="">— Escolher lista —</option>
                     {leadLists.map((l) => (
@@ -488,49 +493,49 @@ function CampaignWizard({
 
           {/* ── Step 3: Review ────────────────────────────────────────────── */}
           {step === 3 && (
-            <div className="space-y-4">
-              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-gray-700">Resumo da Campanha</h3>
-                <div className="space-y-2.5 text-sm">
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div className="gc" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <h3 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)" }}>Resumo da Campanha</h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px" }}>
                   {[
-                    { icon: Megaphone, color: "bg-indigo-100 text-indigo-600", label: "Campanha", value: form.name },
-                    { icon: Zap, color: "bg-purple-100 text-purple-600", label: "Assistente", value: selectedAssistant?.name || form.assistant_id.slice(0, 20) + "…", mono: true },
-                    { icon: ArrowRight, color: "bg-emerald-100 text-emerald-600", label: "Número", value: selectedPhone?.number || selectedPhone?.name || form.phone_number_id.slice(0, 20) + "…", mono: true },
-                    { icon: Users, color: "bg-blue-100 text-blue-600", label: "Lista de leads", value: selectedList?.name ?? "—" },
-                  ].map(({ icon: Icon, color, label, value, mono }) => (
-                    <div key={label} className="flex items-center gap-3">
-                      <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${color}`}>
-                        <Icon className="w-3 h-3" />
+                    { icon: Megaphone, color: "var(--red-lo)", iconColor: "var(--red)", label: "Campanha", value: form.name },
+                    { icon: Zap, color: "rgba(168,85,247,0.12)", iconColor: "var(--purple)", label: "Assistente", value: selectedAssistant?.name || form.assistant_id.slice(0, 20) + "…", mono: true },
+                    { icon: ArrowRight, color: "rgba(0,214,143,0.12)", iconColor: "var(--green)", label: "Número", value: selectedPhone?.number || selectedPhone?.name || form.phone_number_id.slice(0, 20) + "…", mono: true },
+                    { icon: Users, color: "rgba(0,194,255,0.12)", iconColor: "var(--cyan)", label: "Lista de leads", value: selectedList?.name ?? "—" },
+                  ].map(({ icon: Icon, color, iconColor, label, value, mono }) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      <div style={{ width: "20px", height: "20px", borderRadius: "6px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: color }}>
+                        <Icon style={{ width: "12px", height: "12px", color: iconColor }} />
                       </div>
-                      <span className="text-gray-500 w-28 shrink-0">{label}</span>
-                      <span className={`font-semibold text-gray-800 ${mono ? "font-mono text-xs" : ""}`}>{value}</span>
+                      <span style={{ color: "var(--text-2)", width: "112px", flexShrink: 0 }}>{label}</span>
+                      <span style={{ fontWeight: 700, color: "var(--text-1)", ...(mono ? { fontFamily: "'JetBrains Mono', monospace", fontSize: "11px" } : {}) }}>{value}</span>
                     </div>
                   ))}
                 </div>
-                <div className="border-t border-gray-100 pt-3 flex gap-4 text-xs text-gray-500 flex-wrap">
-                  <span>Concorrência: <strong>{form.concurrency}</strong></span>
-                  <span>Tentativas: <strong>{form.max_attempts}</strong></span>
-                  <span>Intervalo: <strong>{form.retry_delay_minutes}min</strong></span>
+                <div style={{ borderTop: "1px solid var(--glass-border)", paddingTop: "12px", display: "flex", gap: "16px", fontSize: "11px", color: "var(--text-2)", flexWrap: "wrap" }}>
+                  <span>Concorrência: <strong style={{ color: "var(--text-1)" }}>{form.concurrency}</strong></span>
+                  <span>Tentativas: <strong style={{ color: "var(--text-1)" }}>{form.max_attempts}</strong></span>
+                  <span>Intervalo: <strong style={{ color: "var(--text-1)" }}>{form.retry_delay_minutes}min</strong></span>
                 </div>
               </div>
 
               {/* Start immediately toggle */}
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
+              <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer", padding: "12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--glass-border)" }}>
                 <div onClick={() => setStartImmediately((v) => !v)}
-                  className={`relative w-10 h-5 rounded-full transition-colors shrink-0 cursor-pointer ${startImmediately ? "bg-emerald-500" : "bg-gray-200"}`}>
-                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${startImmediately ? "left-5" : "left-0.5"}`} />
+                  style={{ position: "relative", width: "40px", height: "20px", borderRadius: "999px", transition: "background .2s", flexShrink: 0, cursor: "pointer", background: startImmediately ? "var(--green)" : "var(--glass-bg-2)" }}>
+                  <div style={{ position: "absolute", top: "2px", width: "16px", height: "16px", borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.3)", transition: "transform .2s", transform: startImmediately ? "translateX(20px)" : "translateX(2px)" }} />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-800">Iniciar campanha imediatamente</p>
-                  <p className="text-xs text-gray-400">
+                  <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)" }}>Iniciar campanha imediatamente</p>
+                  <p style={{ fontSize: "11px", color: "var(--text-3)" }}>
                     {startImmediately ? "Vai começar a discar assim que criada" : "Ficará em rascunho — inicie manualmente"}
                   </p>
                 </div>
               </label>
 
               {error && (
-                <div className="flex items-start gap-2 bg-red-50 rounded-xl px-3 py-2.5 text-sm text-red-700">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="alert-error">
+                  <AlertTriangle style={{ width: "16px", height: "16px", flexShrink: 0 }} />
                   {error}
                 </div>
               )}
@@ -539,26 +544,26 @@ function CampaignWizard({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 shrink-0">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderTop: "1px solid var(--glass-border)", flexShrink: 0 }}>
           <button type="button"
             onClick={step === 1 ? onClose : () => setStep((s) => s - 1)}
-            className="btn-secondary flex items-center gap-1.5">
-            {step === 1 ? "Cancelar" : <><ChevronLeft className="w-4 h-4" /> Voltar</>}
+            className="btn btn-secondary" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            {step === 1 ? "Cancelar" : <><ChevronLeft style={{ width: "16px", height: "16px" }} /> Voltar</>}
           </button>
           {step < 3 ? (
             <button type="button" onClick={() => setStep((s) => s + 1)}
               disabled={step === 1 ? !step1Valid : !step2Valid}
-              className="btn-primary disabled:opacity-40 flex items-center gap-1.5">
-              Próximo <ArrowRight className="w-4 h-4" />
+              className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              Próximo <ArrowRight style={{ width: "16px", height: "16px" }} />
             </button>
           ) : (
             <button type="button" onClick={handleCreate} disabled={creating}
-              className="btn-primary flex items-center gap-1.5">
+              className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               {creating
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Criando…</>
+                ? <><Loader2 style={{ width: "16px", height: "16px", animation: "cx-spin .8s linear infinite" }} /> Criando…</>
                 : startImmediately
-                  ? <><Play className="w-4 h-4" /> Criar e Iniciar</>
-                  : <><Check className="w-4 h-4" /> Criar Campanha</>}
+                  ? <><Play style={{ width: "16px", height: "16px" }} /> Criar e Iniciar</>
+                  : <><Check style={{ width: "16px", height: "16px" }} /> Criar Campanha</>}
             </button>
           )}
         </div>
@@ -613,22 +618,22 @@ function EditCampaignModal({
 
   // NO onClick on the overlay wrapper — only X and Cancelar close the modal
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-start justify-center pt-10 pb-8 px-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-              <Pencil className="w-4 h-4 text-indigo-600" />
+    <div className="modal-overlay" style={{ alignItems: "flex-start", paddingTop: "40px", paddingBottom: "32px", paddingLeft: "16px", paddingRight: "16px" }}>
+      <div className="modal" style={{ maxWidth: "42rem", display: "flex", flexDirection: "column", maxHeight: "90vh", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderBottom: "1px solid var(--glass-border)", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ width: "32px", height: "32px", borderRadius: "10px", background: "var(--red-lo)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Pencil style={{ width: "16px", height: "16px", color: "var(--red)" }} />
             </div>
-            <h2 className="font-semibold text-gray-900">Editar Campanha</h2>
+            <h2 style={{ fontWeight: 700, color: "var(--text-1)", fontSize: "15px" }}>Editar Campanha</h2>
           </div>
-          <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600">
-            <X className="w-4 h-4" />
+          <button onClick={onClose} className="btn-icon">
+            <X style={{ width: "16px", height: "16px" }} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", flex: 1, overflow: "hidden" }}>
+          <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", display: "flex", flexDirection: "column", gap: "16px" }}>
             {/* Name */}
             <div>
               <label className="form-label">Nome da Campanha</label>
@@ -636,34 +641,34 @@ function EditCampaignModal({
             </div>
 
             {/* Assistant + Phone */}
-            <div className="grid grid-cols-2 gap-4">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
               <div>
-                <label className="form-label flex items-center gap-1.5">
+                <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   Assistente Vapi
-                  {vapiLoading && <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />}
+                  {vapiLoading && <Loader2 style={{ width: "12px", height: "12px", color: "var(--red)", animation: "cx-spin .8s linear infinite" }} />}
                 </label>
                 {vapiResources && vapiResources.assistants.length > 0 ? (
-                  <select className="select-native" value={form.assistant_id} onChange={(e) => update("assistant_id", e.target.value)} required>
+                  <select className="cx-select" style={{ width: "100%" }} value={form.assistant_id} onChange={(e) => update("assistant_id", e.target.value)} required>
                     <option value="">Selecionar…</option>
                     {vapiResources.assistants.map((a) => (
                       <option key={a.id} value={a.id}>{a.name || a.id}</option>
                     ))}
                   </select>
                 ) : (
-                  <input className="form-input font-mono text-sm" value={form.assistant_id}
+                  <input className="form-input" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "13px" }} value={form.assistant_id}
                     onChange={(e) => update("assistant_id", e.target.value)} required />
                 )}
                 {form.assistant_id && (
-                  <p className="text-xs text-gray-400 mt-1 font-mono truncate">{form.assistant_id}</p>
+                  <p className="mono" style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{form.assistant_id}</p>
                 )}
               </div>
               <div>
-                <label className="form-label flex items-center gap-1.5">
+                <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                   Número de Telefone
-                  {vapiLoading && <Loader2 className="w-3 h-3 animate-spin text-indigo-400" />}
+                  {vapiLoading && <Loader2 style={{ width: "12px", height: "12px", color: "var(--red)", animation: "cx-spin .8s linear infinite" }} />}
                 </label>
                 {vapiResources && vapiResources.phoneNumbers.length > 0 ? (
-                  <select className="select-native" value={form.phone_number_id} onChange={(e) => update("phone_number_id", e.target.value)} required>
+                  <select className="cx-select" style={{ width: "100%" }} value={form.phone_number_id} onChange={(e) => update("phone_number_id", e.target.value)} required>
                     <option value="">Selecionar…</option>
                     {vapiResources.phoneNumbers.map((p) => (
                       <option key={p.id} value={p.id}>
@@ -672,11 +677,11 @@ function EditCampaignModal({
                     ))}
                   </select>
                 ) : (
-                  <input className="form-input font-mono text-sm" value={form.phone_number_id}
+                  <input className="form-input" style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "13px" }} value={form.phone_number_id}
                     onChange={(e) => update("phone_number_id", e.target.value)} required />
                 )}
                 {form.phone_number_id && (
-                  <p className="text-xs text-gray-400 mt-1 font-mono truncate">{form.phone_number_id}</p>
+                  <p className="mono" style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{form.phone_number_id}</p>
                 )}
               </div>
             </div>
@@ -684,10 +689,10 @@ function EditCampaignModal({
             <AdvancedConfigFields form={form} update={update} isAdmin={isAdmin} />
           </div>
 
-          <div className="flex gap-3 justify-end px-6 py-4 border-t border-gray-100 shrink-0">
-            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
-            <button type="submit" disabled={loading} className="btn-primary flex items-center gap-1.5">
-              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Salvando…</> : <><Check className="w-4 h-4" /> Salvar</>}
+          <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", padding: "16px 24px", borderTop: "1px solid var(--glass-border)", flexShrink: 0 }}>
+            <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
+            <button type="submit" disabled={loading} className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {loading ? <><Loader2 style={{ width: "16px", height: "16px", animation: "cx-spin .8s linear infinite" }} /> Salvando…</> : <><Check style={{ width: "16px", height: "16px" }} /> Salvar</>}
             </button>
           </div>
         </form>
@@ -775,35 +780,38 @@ function LeadsTab({
   return (
     <div>
       {/* Leads tab header */}
-      <div className="px-5 py-3 border-b border-gray-50 bg-gray-50/50 space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-gray-500">
-            Lista: <span className="font-medium text-gray-700">{leadListName}</span> · <strong>{total}</strong> leads
+      <div style={{ padding: "12px 20px", borderBottom: "1px solid var(--glass-border)", display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <p style={{ fontSize: "11px", color: "var(--text-2)" }}>
+            Lista: <span style={{ fontWeight: 600, color: "var(--text-1)" }}>{leadListName}</span> · <strong>{total}</strong> leads
           </p>
-          <div className="flex items-center gap-2">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             {/* LiquidJS vars */}
             <button onClick={() => setShowVars((v) => !v)}
               title="Variáveis LiquidJS"
-              className={`btn-icon ${showVars ? "text-indigo-600 bg-indigo-50" : "text-gray-400 hover:text-indigo-500"}`}>
-              <Braces className="w-4 h-4" />
+              className="btn-icon"
+              style={showVars ? { color: "var(--red)", background: "var(--red-lo)" } : {}}>
+              <Braces style={{ width: "16px", height: "16px" }} />
             </button>
           </div>
         </div>
 
         {/* Search bar */}
-        <div className="relative">
-          <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <div style={{ position: "relative" }}>
+          <Search style={{ width: "14px", height: "14px", color: "var(--text-3)", position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
           <input
             type="text"
             placeholder="Buscar por telefone, nome ou campo…"
             value={searchInput}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-300 focus:border-indigo-300 bg-white"
+            className="form-input"
+            style={{ paddingLeft: "32px", fontSize: "13px" }}
           />
           {searchInput && (
             <button onClick={() => { setSearchInput(""); handleSearchChange(""); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
-              <X className="w-3.5 h-3.5" />
+              className="btn-icon"
+              style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", padding: "2px" }}>
+              <X style={{ width: "14px", height: "14px" }} />
             </button>
           )}
         </div>
@@ -811,32 +819,34 @@ function LeadsTab({
 
       {/* LiquidJS variables */}
       {showVars && (
-        <div className="px-5 py-3 bg-indigo-50 border-b border-indigo-100">
-          <p className="text-xs font-semibold text-indigo-700 mb-2 flex items-center gap-1.5">
-            <Braces className="w-3.5 h-3.5" />
+        <div style={{ padding: "12px 20px", background: "rgba(168,85,247,0.08)", borderBottom: "1px solid rgba(168,85,247,0.2)" }}>
+          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--purple)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+            <Braces style={{ width: "14px", height: "14px" }} />
             Variáveis disponíveis no assistente Vapi (LiquidJS)
           </p>
-          <div className="flex flex-wrap gap-1.5">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
             {liquidVars.map((v) => (
               <code key={v}
-                className="text-xs px-2 py-0.5 rounded bg-white border border-indigo-200 text-indigo-700 font-mono cursor-pointer select-all"
+                className="mono"
+                style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "6px", background: "var(--glass-bg-2)", border: "1px solid rgba(168,85,247,0.25)", color: "var(--purple)", cursor: "pointer" }}
                 title={`Clique para copiar: {{${v}}}`}
                 onClick={() => navigator.clipboard?.writeText(`{{${v}}}`)}>
                 {`{{${v}}}`}
               </code>
             ))}
           </div>
-          <p className="text-xs text-indigo-500 mt-1.5">Clique numa variável para copiar · Use no prompt do assistente Vapi</p>
+          <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "6px" }}>Clique numa variável para copiar · Use no prompt do assistente Vapi</p>
         </div>
       )}
 
       {/* Leads table */}
       {loading ? (
-        <div className="flex items-center justify-center h-32">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+        <div className="cx-loading" style={{ height: "128px" }}>
+          <div className="cx-spinner" />
+          Carregando leads…
         </div>
       ) : leads.length === 0 ? (
-        <div className="text-center text-gray-400 py-12 text-sm">
+        <div style={{ textAlign: "center", color: "var(--text-3)", padding: "48px 16px", fontSize: "13px" }}>
           {search ? (
             <>Nenhum lead encontrado para &ldquo;<strong>{search}</strong>&rdquo;.</>
           ) : (
@@ -846,35 +856,35 @@ function LeadsTab({
           )}
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div style={{ overflowX: "auto" }}>
+          <table className="cx-table">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Telefone</th>
-                <th className="text-left px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Nome</th>
-                <th className="text-left px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>
-                <th className="text-center px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Tent.</th>
-                <th className="text-center px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Atendido?</th>
-                <th className="text-left px-4 py-2.5 font-medium text-gray-600 text-xs uppercase tracking-wide">Próx. tentativa</th>
-                <th className="px-4 py-2.5"></th>
+              <tr>
+                <th>Telefone</th>
+                <th>Nome</th>
+                <th>Status</th>
+                <th style={{ textAlign: "center" }}>Tent.</th>
+                <th style={{ textAlign: "center" }}>Atendido?</th>
+                <th>Próx. tentativa</th>
+                <th></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody>
               {leads.map((lead) => {
-                const sc   = LEAD_STATUS_CONFIG[lead.status] ?? { label: lead.status, color: "text-gray-600 bg-gray-50" };
+                const sc   = LEAD_STATUS_CONFIG[lead.status] ?? { label: lead.status, badge: "badge-gray" };
                 const dj   = lead.data_json ?? {};
                 const name = dj.first_name ?? dj.nome ?? dj.name ?? dj.Name ?? dj.Nome ?? dj.full_name ?? dj.fullName ?? dj.cliente ?? dj.contact ?? "";
                 return (
-                  <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-2.5 font-mono text-xs text-gray-700">{lead.phone_e164}</td>
-                    <td className="px-4 py-2.5 text-gray-700 truncate max-w-[140px]">{name || <span className="text-gray-300">—</span>}</td>
-                    <td className="px-4 py-2.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${sc.color}`}>
+                  <tr key={lead.id}>
+                    <td className="mono" style={{ fontSize: "12px" }}>{lead.phone_e164}</td>
+                    <td style={{ maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name || <span style={{ color: "var(--text-3)" }}>—</span>}</td>
+                    <td>
+                      <span className={sc.badge}>
                         {sc.label}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-gray-500 text-center font-mono text-xs">{lead.attempt_count}</td>
-                    <td className="px-4 py-2.5 text-center">
+                    <td className="mono" style={{ textAlign: "center", fontSize: "12px" }}>{lead.attempt_count}</td>
+                    <td style={{ textAlign: "center" }}>
                       {(() => {
                         // Fonte canônica — idêntica à usada no menu Lista de Leads (leads/page.tsx)
                         const ANSWERED = new Set([
@@ -892,32 +902,33 @@ function LeadsTab({
                           "pipeline-error", "transport-error",
                         ]);
                         const outcome = lead.last_outcome ?? "";
-                        if (ANSWERED.has(outcome)) return <CheckCircle2 className="w-4 h-4 text-emerald-500 inline-block" />;
-                        if (NO_ANSWER.has(outcome) || outcome.startsWith("sip-") || outcome.startsWith("pipeline-error")) return <XCircle className="w-4 h-4 text-gray-300 inline-block" />;
-                        return <span className="text-gray-200">—</span>;
+                        if (ANSWERED.has(outcome)) return <CheckCircle2 style={{ width: "16px", height: "16px", color: "var(--green)", display: "inline-block" }} />;
+                        if (NO_ANSWER.has(outcome) || outcome.startsWith("sip-") || outcome.startsWith("pipeline-error")) return <XCircle style={{ width: "16px", height: "16px", color: "var(--text-3)", display: "inline-block" }} />;
+                        return <span style={{ color: "var(--text-3)" }}>—</span>;
                       })()}
                     </td>
-                    <td className="px-4 py-2.5 text-xs text-gray-500">
+                    <td style={{ fontSize: "12px" }}>
                       {lead.next_attempt_at ? (
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-3 h-3 text-indigo-400 shrink-0" />
+                        <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <Clock style={{ width: "12px", height: "12px", color: "var(--purple)", flexShrink: 0 }} />
                           {new Date(lead.next_attempt_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                         </span>
                       ) : (
-                        <span className="text-gray-200">—</span>
+                        <span style={{ color: "var(--text-3)" }}>—</span>
                       )}
                     </td>
-                    <td className="px-2 py-2.5 text-right">
+                    <td style={{ textAlign: "right", padding: "8px" }}>
                       {lead.status !== "doNotCall" && lead.status !== "completed" && (
                         <button
                           onClick={() => removeLead(lead)}
                           disabled={removingId === lead.id}
                           title="Remover da campanha (não será mais discado)"
-                          className="w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                          className="btn-icon"
+                          style={{ width: "24px", height: "24px" }}
                         >
                           {removingId === lead.id
-                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            : <Ban className="w-3.5 h-3.5" />}
+                            ? <Loader2 style={{ width: "14px", height: "14px", animation: "cx-spin .8s linear infinite" }} />
+                            : <Ban style={{ width: "14px", height: "14px" }} />}
                         </button>
                       )}
                     </td>
@@ -931,30 +942,31 @@ function LeadsTab({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50 gap-2">
-          <div className="flex items-center gap-1">
-            <button onClick={() => goToPage(1)} disabled={page === 1} className="btn-icon w-7 h-7 disabled:opacity-30" title="Primeira">
-              <ChevronsLeft className="w-3.5 h-3.5" />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderTop: "1px solid var(--glass-border)", gap: "8px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <button onClick={() => goToPage(1)} disabled={page === 1} className="btn-icon" style={{ width: "28px", height: "28px", opacity: page === 1 ? 0.3 : 1 }} title="Primeira">
+              <ChevronsLeft style={{ width: "14px", height: "14px" }} />
             </button>
-            <button onClick={() => goToPage(page - 1)} disabled={page === 1} className="btn-icon w-7 h-7 disabled:opacity-30" title="Anterior">
-              <ChevronLeft className="w-3.5 h-3.5" />
+            <button onClick={() => goToPage(page - 1)} disabled={page === 1} className="btn-icon" style={{ width: "28px", height: "28px", opacity: page === 1 ? 0.3 : 1 }} title="Anterior">
+              <ChevronLeft style={{ width: "14px", height: "14px" }} />
             </button>
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+          <div className="mono" style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "var(--text-2)" }}>
             <span>Página</span>
             <input type="number" min={1} max={totalPages} value={pageInput}
               onChange={(e) => setPageInput(e.target.value)} onBlur={handlePageBlur} onKeyDown={handlePageKey}
-              className="w-12 text-center border border-gray-200 rounded-lg py-1 text-xs font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-300" />
+              className="form-input"
+              style={{ width: "48px", textAlign: "center", padding: "4px", fontSize: "11px", fontWeight: 600 }} />
             <span>de {totalPages}</span>
-            <span className="text-gray-300">·</span>
+            <span style={{ color: "var(--text-3)" }}>·</span>
             <span>{total} leads</span>
           </div>
-          <div className="flex items-center gap-1">
-            <button onClick={() => goToPage(page + 1)} disabled={page === totalPages} className="btn-icon w-7 h-7 disabled:opacity-30" title="Próxima">
-              <ChevronRight className="w-3.5 h-3.5" />
+          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+            <button onClick={() => goToPage(page + 1)} disabled={page === totalPages} className="btn-icon" style={{ width: "28px", height: "28px", opacity: page === totalPages ? 0.3 : 1 }} title="Próxima">
+              <ChevronRight style={{ width: "14px", height: "14px" }} />
             </button>
-            <button onClick={() => goToPage(totalPages)} disabled={page === totalPages} className="btn-icon w-7 h-7 disabled:opacity-30" title="Última">
-              <ChevronsRight className="w-3.5 h-3.5" />
+            <button onClick={() => goToPage(totalPages)} disabled={page === totalPages} className="btn-icon" style={{ width: "28px", height: "28px", opacity: page === totalPages ? 0.3 : 1 }} title="Última">
+              <ChevronsRight style={{ width: "14px", height: "14px" }} />
             </button>
           </div>
         </div>
@@ -1187,35 +1199,35 @@ export default function CampaignsPage() {
           <h1 className="page-title">Campanhas</h1>
           <p className="page-subtitle">Crie e gerencie campanhas de discagem automática</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
-          <Plus className="w-4 h-4" />
+        <button onClick={() => setShowCreate(true)} className="cx-refresh-btn">
+          <Plus style={{ width: "16px", height: "16px" }} />
           Nova Campanha
         </button>
       </div>
 
       {/* ── Skeleton ── */}
       {loading ? (
-        <div className="space-y-4">
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="card p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="skeleton h-5 w-48" />
-                <div className="skeleton h-5 w-20 rounded-full" />
+            <div key={i} className="gc" style={{ padding: "20px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+                <div className="skeleton" style={{ height: "20px", width: "192px" }} />
+                <div className="skeleton" style={{ height: "20px", width: "80px", borderRadius: "999px" }} />
               </div>
-              <div className="skeleton h-3 w-64 mb-3" />
-              <div className="skeleton h-2 w-full rounded-full" />
+              <div className="skeleton" style={{ height: "12px", width: "256px", marginBottom: "12px" }} />
+              <div className="skeleton" style={{ height: "8px", width: "100%", borderRadius: "999px" }} />
             </div>
           ))}
         </div>
       ) : queues.length === 0 ? (
-        <div className="card">
+        <div className="gc">
           <div className="empty-state">
             <div className="empty-state-icon">
-              <svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
-                <rect x="10" y="10" width="44" height="10" rx="3" fill="#e0e7ff" />
-                <rect x="10" y="26" width="44" height="10" rx="3" fill="#c7d2fe" />
-                <rect x="10" y="42" width="30" height="10" rx="3" fill="#ddd6fe" />
-                <circle cx="52" cy="47" r="10" fill="#6366f1" />
+              <svg viewBox="0 0 64 64" fill="none" style={{ width: "100%", height: "100%" }}>
+                <rect x="10" y="10" width="44" height="10" rx="3" fill="rgba(232,0,45,0.15)" />
+                <rect x="10" y="26" width="44" height="10" rx="3" fill="rgba(232,0,45,0.25)" />
+                <rect x="10" y="42" width="30" height="10" rx="3" fill="rgba(168,85,247,0.2)" />
+                <circle cx="52" cy="47" r="10" fill="var(--red)" />
                 <path d="M48.5 47l2 2 4-4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
@@ -1223,14 +1235,14 @@ export default function CampaignsPage() {
             <p className="empty-state-desc">
               Crie sua primeira campanha, vincule um assistente Vapi e importe seus leads para iniciar a discagem automática.
             </p>
-            <button onClick={() => setShowCreate(true)} className="btn-primary">
-              <Plus className="w-4 h-4" />
+            <button onClick={() => setShowCreate(true)} className="btn btn-primary">
+              <Plus style={{ width: "16px", height: "16px" }} />
               Criar Primeira Campanha
             </button>
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {queues.map((q) => {
             const prog      = progress[q.id];
             const statusCfg = STATUS_CONFIG[q.status] ?? { label: q.status, badge: "badge-gray" };
@@ -1238,24 +1250,24 @@ export default function CampaignsPage() {
             const tab = activeTab[q.id] ?? "overview";
 
             return (
-              <div key={q.id} className="card overflow-hidden hover:shadow-md transition-shadow">
+              <div key={q.id} className="gc" style={{ overflow: "hidden", transition: "box-shadow .2s" }}>
                 {/* ── Campaign header ── */}
-                <div className="p-5">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
-                        <Megaphone className="w-5 h-5 text-indigo-500" />
+                <div style={{ padding: "20px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}>
+                      <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: "var(--red-lo)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <Megaphone style={{ width: "20px", height: "20px", color: "var(--red)" }} />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">{q.name}</h3>
-                        <div className="flex items-center gap-3 mt-1 flex-wrap text-xs text-gray-500">
-                          <span>Lista: <span className="font-medium text-gray-700">{leadListName(q.lead_list_id)}</span></span>
-                          <span className="text-gray-200">·</span>
-                          <span>Concorrência: <span className="font-medium text-gray-700">{q.concurrency}</span></span>
-                          <span className="text-gray-200">·</span>
-                          <span>Tentativas: <span className="font-medium text-gray-700">{q.max_attempts}</span></span>
-                          <span className="text-gray-200">·</span>
-                          <span>Intervalo: <span className="font-medium text-gray-700">{q.retry_delay_minutes ?? 30}min</span></span>
+                        <h3 style={{ fontWeight: 700, color: "var(--text-1)", fontSize: "15px" }}>{q.name}</h3>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px", flexWrap: "wrap", fontSize: "11px", color: "var(--text-2)" }}>
+                          <span>Lista: <span style={{ fontWeight: 600, color: "var(--text-1)" }}>{leadListName(q.lead_list_id)}</span></span>
+                          <span style={{ color: "var(--text-3)" }}>·</span>
+                          <span>Concorrência: <span style={{ fontWeight: 600, color: "var(--text-1)" }}>{q.concurrency}</span></span>
+                          <span style={{ color: "var(--text-3)" }}>·</span>
+                          <span>Tentativas: <span style={{ fontWeight: 600, color: "var(--text-1)" }}>{q.max_attempts}</span></span>
+                          <span style={{ color: "var(--text-3)" }}>·</span>
+                          <span>Intervalo: <span style={{ fontWeight: 600, color: "var(--text-1)" }}>{q.retry_delay_minutes ?? 30}min</span></span>
                           {(() => {
                             const days = Array.isArray(q.allowed_days) ? (q.allowed_days as unknown as number[]) : [];
                             const tw = q.allowed_time_window as { start?: string; end?: string } | null;
@@ -1263,7 +1275,7 @@ export default function CampaignsPage() {
                               const dl = ["", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
                               return (
                                 <>
-                                  <span className="text-gray-200">·</span>
+                                  <span style={{ color: "var(--text-3)" }}>·</span>
                                   <span>{days.map((d) => dl[d]).join(" ")} {tw.start}–{tw.end}</span>
                                 </>
                               );
@@ -1272,25 +1284,25 @@ export default function CampaignsPage() {
                           })()}
                           {q.webhook_url && (
                             <>
-                              <span className="text-gray-200">·</span>
-                              <span className="text-emerald-600 flex items-center gap-1">
-                                <Link2 className="w-3.5 h-3.5" /> Webhook ativo
+                              <span style={{ color: "var(--text-3)" }}>·</span>
+                              <span style={{ color: "var(--green)", display: "flex", alignItems: "center", gap: "4px" }}>
+                                <Link2 style={{ width: "14px", height: "14px" }} /> Webhook ativo
                               </span>
                             </>
                           )}
                         </div>
-                        <p className="text-xs text-gray-400 mt-0.5 font-mono truncate max-w-sm">{q.assistant_id}</p>
+                        <p className="mono" style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "384px" }}>{q.assistant_id}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
                       <span className={statusCfg.badge}>{statusCfg.label}</span>
 
-                      <button onClick={() => setEditingQueue(q)} className="btn-icon text-gray-400 hover:text-indigo-600" title="Editar campanha">
-                        <Pencil className="w-4 h-4" />
+                      <button onClick={() => setEditingQueue(q)} className="btn-icon" title="Editar campanha">
+                        <Pencil style={{ width: "16px", height: "16px" }} />
                       </button>
                       {(q.status === "draft" || q.status === "stopped") && (
-                        <button onClick={() => deleteQueue(q)} className="btn-icon text-gray-400 hover:text-red-500" title="Deletar campanha">
-                          <Trash2 className="w-4 h-4" />
+                        <button onClick={() => deleteQueue(q)} className="btn-icon" title="Deletar campanha" style={{ color: "var(--red)" }}>
+                          <Trash2 style={{ width: "16px", height: "16px" }} />
                         </button>
                       )}
                     </div>
@@ -1312,13 +1324,13 @@ export default function CampaignsPage() {
                     if (circuitUntil && minutesLeft > 0) {
                       // Circuit breaker ativo: mensagem amigável, sem expor detalhes internos
                       return (
-                        <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2.5 mb-4">
-                          <AlertTriangle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", borderRadius: "var(--radius-sm)", background: "rgba(0,194,255,0.08)", border: "1px solid rgba(0,194,255,0.2)", padding: "10px 12px", marginBottom: "16px" }}>
+                          <AlertTriangle style={{ width: "16px", height: "16px", color: "var(--cyan)", flexShrink: 0, marginTop: "2px" }} />
                           <div>
-                            <p className="text-xs font-semibold text-blue-800">
+                            <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-1)" }}>
                               Proteção automática ativada — retomando em {minutesLeft} min
                             </p>
-                            <p className="text-xs text-blue-700 mt-0.5">
+                            <p style={{ fontSize: "11px", color: "var(--text-2)", marginTop: "2px" }}>
                               O sistema detectou instabilidade temporária na rede e pausou os disparos automaticamente
                               para proteger os números de telefone. A campanha retomará sozinha em aproximadamente {minutesLeft} {minutesLeft === 1 ? "minuto" : "minutos"} — nenhuma ação necessária.
                             </p>
@@ -1330,11 +1342,11 @@ export default function CampaignsPage() {
                     if (circuitUntil && minutesLeft === 0) {
                       // Circuit breaker expirado mas last_error ainda não foi limpo pelo worker
                       return (
-                        <div className="flex items-start gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2.5 mb-4">
-                          <AlertTriangle className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "8px", borderRadius: "var(--radius-sm)", background: "rgba(0,214,143,0.08)", border: "1px solid rgba(0,214,143,0.2)", padding: "10px 12px", marginBottom: "16px" }}>
+                          <AlertTriangle style={{ width: "16px", height: "16px", color: "var(--green)", flexShrink: 0, marginTop: "2px" }} />
                           <div>
-                            <p className="text-xs font-semibold text-emerald-800">Proteção automática concluída — retomando disparos</p>
-                            <p className="text-xs text-emerald-700 mt-0.5">
+                            <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-1)" }}>Proteção automática concluída — retomando disparos</p>
+                            <p style={{ fontSize: "11px", color: "var(--text-2)", marginTop: "2px" }}>
                               O período de proteção encerrou. Os disparos serão retomados no próximo ciclo do sistema.
                             </p>
                           </div>
@@ -1344,11 +1356,11 @@ export default function CampaignsPage() {
 
                     // Erro de configuração real (assistente/número deletado no Vapi, etc.)
                     return (
-                      <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 mb-4">
-                        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="alert-warning" style={{ marginBottom: "16px" }}>
+                        <AlertTriangle style={{ width: "16px", height: "16px", flexShrink: 0 }} />
                         <div>
-                          <p className="text-xs font-semibold text-amber-800">Campanha pausada automaticamente por erro de configuração</p>
-                          <p className="text-xs text-amber-700 mt-0.5">{q.last_error}</p>
+                          <p style={{ fontSize: "11px", fontWeight: 700 }}>Campanha pausada automaticamente por erro de configuração</p>
+                          <p style={{ fontSize: "11px", marginTop: "2px", opacity: 0.8 }}>{q.last_error}</p>
                         </div>
                       </div>
                     );
@@ -1356,95 +1368,95 @@ export default function CampaignsPage() {
 
                   {/* Progress bar */}
                   {prog && (
-                    <div className="mb-4">
-                      <div className="flex justify-between text-xs text-gray-500 mb-1.5">
+                    <div style={{ marginBottom: "16px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "var(--text-2)", marginBottom: "6px" }}>
                         <span>
-                          <span className="font-semibold text-gray-700">{prog.done}</span>/{prog.total} concluídos
-                          <span className="ml-1 text-indigo-600 font-medium">({prog.progressPct}%)</span>
+                          <span style={{ fontWeight: 700, color: "var(--text-1)", fontFamily: "'JetBrains Mono', monospace" }}>{prog.done}</span>/{prog.total} concluídos
+                          <span style={{ marginLeft: "4px", color: "var(--red)", fontWeight: 600 }}>({prog.progressPct}%)</span>
                         </span>
                         {prog.calling > 0 && (
-                          <span className="text-amber-600 font-medium">{prog.calling} em ligação agora</span>
+                          <span style={{ color: "var(--yellow)", fontWeight: 600 }}>{prog.calling} em ligação agora</span>
                         )}
                       </div>
-                      <div className="progress-bar">
-                        <div className="progress-bar-fill" style={{ width: `${prog.progressPct}%` }} />
+                      <div style={{ height: "6px", borderRadius: "999px", background: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
+                        <div style={{ height: "100%", borderRadius: "999px", width: `${prog.progressPct}%`, background: "linear-gradient(90deg, var(--red), #ff4d6d)", boxShadow: "0 0 12px var(--red-glow)", transition: "width 1s var(--ease)" }} />
                       </div>
                     </div>
                   )}
 
                   {/* Lista esgotada banner */}
                   {prog && prog.total > 0 && prog.pending === 0 && prog.calling === 0 && (q.status === "running" || q.status === "paused") && (
-                    <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-amber-800">Todos os leads já foram contatados</p>
-                          <p className="text-xs text-amber-600">Adicione mais leads para continuar ou encerre a campanha.</p>
+                    <div className="alert-warning" style={{ marginBottom: "16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                        <AlertCircle style={{ width: "16px", height: "16px", flexShrink: 0 }} />
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: "13px", fontWeight: 600 }}>Todos os leads já foram contatados</p>
+                          <p style={{ fontSize: "11px", opacity: 0.8 }}>Adicione mais leads para continuar ou encerre a campanha.</p>
                         </div>
                       </div>
-                      <div className="flex gap-2 shrink-0">
+                      <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
                         <button
                           onClick={() => { setExpandedId(q.id); setActiveTab((p) => ({ ...p, [q.id]: "leads" })); }}
-                          className="btn btn-sm bg-amber-100 text-amber-800 hover:bg-amber-200">
-                          <UserPlus className="w-3.5 h-3.5" /> Adicionar leads
+                          className="btn btn-sm btn-secondary">
+                          <UserPlus style={{ width: "14px", height: "14px" }} /> Adicionar leads
                         </button>
                         <button onClick={() => queueAction(q.id, "stop")}
-                          className="btn btn-sm bg-red-100 text-red-700 hover:bg-red-200">
-                          <Square className="w-3.5 h-3.5" /> Encerrar
+                          className="btn btn-sm" style={{ background: "var(--red-lo)", color: "var(--red)" }}>
+                          <Square style={{ width: "14px", height: "14px" }} /> Encerrar
                         </button>
                       </div>
                     </div>
                   )}
 
                   {/* Actions */}
-                  <div className="flex gap-2 flex-wrap">
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                     {q.status === "draft" && (
                       <button onClick={() => queueAction(q.id, "start")}
-                        className="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700">
-                        <Play className="w-3.5 h-3.5" /> Iniciar
+                        className="btn btn-sm" style={{ background: "rgba(0,214,143,0.15)", color: "var(--green)", border: "1px solid rgba(0,214,143,0.25)" }}>
+                        <Play style={{ width: "14px", height: "14px" }} /> Iniciar
                       </button>
                     )}
                     {q.status === "running" && (
                       <button onClick={() => queueAction(q.id, "pause")}
-                        className="btn btn-sm bg-amber-500 text-white hover:bg-amber-600"
+                        className="btn btn-sm" style={{ background: "rgba(255,184,0,0.15)", color: "var(--yellow)", border: "1px solid rgba(255,184,0,0.25)" }}
                         title="Pausa temporariamente — os leads ficam na fila e a campanha pode ser retomada depois">
-                        <Pause className="w-3.5 h-3.5" /> Pausar
+                        <Pause style={{ width: "14px", height: "14px" }} /> Pausar
                       </button>
                     )}
                     {q.status === "paused" && (
                       <button onClick={() => queueAction(q.id, "start")}
-                        className="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700">
-                        <Play className="w-3.5 h-3.5" /> Retomar
+                        className="btn btn-sm" style={{ background: "rgba(0,214,143,0.15)", color: "var(--green)", border: "1px solid rgba(0,214,143,0.25)" }}>
+                        <Play style={{ width: "14px", height: "14px" }} /> Retomar
                       </button>
                     )}
                     {q.status === "stopped" && (
                       <button onClick={() => queueAction(q.id, "start")}
-                        className="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700">
-                        <RotateCcw className="w-3.5 h-3.5" /> Reiniciar
+                        className="btn btn-sm" style={{ background: "rgba(0,214,143,0.15)", color: "var(--green)", border: "1px solid rgba(0,214,143,0.25)" }}>
+                        <RotateCcw style={{ width: "14px", height: "14px" }} /> Reiniciar
                       </button>
                     )}
                     {(q.status === "running" || q.status === "paused") && (
                       <button onClick={() => queueAction(q.id, "stop")}
-                        className="btn btn-sm bg-red-100 text-red-700 hover:bg-red-200"
+                        className="btn btn-sm" style={{ background: "var(--red-lo)", color: "var(--red)", border: "1px solid rgba(232,0,45,0.25)" }}
                         title="Encerra a campanha definitivamente — para reiniciar será necessário criar uma nova campanha">
-                        <Square className="w-3.5 h-3.5" /> Encerrar
+                        <Square style={{ width: "14px", height: "14px" }} /> Encerrar
                       </button>
                     )}
                     <button onClick={() => duplicateQueue(q)}
-                      className="btn btn-sm bg-gray-100 text-gray-700 hover:bg-gray-200">
-                      <Copy className="w-3.5 h-3.5" /> Duplicar
+                      className="btn btn-sm btn-secondary">
+                      <Copy style={{ width: "14px", height: "14px" }} /> Duplicar
                     </button>
                     <button onClick={() => diagnoseQueue(q.id)} disabled={diagnosing[q.id]}
-                      className="btn btn-sm bg-gray-100 text-gray-700 hover:bg-gray-200">
+                      className="btn btn-sm btn-secondary">
                       {diagnosing[q.id]
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <Stethoscope className="w-3.5 h-3.5" />}
+                        ? <Loader2 style={{ width: "14px", height: "14px", animation: "cx-spin .8s linear infinite" }} />
+                        : <Stethoscope style={{ width: "14px", height: "14px" }} />}
                       Diagnosticar
                     </button>
                     {/* Expand/collapse */}
                     <button onClick={() => toggleExpand(q.id)}
-                      className="btn btn-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 ml-auto flex items-center gap-1.5">
-                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      className="btn btn-sm" style={{ marginLeft: "auto", background: "var(--red-lo)", color: "var(--red)", border: "1px solid rgba(232,0,45,0.25)", display: "flex", alignItems: "center", gap: "6px" }}>
+                      {isExpanded ? <ChevronUp style={{ width: "14px", height: "14px" }} /> : <ChevronDown style={{ width: "14px", height: "14px" }} />}
                       {isExpanded ? "Fechar" : "Ver detalhes"}
                     </button>
                   </div>
@@ -1452,20 +1464,22 @@ export default function CampaignsPage() {
 
                 {/* ── Expanded section with tabs ── */}
                 {isExpanded && (
-                  <div className="border-t border-gray-100">
+                  <div style={{ borderTop: "1px solid var(--glass-border)" }}>
                     {/* Tab bar */}
-                    <div className="flex border-b border-gray-100 bg-gray-50/80">
+                    <div style={{ display: "flex", borderBottom: "1px solid var(--glass-border)" }}>
                       {[
                         { key: "overview", label: "Visão Geral" },
                         { key: "leads",    label: "Leads" },
                       ].map(({ key, label }) => (
                         <button key={key}
                           onClick={() => setActiveTab((p) => ({ ...p, [q.id]: key as "overview" | "leads" }))}
-                          className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                            tab === key
-                              ? "text-indigo-600 border-indigo-500 bg-white"
-                              : "text-gray-500 border-transparent hover:text-gray-700"
-                          }`}>
+                          style={{
+                            padding: "12px 20px", fontSize: "13px", fontWeight: 600, transition: "all .15s",
+                            borderBottom: `2px solid ${tab === key ? "var(--red)" : "transparent"}`,
+                            marginBottom: "-1px",
+                            color: tab === key ? "var(--red)" : "var(--text-2)",
+                            background: tab === key ? "var(--red-lo)" : "transparent",
+                          }}>
                           {label}
                         </button>
                       ))}
@@ -1473,51 +1487,54 @@ export default function CampaignsPage() {
 
                     {/* Tab: Visão Geral */}
                     {tab === "overview" && (
-                      <div className="p-5 space-y-4">
+                      <div style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
                         {/* Summary stats */}
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <p className="text-xs text-gray-400 mb-1">Status</p>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+                          <div className="gc" style={{ padding: "12px 16px" }}>
+                            <p style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: "4px" }}>Status</p>
                             <span className={statusCfg.badge}>{statusCfg.label}</span>
                           </div>
-                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <p className="text-xs text-gray-400 mb-1">Ligações atendidas</p>
-                            <p className="text-xl font-bold text-emerald-600">{prog?.byStatus?.completed ?? 0}</p>
+                          <div className="gc" style={{ padding: "12px 16px" }}>
+                            <p style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: "4px" }}>Ligações atendidas</p>
+                            <p className="mono" style={{ fontSize: "20px", fontWeight: 800, color: "var(--green)" }}>{prog?.byStatus?.completed ?? 0}</p>
                           </div>
-                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <p className="text-xs text-gray-400 mb-1">Não atendidas</p>
-                            <p className="text-xl font-bold text-red-500">{prog?.byStatus?.failed ?? 0}</p>
+                          <div className="gc" style={{ padding: "12px 16px" }}>
+                            <p style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: "4px" }}>Não atendidas</p>
+                            <p className="mono" style={{ fontSize: "20px", fontWeight: 800, color: "var(--red)" }}>{prog?.byStatus?.failed ?? 0}</p>
                           </div>
-                          <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <p className="text-xs text-gray-400 mb-1">Falta ligar para</p>
-                            <p className="text-xl font-bold text-indigo-600">{prog?.pending ?? "—"}</p>
+                          <div className="gc" style={{ padding: "12px 16px" }}>
+                            <p style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: "4px" }}>Falta ligar para</p>
+                            <p className="mono" style={{ fontSize: "20px", fontWeight: 800, color: "var(--purple)" }}>{prog?.pending ?? "—"}</p>
                           </div>
                         </div>
 
                         {q.webhook_url && (
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-2">
-                              <Zap className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                              <span className="text-xs text-gray-500 font-mono truncate flex-1">{q.webhook_url}</span>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                              <Zap style={{ width: "14px", height: "14px", color: "var(--purple)", flexShrink: 0 }} />
+                              <span className="mono" style={{ fontSize: "11px", color: "var(--text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{q.webhook_url}</span>
                               <button onClick={() => testWebhook(q.id)} disabled={webhookTesting[q.id]}
-                                className="btn btn-sm bg-indigo-50 text-indigo-700 hover:bg-indigo-100 shrink-0">
+                                className="btn btn-sm btn-secondary" style={{ flexShrink: 0 }}>
                                 {webhookTesting[q.id]
-                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  : <Zap className="w-3.5 h-3.5" />}
+                                  ? <Loader2 style={{ width: "14px", height: "14px", animation: "cx-spin .8s linear infinite" }} />
+                                  : <Zap style={{ width: "14px", height: "14px" }} />}
                                 {webhookTesting[q.id] ? "Testando…" : "Testar"}
                               </button>
                             </div>
                             {webhookResults[q.id] && (
-                              <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
-                                webhookResults[q.id].ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
-                              }`}>
+                              <div style={{
+                                display: "flex", alignItems: "flex-start", gap: "8px", borderRadius: "var(--radius-sm)", padding: "8px 12px", fontSize: "11px",
+                                background: webhookResults[q.id].ok ? "rgba(0,214,143,0.08)" : "var(--red-lo)",
+                                border: `1px solid ${webhookResults[q.id].ok ? "rgba(0,214,143,0.2)" : "rgba(232,0,45,0.2)"}`,
+                                color: webhookResults[q.id].ok ? "var(--green)" : "var(--red)",
+                              }}>
                                 {webhookResults[q.id].ok
-                                  ? <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                                  : <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+                                  ? <CheckCircle2 style={{ width: "14px", height: "14px", flexShrink: 0, marginTop: "2px" }} />
+                                  : <XCircle style={{ width: "14px", height: "14px", flexShrink: 0, marginTop: "2px" }} />}
                                 <span>
                                   {webhookResults[q.id].message}
                                   {webhookResults[q.id].elapsed_ms > 0 && (
-                                    <span className="opacity-60 ml-1">({webhookResults[q.id].elapsed_ms}ms)</span>
+                                    <span style={{ opacity: 0.6, marginLeft: "4px" }}>({webhookResults[q.id].elapsed_ms}ms)</span>
                                   )}
                                 </span>
                               </div>
@@ -1529,35 +1546,39 @@ export default function CampaignsPage() {
                         {diagnoseResults[q.id] && (() => {
                           const d = diagnoseResults[q.id]!;
                           return (
-                            <div className={`rounded-xl border px-3 py-3 space-y-2 text-xs ${d.ok ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
-                              <div className="flex items-center gap-2 font-semibold">
+                            <div className="gc" style={{
+                              padding: "12px", display: "flex", flexDirection: "column", gap: "8px", fontSize: "11px",
+                              borderColor: d.ok ? "rgba(0,214,143,0.25)" : "rgba(255,184,0,0.25)",
+                              background: d.ok ? "rgba(0,214,143,0.06)" : "rgba(255,184,0,0.06)",
+                            }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 700 }}>
                                 {d.ok
-                                  ? <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /><span className="text-emerald-700">Tudo certo — pronto para discar</span></>
-                                  : <><AlertTriangle className="w-3.5 h-3.5 text-amber-600" /><span className="text-amber-700">{d.issues.length} problema(s) detectado(s)</span></>}
+                                  ? <><CheckCircle2 style={{ width: "14px", height: "14px", color: "var(--green)" }} /><span style={{ color: "var(--green)" }}>Tudo certo — pronto para discar</span></>
+                                  : <><AlertTriangle style={{ width: "14px", height: "14px", color: "var(--yellow)" }} /><span style={{ color: "var(--yellow)" }}>{d.issues.length} problema(s) detectado(s)</span></>}
                               </div>
                               {d.issues.length > 0 && (
-                                <ul className="space-y-1">
+                                <ul style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                                   {d.issues.map((issue, i) => (
-                                    <li key={i} className="flex items-start gap-1.5 text-amber-800">
-                                      <Ban className="w-3 h-3 shrink-0 mt-0.5" />{issue}
+                                    <li key={i} style={{ display: "flex", alignItems: "flex-start", gap: "6px", color: "var(--yellow)" }}>
+                                      <Ban style={{ width: "12px", height: "12px", flexShrink: 0, marginTop: "2px" }} />{issue}
                                     </li>
                                   ))}
                                 </ul>
                               )}
-                              <div className="flex gap-4 flex-wrap pt-1 border-t border-amber-200/60">
-                                <span className="flex items-center gap-1 text-gray-600">
-                                  <Users className="w-3 h-3" /> Prontos: <strong>{d.leads.ready_to_call}</strong>
+                              <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", paddingTop: "4px", borderTop: `1px solid ${d.ok ? "rgba(0,214,143,0.15)" : "rgba(255,184,0,0.15)"}` }}>
+                                <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-2)" }}>
+                                  <Users style={{ width: "12px", height: "12px" }} /> Prontos: <strong style={{ color: "var(--text-1)" }}>{d.leads.ready_to_call}</strong>
                                 </span>
                                 {Object.entries(d.leads.by_status).map(([s, c]) => (
-                                  <span key={s} className="text-gray-500">{s}: {c}</span>
+                                  <span key={s} style={{ color: "var(--text-3)" }}>{s}: {c}</span>
                                 ))}
                                 {d.time_window.now_in_tz && (
-                                  <span className="flex items-center gap-1 text-gray-600">
-                                    <Clock className="w-3 h-3" />
+                                  <span style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--text-2)" }}>
+                                    <Clock style={{ width: "12px", height: "12px" }} />
                                     {d.time_window.now_in_tz} ({d.time_window.timezone}) — janela: {d.time_window.window_start}–{d.time_window.window_end}
-                                    {d.time_window.status === "blocked_day"  && <span className="text-red-600 font-semibold ml-1">DIA BLOQUEADO</span>}
-                                    {d.time_window.status === "blocked_hour" && <span className="text-red-600 font-semibold ml-1">FORA DO HORÁRIO</span>}
-                                    {d.time_window.status === "allowed"      && <span className="text-emerald-600 font-semibold ml-1">✓</span>}
+                                    {d.time_window.status === "blocked_day"  && <span style={{ color: "var(--red)", fontWeight: 700, marginLeft: "4px" }}>DIA BLOQUEADO</span>}
+                                    {d.time_window.status === "blocked_hour" && <span style={{ color: "var(--red)", fontWeight: 700, marginLeft: "4px" }}>FORA DO HORÁRIO</span>}
+                                    {d.time_window.status === "allowed"      && <span style={{ color: "var(--green)", fontWeight: 700, marginLeft: "4px" }}>OK</span>}
                                   </span>
                                 )}
                               </div>
@@ -1567,8 +1588,8 @@ export default function CampaignsPage() {
 
                         {/* Empty overview */}
                         {!q.webhook_url && !diagnoseResults[q.id] && (
-                          <p className="text-sm text-gray-400 text-center py-4">
-                            Use o botão <strong>Diagnosticar</strong> para verificar o estado desta campanha.
+                          <p style={{ fontSize: "13px", color: "var(--text-3)", textAlign: "center", padding: "16px 0" }}>
+                            Use o botão <strong style={{ color: "var(--text-1)" }}>Diagnosticar</strong> para verificar o estado desta campanha.
                           </p>
                         )}
                       </div>
@@ -1618,12 +1639,12 @@ export default function CampaignsPage() {
       )}
 
       {/* ── Toasts ── */}
-      <div className="toast-container">
+      <div className="cx-toast-container">
         {toasts.map((t) => (
-          <div key={t.id} className={t.type === "success" ? "toast-success" : "toast-error"}>
+          <div key={t.id} className={`cx-toast ${t.type === "success" ? "cx-toast-success" : "cx-toast-error"}`}>
             {t.type === "success"
-              ? <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-              : <AlertTriangle className="w-4 h-4 shrink-0" />}
+              ? <Check style={{ width: "16px", height: "16px", color: "var(--green)", flexShrink: 0 }} />
+              : <AlertTriangle style={{ width: "16px", height: "16px", flexShrink: 0 }} />}
             <span>{t.message}</span>
           </div>
         ))}

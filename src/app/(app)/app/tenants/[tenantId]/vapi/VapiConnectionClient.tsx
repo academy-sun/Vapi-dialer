@@ -377,7 +377,7 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
   }
 
   return (
-    <div className="max-w-5xl">
+    <div className="cx-vapi-page">
       <div className="page-header">
         <div>
           <h1 className="page-title">Configurações Vapi</h1>
@@ -387,29 +387,29 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
 
       {/* Status da conexao — full width */}
       {fetchingConn ? (
-        <div className="card p-5 mb-5">
-          <div className="flex items-center gap-3">
-            <div className="skeleton w-5 h-5 rounded-full" />
-            <div className="skeleton h-4 w-48" />
+        <div className="gc" style={{ padding: '20px', marginBottom: '18px' }}>
+          <div className="cx-loading">
+            <div className="cx-spinner" />
+            <span>Carregando conexão...</span>
           </div>
         </div>
       ) : connection ? (
-        <div className="alert-success mb-6">
-          <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-600" />
+        <div className="alert-success" style={{ marginBottom: '22px' }}>
+          <CheckCircle2 style={{ width: 20, height: 20, flexShrink: 0, color: 'var(--green)' }} />
           <div>
-            <p className="font-semibold text-sm">Vapi conectada com sucesso!</p>
-            <p className="text-sm mt-0.5 text-emerald-700">
-              Label: <span className="font-medium">{connection.label}</span> · Configurada em{" "}
+            <p style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-1)' }}>Vapi conectada com sucesso!</p>
+            <p style={{ fontSize: '12px', marginTop: '2px', color: 'var(--text-2)' }}>
+              Label: <span style={{ fontWeight: 600 }}>{connection.label}</span> · Configurada em{" "}
               {new Date(connection.created_at).toLocaleDateString("pt-BR")}
             </p>
           </div>
         </div>
       ) : (
-        <div className="alert-warning mb-6">
-          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-amber-600" />
+        <div className="alert-warning" style={{ marginBottom: '22px' }}>
+          <AlertTriangle style={{ width: 20, height: 20, flexShrink: 0, color: 'var(--yellow)' }} />
           <div>
-            <p className="font-semibold text-sm">Nenhuma Vapi key configurada</p>
-            <p className="text-sm text-amber-700 mt-0.5">
+            <p style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-1)' }}>Nenhuma Vapi key configurada</p>
+            <p style={{ fontSize: '12px', color: 'var(--text-2)', marginTop: '2px' }}>
               Adicione sua API Key do Vapi abaixo para ativar chamadas neste tenant.
             </p>
           </div>
@@ -417,19 +417,19 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
       )}
 
       {/* Linha 1: 2-column grid — API Key | Limite de chamadas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+      <div className="cx-vapi-grid">
 
         {/* Section 1: API Key */}
-        <div className="card">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Key className="w-4 h-4 text-indigo-500" />
+        <div className="gc">
+          <div className="cx-vapi-card-header">
+            <h2 className="cx-vapi-card-title">
+              <Key />
               Vapi API Key
             </h2>
             {connection && !expandKeyForm && (
               <button
                 onClick={() => setExpandKeyForm(true)}
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline underline-offset-2"
+                className="cx-vapi-update-link"
               >
                 Atualizar key
               </button>
@@ -438,25 +438,25 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
 
           {/* Compact state — key already configured */}
           {connection && !expandKeyForm ? (
-            <div className="card-body">
-              <div className="flex items-center gap-3 py-1">
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <div className="cx-vapi-card-body">
+              <div className="cx-vapi-compact-row">
+                <div className="cx-vapi-compact-icon">
+                  <CheckCircle2 />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-800">API Key configurada</p>
-                  <p className="text-xs text-gray-400 font-mono">
-                    sk_live_••••••••  ·  Label: <span className="font-medium text-gray-600">{connection.label}</span>
+                  <p className="cx-vapi-compact-label">API Key configurada</p>
+                  <p className="cx-vapi-compact-sub">
+                    sk_live_••••••••  ·  Label: <span style={{ fontWeight: 600, color: 'var(--text-1)' }}>{connection.label}</span>
                   </p>
                 </div>
               </div>
             </div>
           ) : (
-            <form onSubmit={(e) => { handleSaveKey(e); setExpandKeyForm(false); }} className="card-body space-y-5">
+            <form onSubmit={(e) => { handleSaveKey(e); setExpandKeyForm(false); }} className="cx-vapi-card-body">
               {keyError && (
                 <div className="alert-error">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  <span className="text-sm">{keyError}</span>
+                  <AlertTriangle style={{ width: 16, height: 16, flexShrink: 0 }} />
+                  <span style={{ fontSize: '13px' }}>{keyError}</span>
                 </div>
               )}
               <div>
@@ -470,14 +470,15 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                 />
               </div>
               <div>
-                <label className="form-label flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-gray-500" />
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Lock style={{ width: 14, height: 14, color: 'var(--text-3)' }} />
                   Vapi API Key (privada)
                 </label>
                 <div className="relative">
                   <input
                     type={showKey ? "text" : "password"}
-                    className="form-input pr-10 font-mono"
+                    className="form-input"
+                    style={{ paddingRight: '40px', fontFamily: "'JetBrains Mono', monospace" }}
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder="sk_live_"
@@ -486,23 +487,23 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                   <button
                     type="button"
                     onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="cx-vapi-eye-btn"
                   >
-                    {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {showKey ? <EyeOff /> : <Eye />}
                   </button>
                 </div>
-                <p className="text-xs text-gray-400 mt-1.5">
-                  Criptografada com <span className="font-medium">AES-256-GCM</span> antes de ser armazenada.
+                <p className="cx-vapi-hint">
+                  Criptografada com <strong>AES-256-GCM</strong> antes de ser armazenada.
                 </p>
               </div>
-              <div className="flex items-center justify-between pt-1">
+              <div className="cx-vapi-actions">
                 {connection && (
-                  <button type="button" onClick={() => setExpandKeyForm(false)} className="btn-ghost text-sm">
+                  <button type="button" onClick={() => setExpandKeyForm(false)} className="btn-ghost">
                     Cancelar
                   </button>
                 )}
-                <button type="submit" disabled={savingKey || !apiKey.trim()} className="btn-primary ml-auto">
-                  {savingKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                <button type="submit" disabled={savingKey || !apiKey.trim()} className="btn btn-primary" style={{ marginLeft: 'auto' }}>
+                  {savingKey ? <Loader2 style={{ width: 16, height: 16, animation: 'cx-spin .8s linear infinite' }} /> : <Check style={{ width: 16, height: 16 }} />}
                   Salvar Key
                 </button>
               </div>
@@ -512,24 +513,24 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
 
         {/* Section 1.5: Limite de Concorrência da Org Vapi */}
         {connection && (
-          <div className="card">
-            <div className="card-header">
-              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                <Zap className="w-4 h-4 text-indigo-500" />
+          <div className="gc">
+            <div className="cx-vapi-card-header">
+              <h2 className="cx-vapi-card-title">
+                <Zap />
                 Limite de chamadas simultâneas (org Vapi)
               </h2>
             </div>
-            <div className="card-body space-y-4">
-              <div className="alert-info text-sm">
-                <Info className="w-4 h-4 shrink-0 mt-0.5 text-indigo-600" />
-                <span>
+            <div className="cx-vapi-card-body">
+              <div className="alert-info">
+                <Info style={{ width: 16, height: 16, flexShrink: 0, marginTop: '2px', color: 'var(--cyan)' }} />
+                <span style={{ fontSize: '13px' }}>
                   Cada conta Vapi tem um número máximo de chamadas simultâneas (slots de concorrência da org).
                   O worker distribui esses slots proporcionalmente entre todas as campanhas ativas deste tenant.
-                  Verifique seu limite em: <span className="font-medium">Vapi Dashboard → Billing / Plan</span>.
+                  Verifique seu limite em: <span style={{ fontWeight: 600 }}>Vapi Dashboard → Billing / Plan</span>.
                 </span>
               </div>
-              <div className="flex items-end gap-4">
-                <div className="flex-1">
+              <div className="cx-vapi-row-end">
+                <div className="cx-vapi-flex1">
                   <label className="form-label">Slots simultâneos da org Vapi</label>
                   <input
                     type="number"
@@ -539,16 +540,17 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                     value={concurrencyLimit}
                     onChange={(e) => setConcurrencyLimit(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
                   />
-                  <p className="text-xs text-gray-400 mt-1.5">
+                  <p className="cx-vapi-hint">
                     Dividido igualmente entre campanhas ativas. Ex: 10 slots ÷ 3 campanhas = 3 + 3 + 4.
                   </p>
                 </div>
                 <button
                   onClick={handleSaveConcurrency}
                   disabled={savingConcurrency}
-                  className="btn-primary shrink-0"
+                  className="btn btn-primary"
+                  style={{ flexShrink: 0 }}
                 >
-                  {savingConcurrency ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {savingConcurrency ? <Loader2 style={{ width: 16, height: 16, animation: 'cx-spin .8s linear infinite' }} /> : <Save style={{ width: 16, height: 16 }} />}
                   Salvar
                 </button>
               </div>
@@ -560,35 +562,35 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
 
       {/* Section 1.8: Minutos Contratados — visível apenas para admins */}
       {isAdmin && connection && (
-        <div className="card mb-5" style={{ borderLeft: "3px solid #FF1A1A" }}>
-          <div className="card-header flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-red-500" />
+        <div className="gc cx-vapi-admin-border" style={{ marginBottom: '18px' }}>
+          <div className="cx-vapi-card-header">
+            <h2 className="cx-vapi-card-title">
+              <Zap style={{ color: 'var(--red)' }} />
               Minutos contratados por mês
-              <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-red-100 text-red-700">Admin</span>
+              <span className="cx-vapi-admin-badge">Admin</span>
             </h2>
             {minutesBlocked && (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-red-100 text-red-700 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+              <span className="cx-vapi-blocked-badge">
+                <span className="cx-vapi-blocked-dot" />
                 Conta bloqueada
               </span>
             )}
           </div>
-          <div className="card-body space-y-4">
+          <div className="cx-vapi-card-body">
             {minutesBlocked && (
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-red-50 border border-red-200">
-                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-red-800">Conta bloqueada por consumo de minutos</p>
-                  <p className="text-xs text-red-600 mt-0.5">
+              <div className="cx-vapi-blocked-box">
+                <AlertTriangle />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p className="cx-vapi-blocked-title">Conta bloqueada por consumo de minutos</p>
+                  <p className="cx-vapi-blocked-desc">
                     Todas as campanhas foram pausadas. Para desbloquear, defina um limite acima de{" "}
                     <strong>{connection ? Math.ceil(connection.minutes_used_cache / 60) : "—"} min</strong> (uso atual) e clique em Salvar.
                   </p>
                 </div>
               </div>
             )}
-            <div className="flex items-end gap-4">
-              <div className="flex-1">
+            <div className="cx-vapi-row-end">
+              <div className="cx-vapi-flex1">
                 <label className="form-label">Minutos contratados por mês</label>
                 <input
                   type="number"
@@ -598,7 +600,7 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                   onChange={(e) => setContractedMinutesInput(e.target.value)}
                   placeholder="Ex: 500 (deixe vazio para desativar o controle)"
                 />
-                <p className="text-xs text-gray-400 mt-1.5">
+                <p className="cx-vapi-hint">
                   Quando o cliente atingir 100%, as campanhas são pausadas automaticamente.
                 </p>
                 {(() => {
@@ -606,8 +608,8 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                   const usedMin = connection ? Math.ceil(connection.minutes_used_cache / 60) : 0;
                   if (contractedMinutesInput.trim() !== "" && !isNaN(typed) && usedMin > 0 && typed <= usedMin) {
                     return (
-                      <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                      <p style={{ fontSize: '12px', color: 'var(--yellow)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <AlertTriangle style={{ width: 12, height: 12, flexShrink: 0 }} />
                         Uso atual ({usedMin} min) já supera este limite — a conta será bloqueada imediatamente.
                       </p>
                     );
@@ -617,16 +619,16 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                 {contractedMinutes != null && connection.minutes_used_cache != null && (() => {
                   const usedMin = Math.ceil(connection.minutes_used_cache / 60);
                   const pct = Math.min(100, Math.round((usedMin / contractedMinutes) * 100));
-                  const barColor = pct >= 100 ? "#dc2626" : pct >= 90 ? "#f97316" : pct >= 80 ? "#f59e0b" : "#22c55e";
+                  const barColor = pct >= 100 ? "var(--red)" : pct >= 90 ? "#f97316" : pct >= 80 ? "var(--yellow)" : "var(--green)";
                   return (
-                    <div className="mt-2 space-y-1">
-                      <div className="flex justify-between text-xs text-gray-500">
-                        <span className="font-medium">{usedMin} min usados</span>
-                        <span>{contractedMinutes} min contratados · {connection.minutes_cache_month ?? "—"} · <span style={{ color: barColor, fontWeight: 600 }}>{pct}%</span></span>
+                    <div className="cx-vapi-progress">
+                      <div className="cx-vapi-progress-meta">
+                        <span><strong>{usedMin} min usados</strong></span>
+                        <span>{contractedMinutes} min contratados · {connection.minutes_cache_month ?? "—"} · <span style={{ color: barColor, fontWeight: 700 }}>{pct}%</span></span>
                       </div>
-                      <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+                      <div className="cx-min-track" style={{ height: '7px' }}>
                         <div
-                          className="h-full rounded-full transition-all"
+                          className="cx-min-fill"
                           style={{ width: `${pct}%`, background: barColor }}
                         />
                       </div>
@@ -637,9 +639,10 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
               <button
                 onClick={handleSaveContracted}
                 disabled={savingContracted}
-                className="btn-primary shrink-0"
+                className="btn btn-primary"
+                style={{ flexShrink: 0 }}
               >
-                {savingContracted ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {savingContracted ? <Loader2 style={{ width: 16, height: 16, animation: 'cx-spin .8s linear infinite' }} /> : <Save style={{ width: 16, height: 16 }} />}
                 Salvar
               </button>
             </div>
@@ -649,16 +652,16 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
 
       {/* Chave Pública Vapi (para Testar Assistente) */}
       {connection && (
-        <div className="card mb-5">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Globe className="w-4 h-4 text-indigo-500" />
+        <div className="gc" style={{ marginBottom: '18px' }}>
+          <div className="cx-vapi-card-header">
+            <h2 className="cx-vapi-card-title">
+              <Globe />
               Chave Pública Vapi
             </h2>
             {connection.has_public_key && !expandPublicKeyForm && (
               <button
                 onClick={() => setExpandPublicKeyForm(true)}
-                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline underline-offset-2"
+                className="cx-vapi-update-link"
               >
                 Atualizar
               </button>
@@ -666,58 +669,60 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
           </div>
 
           {connection.has_public_key && !expandPublicKeyForm ? (
-            <div className="card-body">
-              <div className="flex items-center gap-3 py-1">
-                <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <div className="cx-vapi-card-body">
+              <div className="cx-vapi-compact-row">
+                <div className="cx-vapi-compact-icon">
+                  <CheckCircle2 />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-800">Chave Pública configurada</p>
-                  <p className="text-xs text-gray-400 font-mono">pk_live_••••••••  ·  Botão &quot;Testar Assistente&quot; disponível</p>
+                  <p className="cx-vapi-compact-label">Chave Pública configurada</p>
+                  <p className="cx-vapi-compact-sub">pk_live_••••••••  ·  Botão &quot;Testar Assistente&quot; disponível</p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="card-body space-y-4">
+            <div className="cx-vapi-card-body">
               {!connection.has_public_key && (
-                <div className="alert-warning text-sm">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
-                  <span>
+                <div className="alert-warning">
+                  <AlertTriangle style={{ width: 16, height: 16, flexShrink: 0, color: 'var(--yellow)' }} />
+                  <span style={{ fontSize: '13px' }}>
                     Sem chave pública configurada — o botão <strong>&quot;Testar Assistente&quot;</strong> ficará indisponível.
                     Encontre sua chave pública em{" "}
-                    <span className="font-medium">Vapi Dashboard → Account → API Keys → Public Key</span>.
+                    <span style={{ fontWeight: 600 }}>Vapi Dashboard → Account → API Keys → Public Key</span>.
                   </span>
                 </div>
               )}
               <div>
-                <label className="form-label flex items-center gap-1.5">
-                  <Globe className="w-3.5 h-3.5 text-gray-500" />
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Globe style={{ width: 14, height: 14, color: 'var(--text-3)' }} />
                   Vapi Public Key
                 </label>
                 <input
                   type="password"
-                  className="form-input font-mono"
+                  className="form-input"
+                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
                   value={publicKeyInput}
                   onChange={(e) => setPublicKeyInput(e.target.value)}
                   placeholder="pk_live_..."
                 />
-                <p className="text-xs text-gray-400 mt-1.5">
+                <p className="cx-vapi-hint">
                   Chave pública para iniciar chamadas WebRTC diretamente do navegador.
                   Diferente da chave privada — é segura para uso no frontend.
                 </p>
               </div>
-              <div className="flex items-center justify-between pt-1">
+              <div className="cx-vapi-actions">
                 {connection.has_public_key && (
-                  <button type="button" onClick={() => setExpandPublicKeyForm(false)} className="btn-ghost text-sm">
+                  <button type="button" onClick={() => setExpandPublicKeyForm(false)} className="btn-ghost">
                     Cancelar
                   </button>
                 )}
                 <button
                   onClick={handleSavePublicKey}
                   disabled={savingPublicKey || !publicKeyInput.trim()}
-                  className="btn-primary ml-auto"
+                  className="btn btn-primary"
+                  style={{ marginLeft: 'auto' }}
                 >
-                  {savingPublicKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  {savingPublicKey ? <Loader2 style={{ width: 16, height: 16, animation: 'cx-spin .8s linear infinite' }} /> : <Check style={{ width: 16, height: 16 }} />}
                   Salvar Chave Pública
                 </button>
               </div>
@@ -728,31 +733,31 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
 
       {/* Linha 2: Webhook do Assistente — full width */}
       {connection && (
-        <div className="card mb-5">
-          <div className="card-header">
-            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Webhook className="w-4 h-4 text-indigo-500" />
+        <div className="gc" style={{ marginBottom: '18px' }}>
+          <div className="cx-vapi-card-header">
+            <h2 className="cx-vapi-card-title">
+              <Webhook />
               Webhook do Assistente
             </h2>
           </div>
-          <div className="card-body space-y-4">
-            <p className="text-xs text-gray-500">
+          <div className="cx-vapi-card-body">
+            <p style={{ fontSize: '12px', color: 'var(--text-3)' }}>
               Sincroniza o assistente Vapi para receber eventos de fim de chamada em tempo real.
-              Cole a URL abaixo manualmente em <span className="font-medium text-gray-700">Vapi Dashboard → Assistants → Server URL</span>,
+              Cole a URL abaixo manualmente em <span style={{ fontWeight: 600, color: 'var(--text-2)' }}>Vapi Dashboard → Assistants → Server URL</span>,
               ou use o botão para enviar automaticamente via API.
             </p>
 
             {/* URL — full width */}
             <div>
               <label className="form-label">URL do Webhook</label>
-              <div className="copy-field text-xs font-mono text-gray-600">
-                <span className="flex-1 break-all select-all">{webhookUrl}</span>
+              <div className="cx-copy-field">
+                <span>{webhookUrl}</span>
                 <button
                   onClick={handleCopy}
-                  className="shrink-0 p-1.5 rounded-md hover:bg-gray-200 transition-colors ml-1"
+                  className="cx-copy-btn"
                   title="Copiar URL"
                 >
-                  {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4 text-gray-500" />}
+                  {copied ? <Check style={{ color: 'var(--green)' }} /> : <Copy />}
                 </button>
               </div>
             </div>
@@ -771,7 +776,7 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                 ))}
               </select>
               {webhookAssistantId && (
-                <p className="text-[11px] text-gray-400 mt-1 font-mono">ID: {webhookAssistantId}</p>
+                <p className="cx-vapi-webhook-id">ID: {webhookAssistantId}</p>
               )}
             </div>
 
@@ -779,22 +784,23 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
             {webhookStatus && (
               <div className={webhookStatus.ok ? "alert-success" : "alert-error"}>
                 {webhookStatus.ok
-                  ? <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                  : <AlertTriangle className="w-4 h-4 shrink-0" />}
-                <span className="text-sm">{webhookStatus.msg}</span>
+                  ? <CheckCircle2 style={{ width: 16, height: 16, flexShrink: 0, color: 'var(--green)' }} />
+                  : <AlertTriangle style={{ width: 16, height: 16, flexShrink: 0 }} />}
+                <span style={{ fontSize: '13px' }}>{webhookStatus.msg}</span>
               </div>
             )}
 
             {/* Button — right-aligned */}
-            <div className="flex justify-end pt-1">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '4px' }}>
               <button
                 onClick={handleUpdateWebhook}
                 disabled={updatingWebhook || !webhookAssistantId}
-                className="btn-primary shrink-0 ml-4"
+                className="btn btn-primary"
+                style={{ flexShrink: 0 }}
               >
                 {updatingWebhook
-                  ? <><Loader2 className="w-4 h-4 animate-spin" />Atualizando…</>
-                  : <><Webhook className="w-4 h-4" />Atualizar no Assistente</>}
+                  ? <><Loader2 style={{ width: 16, height: 16, animation: 'cx-spin .8s linear infinite' }} />Atualizando…</>
+                  : <><Webhook style={{ width: 16, height: 16 }} />Atualizar no Assistente</>}
               </button>
             </div>
           </div>
@@ -803,63 +809,63 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
 
       {/* Linha 3: Assistentes configurados — full width */}
       {connection && (
-        <div className="card mb-5" id="assistentes">
-          <div className="card-header flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-indigo-500" />
+        <div className="gc" style={{ marginBottom: '18px' }} id="assistentes">
+          <div className="cx-vapi-card-header">
+            <h2 className="cx-vapi-card-title">
+              <Sparkles />
               Assistentes configurados
             </h2>
-            {loadingAssistants && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+            {loadingAssistants && <Loader2 style={{ width: 16, height: 16, animation: 'cx-spin .8s linear infinite', color: 'var(--text-3)' }} />}
           </div>
-          <div className="card-body space-y-4">
-            <p className="text-xs text-gray-500">
+          <div className="cx-vapi-card-body">
+            <p style={{ fontSize: '12px', color: 'var(--text-3)' }}>
               Configure o critério de sucesso para cada assistente da conta Vapi.
               O sistema usa esse critério para calcular a taxa de conversão nos relatórios.
             </p>
 
             {/* Lista de assistentes da conta Vapi */}
             {assistants.length === 0 && !loadingAssistants ? (
-              <p className="text-sm text-gray-400">Nenhum assistente encontrado na conta Vapi.</p>
+              <p style={{ fontSize: '13px', color: 'var(--text-3)' }}>Nenhum assistente encontrado na conta Vapi.</p>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div>
                 {assistants.map((assistant) => {
                   const cfg = assistantConfigs.find((c) => c.assistant_id === assistant.id);
                   const isEditing = editingAssistantId === assistant.id;
 
                   return (
-                    <div key={assistant.id} className="py-3">
+                    <div key={assistant.id} className="cx-vapi-assistant-row">
                       {/* Row header */}
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="cx-vapi-assistant-header">
                         <div>
-                          <p className="text-sm font-medium text-gray-800">
+                          <p className="cx-vapi-assistant-name">
                             {cfg?.name ?? assistant.name}
                           </p>
-                          <p className="text-xs text-gray-400 font-mono">{assistant.id}</p>
+                          <p className="cx-vapi-assistant-id">{assistant.id}</p>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="cx-vapi-assistant-actions">
                           {cfg?.success_field ? (
-                            <span className="text-xs bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">
+                            <span className="cx-vapi-success-tag configured">
                               {cfg.success_field} = {cfg.success_value}
                             </span>
                           ) : (
-                            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                            <span className="cx-vapi-success-tag empty">
                               Sem critério configurado
                             </span>
                           )}
                           <button
                             onClick={() => isEditing ? setEditingAssistantId(null) : startEditAssistant(assistant.id)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                            className="cx-vapi-edit-btn"
                             title="Editar configuração"
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Pencil />
                           </button>
                           {cfg && (
                             <button
                               onClick={() => handleDeleteAssistantConfig(assistant.id)}
-                              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                              className="cx-vapi-delete-btn"
                               title="Remover configuração"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 />
                             </button>
                           )}
                         </div>
@@ -867,7 +873,7 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
 
                       {/* Inline edit form */}
                       {isEditing && (
-                        <div className="mt-3 p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
+                        <div className="cx-vapi-edit-form">
                           {/* Nome legível */}
                           <div>
                             <label className="form-label">Nome legível (opcional)</label>
@@ -878,26 +884,26 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                               onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
                               placeholder={assistant.name}
                             />
-                            <p className="text-xs text-gray-400 mt-1">Ex: "Agente Imobiliária", "Agente Cobrança"</p>
+                            <p className="cx-vapi-hint">Ex: &quot;Agente Imobiliária&quot;, &quot;Agente Cobrança&quot;</p>
                           </div>
 
                           {/* Structured output fields */}
                           {loadingFields ? (
-                            <div className="flex items-center gap-2 text-sm text-gray-400">
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Carregando campos do assistente...
+                            <div className="cx-loading">
+                              <div className="cx-spinner" />
+                              <span>Carregando campos do assistente...</span>
                             </div>
                           ) : editForm.fields.length > 0 ? (
                             <>
-                              <div className="p-3 rounded-lg bg-indigo-50 border border-indigo-100">
-                                <p className="text-xs font-medium text-indigo-700 mb-1">
+                              <div className="cx-vapi-fields-box">
+                                <p className="cx-vapi-fields-title">
                                   Campos disponíveis no Structured Output:
                                 </p>
-                                <p className="text-xs text-indigo-600 font-mono">
+                                <p className="cx-vapi-fields-mono">
                                   {editForm.fields.join(", ")}
                                 </p>
                               </div>
-                              <div className="grid grid-cols-2 gap-3">
+                              <div className="cx-vapi-2col">
                                 <div>
                                   <label className="form-label">Campo de conversão</label>
                                   <select
@@ -924,7 +930,7 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                               </div>
                             </>
                           ) : (
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="cx-vapi-2col">
                               <div>
                                 <label className="form-label">Campo de conversão</label>
                                 <input
@@ -934,7 +940,7 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                                   onChange={(e) => setEditForm((p) => ({ ...p, successField: e.target.value }))}
                                   placeholder="ex: QuerReuniao"
                                 />
-                                <p className="text-xs text-gray-400 mt-1">Assistente sem Structured Outputs — digite manualmente</p>
+                                <p className="cx-vapi-hint">Assistente sem Structured Outputs — digite manualmente</p>
                               </div>
                               <div>
                                 <label className="form-label">Valor de sucesso</label>
@@ -949,30 +955,31 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between pt-1">
+                          <div className="cx-vapi-actions">
                             <button
                               type="button"
                               onClick={() => setEditingAssistantId(null)}
-                              className="btn-ghost text-sm"
+                              className="btn-ghost"
                             >
                               Cancelar
                             </button>
-                            <div className="flex gap-2">
+                            <div className="cx-vapi-actions-right">
                               {/* Botão para abrir editor de prompt */}
                               <button
                                 type="button"
                                 onClick={() => { setEditorAssistantId(assistant.id); setEditorOpen(true); }}
-                                className="btn-secondary text-sm flex items-center gap-1.5"
+                                className="btn btn-secondary"
+                                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}
                               >
-                                <Bot className="w-3.5 h-3.5" />
+                                <Bot style={{ width: 14, height: 14 }} />
                                 Editar prompt
                               </button>
                               <button
                                 onClick={handleSaveAssistantConfig}
                                 disabled={savingAssistantConfig}
-                                className="btn-primary"
+                                className="btn btn-primary"
                               >
-                                {savingAssistantConfig ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                {savingAssistantConfig ? <Loader2 style={{ width: 16, height: 16, animation: 'cx-spin .8s linear infinite' }} /> : <Save style={{ width: 16, height: 16 }} />}
                                 Salvar
                               </button>
                             </div>
@@ -990,19 +997,19 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
 
       {/* Section 3: Assistant Editor (prompt/voice no Vapi) */}
       {connection && editorAssistantId && assistantEditorConfig && editorOpen && (
-        <div className="card mb-5">
+        <div className="gc" style={{ marginBottom: '18px' }}>
           <button
-            className="card-header w-full flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+            className="cx-vapi-editor-toggle"
             onClick={() => setEditorOpen(!editorOpen)}
           >
-            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-              <Bot className="w-4 h-4 text-indigo-500" />
+            <h2 className="cx-vapi-card-title">
+              <Bot />
               Editor do Assistente
             </h2>
-            {editorOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            {editorOpen ? <ChevronUp /> : <ChevronDown />}
           </button>
 
-          <div className="card-body space-y-5">
+          <div className="cx-vapi-card-body">
             <div>
               <label className="form-label">Nome do assistente</label>
               <input
@@ -1017,12 +1024,13 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
             <div>
               <label className="form-label">Primeira mensagem</label>
               <textarea
-                className="form-input min-h-[80px] resize-y"
+                className="form-input"
+                style={{ minHeight: '80px', resize: 'vertical' }}
                 value={editFirstMessage}
                 onChange={(e) => setEditFirstMessage(e.target.value)}
                 placeholder="Ola! Sou a IA da empresa X..."
               />
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="cx-vapi-hint">
                 Primeira coisa que o assistente diz quando a chamada e atendida.
               </p>
             </div>
@@ -1030,30 +1038,31 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
             <div>
               <label className="form-label">Prompt do sistema</label>
               <textarea
-                className="form-input min-h-[200px] resize-y font-mono text-sm"
+                className="form-input"
+                style={{ minHeight: '200px', resize: 'vertical', fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' }}
                 value={editSystemPrompt}
                 onChange={(e) => setEditSystemPrompt(e.target.value)}
                 placeholder="Voce e um assistente de vendas..."
               />
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="cx-vapi-hint">
                 Instrucoes completas de comportamento do assistente.
               </p>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <p className="text-xs text-gray-400 flex items-center gap-1">
-                <RotateCcw className="w-3 h-3" />
+            <div className="cx-vapi-actions">
+              <p className="cx-vapi-snapshot-hint">
+                <RotateCcw />
                 Snapshot automatico antes de salvar
               </p>
               <button
                 onClick={handleSaveAssistant}
                 disabled={savingAssistant}
-                className="btn-primary"
+                className="btn btn-primary"
               >
                 {savingAssistant ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" />Salvando no Vapi...</>
+                  <><Loader2 style={{ width: 16, height: 16, animation: 'cx-spin .8s linear infinite' }} />Salvando no Vapi...</>
                 ) : (
-                  <><Save className="w-4 h-4" />Salvar no Vapi</>
+                  <><Save style={{ width: 16, height: 16 }} />Salvar no Vapi</>
                 )}
               </button>
             </div>
@@ -1062,10 +1071,10 @@ export default function VapiConnectionClient({ isAdmin = false }: { isAdmin?: bo
       )}
 
       {/* Toasts */}
-      <div className="toast-container">
+      <div className="cx-toast-container">
         {toasts.map((t) => (
-          <div key={t.id} className={t.type === "success" ? "toast-success" : "toast-error"}>
-            {t.type === "success" ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4" />}
+          <div key={t.id} className={t.type === "success" ? "cx-toast cx-toast-success" : "cx-toast cx-toast-error"}>
+            {t.type === "success" ? <Check style={{ width: 16, height: 16, color: 'var(--green)' }} /> : <AlertTriangle style={{ width: 16, height: 16 }} />}
             {t.message}
           </div>
         ))}

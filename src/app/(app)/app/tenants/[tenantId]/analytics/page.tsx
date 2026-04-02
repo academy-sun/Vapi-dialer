@@ -2,10 +2,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
-  RefreshCw, Phone, PhoneOff, PhoneCall, DollarSign, Clock,
-  Timer, Users, CheckCircle2, BarChart3, Loader2, Bot, Filter,
-  Flame, Activity, TrendingUp, AlertTriangle, Sparkles, History,
-  ChevronDown, ChevronUp, Zap,
+  RefreshCw, PhoneCall, Users, CheckCircle2, Loader2, Filter,
+  Activity, Sparkles, History, ChevronDown, ChevronUp, Zap,
 } from "lucide-react";
 import Markdown from "react-markdown";
 import { createClient } from "@/lib/supabase/browser";
@@ -78,41 +76,20 @@ function pct(part: number, total: number): string {
   return `${Math.round((part / total) * 100)}%`;
 }
 
-const BAR_MAX_PX = 112; // altura máxima da barra em pixels
-
-function BarChart({ data, labels, maxVal, color = "bg-indigo-500" }: {
-  data: number[]; labels: string[]; maxVal: number; color?: string;
-}) {
-  return (
-    <div className="flex items-end gap-0.5">
-      {data.map((val, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-          <div
-            className={`w-full rounded-t-sm ${color} transition-all duration-300 min-h-0`}
-            style={{ height: maxVal > 0 ? `${Math.max(1, Math.round((val / maxVal) * BAR_MAX_PX))}px` : "0px" }}
-            title={`${labels[i]}: ${val}`}
-          />
-          <span className="text-gray-400 text-[9px] leading-none">{labels[i]}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 const WEEKDAY_LABELS = ["", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2, "0")}h`);
 
 // ── Heatmap dia × hora ──────────────────────────────────────────────────────
 type HeatmapMode = "calls" | "answered" | "rate";
 
-function heatColor(val: number, max: number): string {
-  if (max === 0 || val === 0) return "bg-white/5 text-white/20";
+function heatClass(val: number, max: number): string {
+  if (max === 0 || val === 0) return "cx-hmap-cell empty";
   const pctValue = val / max;
-  if (pctValue <= 0.15) return "bg-[#00D68F]/10 text-[#00D68F]/70";
-  if (pctValue <= 0.35) return "bg-[#00D68F]/25 text-[#00D68F]/80";
-  if (pctValue <= 0.55) return "bg-[#00D68F]/40 text-white";
-  if (pctValue <= 0.75) return "bg-[#00D68F]/60 text-white";
-  return "bg-[#00D68F] text-[#060608] font-bold";
+  if (pctValue <= 0.2) return "cx-hmap-cell hc1";
+  if (pctValue <= 0.4) return "cx-hmap-cell hc2";
+  if (pctValue <= 0.6) return "cx-hmap-cell hc3";
+  if (pctValue <= 0.8) return "cx-hmap-cell hc4";
+  return "cx-hmap-cell hc5";
 }
 
 function HeatmapSection({ data }: { data: AnalyticsData }) {
@@ -160,22 +137,18 @@ function HeatmapSection({ data }: { data: AnalyticsData }) {
   };
 
   return (
-    <div className="gc p-6 space-y-6">
+    <div className="gc cx-hmap-card">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
-            <Flame className="w-4 h-4 text-orange-500" />
-          </div>
-          <h3 className="text-sm font-bold text-white tracking-tight">Fluxo de Engajamento <span className="text-white/30 font-medium ml-1">— Dia × Hora</span></h3>
+      <div className="cx-hmap-head">
+        <div>
+          <div className="cx-card-title">Fluxo de Engajamento</div>
+          <div className="cx-card-sub">Dia x Hora</div>
         </div>
-        <div className="flex p-1 rounded-xl bg-black/40 border border-white/5 text-[11px]">
+        <div className="cx-period-tabs">
           {(["calls", "answered", "rate"] as HeatmapMode[]).map((m) => (
             <button key={m}
               onClick={() => setMode(m)}
-              className={`px-4 py-1.5 rounded-lg font-bold transition-all ${
-                mode === m ? "bg-[#E8002D] text-white shadow-[0_0_15px_rgba(232,0,45,0.4)]" : "text-white/40 hover:text-white"
-              }`}>
+              className={`cx-period-tab ${mode === m ? "active" : ""}`}>
               {modeLabels[m]}
             </button>
           ))}
@@ -183,69 +156,47 @@ function HeatmapSection({ data }: { data: AnalyticsData }) {
       </div>
 
       {/* Grid */}
-      <div className="overflow-x-auto">
-        <table className="text-[10px] border-separate border-spacing-0.5 mx-auto">
-          <thead>
-            <tr>
-              <th className="w-8" />
-              {Array.from({ length: 24 }, (_, h) => (
-                <th key={h} className="w-7 text-center text-gray-400 font-normal pb-1">
-                  {h % 3 === 0 ? `${String(h).padStart(2, "0")}h` : ""}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {matrix.map((row, di) => (
-              <tr key={di}>
-                <td className="pr-1.5 text-right text-gray-500 font-medium whitespace-nowrap">
-                  {WEEKDAY_LABELS[di + 1]}
-                </td>
-                {row.map((val, h) => (
-                  <td key={h}
-                    title={`${WEEKDAY_LABELS[di + 1]} ${String(h).padStart(2, "0")}h → ${val}${mode === "rate" ? "%" : ""}`}
-                    className={`w-7 h-6 rounded text-center leading-6 cursor-default transition-colors ${heatColor(val, maxVal)}`}>
-                    {val > 0 ? val : ""}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center gap-2 text-[10px] text-white/30 font-bold uppercase tracking-wider">
-        <span>Baixo</span>
-        {["bg-white/5", "bg-[#00D68F]/20", "bg-[#00D68F]/40", "bg-[#00D68F]/60", "bg-[#00D68F]"].map((c) => (
-          <div key={c} className={`w-3.5 h-3.5 rounded-sm ${c} border border-white/5`} />
+      <div className="cx-hmap-hours">
+        <span />
+        {Array.from({ length: 13 }, (_, i) => (
+          <span key={i} className="cx-hmap-hlabel">{String(i * 2).padStart(2, "0")}h</span>
         ))}
-        <span>Alto</span>
       </div>
+      {matrix.map((row, di) => (
+        <div key={di} className="cx-hmap-row">
+          <span className="cx-hmap-day">{WEEKDAY_LABELS[di + 1]}</span>
+          {/* Collapse 24h into 13 slots (every other hour) for the grid */}
+          {Array.from({ length: 13 }, (_, i) => {
+            const h = i * 2;
+            const val = row[h] + (row[h + 1] ?? 0);
+            return (
+              <div key={i}
+                title={`${WEEKDAY_LABELS[di + 1]} ${String(h).padStart(2, "0")}h → ${val}${mode === "rate" ? "%" : ""}`}
+                className={heatClass(val, maxVal * 2)}>
+                {val > 0 ? val : ""}
+              </div>
+            );
+          })}
+        </div>
+      ))}
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-white/5">
-        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
-          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Total tentativas</p>
-          <p className="text-xl font-black text-white font-mono leading-none">{totalAttempts.toLocaleString("pt-BR")}</p>
+      {/* Summary stats */}
+      <div className="cx-hmap-stats">
+        <div>
+          <div className="cx-hmap-stt">Total tentativas</div>
+          <div className="cx-hmap-stv">{totalAttempts.toLocaleString("pt-BR")}</div>
         </div>
-        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
-          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Média por hora</p>
-          <p className="text-xl font-black text-white font-mono leading-none">{avgPerHour}</p>
+        <div>
+          <div className="cx-hmap-stt">Média por hora</div>
+          <div className="cx-hmap-stv">{avgPerHour}</div>
         </div>
-        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
-          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Hora Pico</p>
-          <div className="flex items-baseline gap-2">
-            <p className="text-xl font-black text-white font-mono leading-none">{String(peakHour).padStart(2, "0")}h</p>
-            <span className="text-[10px] text-white/30 font-medium">{peakHourVal} chamadas</span>
-          </div>
+        <div>
+          <div className="cx-hmap-stt">Hora Pico</div>
+          <div className="cx-hmap-stv accent">{String(peakHour).padStart(2, "0")}h</div>
         </div>
-        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
-          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Dia Pico</p>
-          <div className="flex items-baseline gap-2">
-             <p className="text-xl font-black text-white font-mono leading-none">{WEEKDAY_LABELS[peakDay]}</p>
-             <span className="text-[10px] text-white/30 font-medium">{peakDayVal} voos</span>
-          </div>
+        <div>
+          <div className="cx-hmap-stt">Dia Pico</div>
+          <div className="cx-hmap-stv accent">{WEEKDAY_LABELS[peakDay]}</div>
         </div>
       </div>
     </div>
@@ -255,75 +206,75 @@ function HeatmapSection({ data }: { data: AnalyticsData }) {
 // ── Talk Time Breakdown ──────────────────────────────────────────────────────
 function TalkTimeSection({ data }: { data: AnalyticsData }) {
   const buckets = [
-    { key: "0-10s",  label: "< 10s",   desc: "Chamadas instantâneas" },
-    { key: "10-60s", label: "10s–1min", desc: "Curtas" },
-    { key: "1-3min", label: "1–3 min",  desc: "Médias" },
-    { key: "3-5min", label: "3–5 min",  desc: "Longas" },
-    { key: "5min+",  label: "> 5 min",  desc: "Muito longas" },
+    { key: "0-10s",  label: "< 10s",   desc: "Chamadas instantâneas", color: "#E8002D" },
+    { key: "10-60s", label: "10s–1min", desc: "Curtas",                color: "#FF6B35" },
+    { key: "1-3min", label: "1–3 min",  desc: "Médias",               color: "#FFB800" },
+    { key: "3-5min", label: "3–5 min",  desc: "Longas",               color: "#00D68F" },
+    { key: "5min+",  label: "> 5 min",  desc: "Muito longas",         color: "#00C2FF" },
   ];
   const bucketValues = buckets.map((b) => data.durationBuckets?.[b.key] ?? 0);
-  const bucketMax = Math.max(1, ...bucketValues);
-  const BAR = 80;
+  const totalBuckets = bucketValues.reduce((a, b) => a + b, 0);
 
   const costPerMin = data.totalDurationSec > 0
     ? (data.totalCost / (data.totalDurationSec / 60))
     : null;
 
   return (
-    <div className="gc p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center">
-            <Activity className="w-4 h-4 text-cyan-500" />
-        </div>
-        <h3 className="text-sm font-bold text-white tracking-tight">Talk Time Breakdown</h3>
-      </div>
+    <div className="gc cx-tt-card">
+      <div className="cx-card-title" style={{ marginBottom: 16 }}>Talk Time Breakdown</div>
 
       {/* 4 mini stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
-          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Total em ligação</p>
-          <p className="text-xl font-black text-white font-mono leading-none">{formatDurationLong(data.totalDurationSec)}</p>
+      <div className="cx-tt-meta">
+        <div>
+          <div className="cx-tt-lbl">Total em ligação</div>
+          <div className="cx-tt-val white">{formatDurationLong(data.totalDurationSec)}</div>
         </div>
-        <div className="rounded-xl bg-cyan-500/10 p-4 border border-cyan-500/20">
-          <p className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest mb-1">Atendidas</p>
-          <p className="text-xl font-black text-cyan-400 font-mono leading-none">{formatDurationLong(data.totalDurationAnsweredSec ?? 0)}</p>
+        <div>
+          <div className="cx-tt-lbl">Atendidas</div>
+          <div className="cx-tt-val green">{formatDurationLong(data.totalDurationAnsweredSec ?? 0)}</div>
         </div>
-        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
-          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Média (atendidas)</p>
-          <p className="text-xl font-black text-white font-mono leading-none">{formatDurationShort(data.avgDurationSec)}</p>
+        <div>
+          <div className="cx-tt-lbl">Média (atendidas)</div>
+          <div className="cx-tt-val white">{formatDurationShort(data.avgDurationSec)}</div>
         </div>
-        <div className="rounded-xl bg-white/5 p-4 border border-white/5">
-          <p className="text-[10px] font-bold text-white/30 uppercase tracking-widest mb-1">Máximo</p>
-          <div className="flex items-baseline justify-between">
-            <p className="text-xl font-black text-white font-mono leading-none">{formatDurationShort(data.maxDurationSec ?? 0)}</p>
-            {costPerMin != null && data.userRole !== "member" && (
-              <p className="text-[10px] font-bold text-[#00D68F]">
-                ${costPerMin.toFixed(4)}/m
-              </p>
-            )}
-          </div>
+        <div>
+          <div className="cx-tt-lbl">Máximo</div>
+          <div className="cx-tt-val yellow">{formatDurationShort(data.maxDurationSec ?? 0)}</div>
+          {costPerMin != null && data.userRole !== "member" && (
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--green)", marginTop: 2 }}>
+              ${costPerMin.toFixed(4)}/m
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Duration distribution bar chart */}
-      {data.answeredCalls > 0 && (
+      {/* Duration distribution stacked bar */}
+      {data.answeredCalls > 0 && totalBuckets > 0 && (
         <div>
-          <p className="text-xs text-gray-400 mb-3">Distribuição de duração (chamadas atendidas)</p>
-          <div className="flex items-end gap-2">
+          <div className="cx-dur-sub">Distribuição de duração (chamadas atendidas)</div>
+          <div className="cx-dur-bars">
             {buckets.map((b, i) => {
               const val = bucketValues[i];
-              const heightPx = bucketMax > 0 ? Math.max(2, Math.round((val / bucketMax) * BAR)) : 0;
-              const pctShare = data.answeredCalls > 0
-                ? Math.round((val / data.answeredCalls) * 100) : 0;
+              if (val === 0) return null;
+              const widthPct = Math.max(2, Math.round((val / totalBuckets) * 100));
               return (
-                <div key={b.key} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[10px] text-gray-500 font-medium">{val > 0 ? pctShare + "%" : ""}</span>
-                  <div
-                    className="w-full rounded-t-sm bg-cyan-400 transition-all"
-                    style={{ height: `${heightPx}px` }}
-                    title={`${b.desc}: ${val} chamadas (${pctShare}%)`}
-                  />
-                  <span className="text-[9px] text-gray-400 text-center leading-tight">{b.label}</span>
+                <div key={b.key}
+                  className="cx-dur-seg"
+                  style={{ width: `${widthPct}%`, background: b.color }}
+                  title={`${b.desc}: ${val} chamadas`}>
+                  {widthPct > 8 ? `${Math.round((val / totalBuckets) * 100)}%` : ""}
+                </div>
+              );
+            })}
+          </div>
+          <div className="cx-dur-legend">
+            {buckets.map((b, i) => {
+              const val = bucketValues[i];
+              if (val === 0) return null;
+              return (
+                <div key={b.key} className="cx-dl-item">
+                  <span className="cx-dl-dot" style={{ background: b.color }} />
+                  {b.label} ({val})
                 </div>
               );
             })}
@@ -350,17 +301,17 @@ const END_REASON_PT: Record<string, string> = {
 };
 
 const END_REASON_COLOR: Record<string, string> = {
-  "customer-ended-call":   "bg-emerald-400",
-  "assistant-ended-call":  "bg-blue-400",
-  "no-answer":             "bg-gray-300",
-  "customer-did-not-answer": "bg-gray-300",
-  "busy":                  "bg-yellow-400",
-  "customer-busy":         "bg-yellow-400",
-  "voicemail":             "bg-purple-400",
-  "machine_end_silence":   "bg-purple-300",
-  "silence-timed-out":     "bg-purple-300",
-  "failed":                "bg-red-400",
-  "pipeline-error":        "bg-red-300",
+  "customer-ended-call":   "#00D68F",
+  "assistant-ended-call":  "#00C2FF",
+  "no-answer":             "#666",
+  "customer-did-not-answer": "#666",
+  "busy":                  "#FFB800",
+  "customer-busy":         "#FFB800",
+  "voicemail":             "#A855F7",
+  "machine_end_silence":   "#A855F7",
+  "silence-timed-out":     "#A855F7",
+  "failed":                "#E8002D",
+  "pipeline-error":        "#E8002D",
 };
 
 function EndReasonsSection({ data }: { data: AnalyticsData }) {
@@ -374,28 +325,21 @@ function EndReasonsSection({ data }: { data: AnalyticsData }) {
   const maxVal = Math.max(1, ...reasons.map(([, v]) => v));
 
   return (
-    <div className="gc p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center">
-          <TrendingUp className="w-4 h-4 text-indigo-500" />
-        </div>
-        <h3 className="text-sm font-bold text-white tracking-tight">Motivos de Encerramento</h3>
-        <span className="text-[10px] font-bold text-white/30 uppercase tracking-widest ml-auto">{total} chamadas</span>
-      </div>
-      <div className="space-y-2">
+    <div className="gc cx-mot-card">
+      <div className="cx-card-title" style={{ marginBottom: 6 }}>Motivos de Encerramento</div>
+      <div className="cx-card-sub" style={{ marginBottom: 16 }}>{total} chamadas</div>
+      <div className="cx-mot-rows">
         {reasons.map(([key, count]) => {
           const label = END_REASON_PT[key] ?? key;
-          const barColorToken = END_REASON_COLOR[key] ?? "bg-gray-300";
+          const barColor = END_REASON_COLOR[key] ?? "#666";
           const barWidth = Math.round((count / maxVal) * 100);
           return (
-            <div key={key}>
-              <div className="flex justify-between text-[11px] font-bold text-white/60 mb-2">
-                <span className="truncate max-w-[200px] uppercase tracking-wider" title={key}>{label}</span>
-                <span className="text-white font-mono">{count} <span className="text-white/20 ml-1">({pct(count, total)})</span></span>
+            <div key={key} className="cx-mot-row">
+              <span className="cx-mot-name" title={key}>{label}</span>
+              <div className="cx-mot-bar">
+                <div className="cx-mot-fill" style={{ width: `${barWidth}%`, background: barColor }} />
               </div>
-              <div className="h-2 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                <div className={`h-full ${barColorToken} rounded-full transition-all shadow-[0_0_8px_rgba(255,255,255,0.1)]`} style={{ width: `${barWidth}%` }} />
-              </div>
+              <span className="cx-mot-val">{count} <span className="cx-mot-pct">({pct(count, total)})</span></span>
             </div>
           );
         })}
@@ -404,23 +348,19 @@ function EndReasonsSection({ data }: { data: AnalyticsData }) {
   );
 }
 
-function StatCard({ title, value, sub, icon: Icon, color = "text-white", bg = "bg-white/5" }: {
-  title: string; value: string; sub?: string; icon: React.ElementType; color?: string; bg?: string;
+function StatCard({ title, value, sub, icon: Icon, gradClass = "grad-white", iconBg }: {
+  title: string; value: string; sub?: string; icon: React.ElementType; gradClass?: string; iconBg?: string;
 }) {
-  const isRed = color.includes("red") || color.includes("E8002D");
-  
   return (
-    <div className="gc p-5 group hover:border-white/20 transition-all duration-300">
-      <div className="flex items-start justify-between">
-        <div className="min-w-0">
-          <p className="text-[10px] font-black text-white/30 uppercase tracking-[1.5px] mb-2">{title}</p>
-          <p className={`kpi-value ${isRed ? 'grad-red' : 'text-white'}`}>{value}</p>
-          {sub && <p className="text-[10px] font-bold text-white/20 mt-2 uppercase tracking-wide truncate">{sub}</p>}
-        </div>
-        <div className={`w-10 h-10 rounded-xl ${bg} border border-white/5 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform`}>
-          <Icon className={`w-5 h-5 ${color}`} />
+    <div className="gc cx-kpi-card">
+      <div className="cx-kpi-head">
+        <span className="cx-kpi-label">{title}</span>
+        <div className="cx-kpi-icon" style={iconBg ? { background: iconBg } : undefined}>
+          <Icon style={{ width: 16, height: 16 }} />
         </div>
       </div>
+      <div className={`cx-kpi-value ${gradClass}`}>{value}</div>
+      {sub && <div className="cx-kpi-badge">{sub}</div>}
     </div>
   );
 }
@@ -579,408 +519,323 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-           <div className="flex items-center gap-2 mb-1">
-             <div className="w-2 h-2 rounded-full bg-[#E8002D] animate-pulse shadow-[0_0_8px_#E8002D]" />
-             <span className="text-[10px] font-black text-white/30 uppercase tracking-[2px]">Intelligence Unit</span>
-           </div>
-          <h1 className="text-3xl font-black text-white tracking-tight">Analytics</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => load(true)} 
-            className="btn-glass px-5 py-2.5" 
-            disabled={refreshing}
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-            <span className="font-bold uppercase tracking-wider text-[11px]">Sincronizar</span>
-          </button>
-        </div>
-      </div>
-
       {/* Filtros */}
-      <div className="gc p-5 mb-8 no-print border-white/5">
-        <div className="flex items-center gap-6 flex-wrap">
-          <div className="flex items-center gap-2 text-[10px] font-black text-white/30 uppercase tracking-[2px]">
-            <Filter className="w-3.5 h-3.5" />
-            Parâmetros de Filtro
-          </div>
-
-          <div className="h-4 w-px bg-white/10 hidden sm:block" />
-
-          {/* Assistant Select */}
-          <div className="flex-1 min-w-[200px]">
-            <div className="flex items-center gap-2 group">
-              <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 group-hover:bg-indigo-500/20 transition-all">
-                <Bot className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-              </div>
-              <select
-                className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors w-full"
-                value={selectedAssistant || ""}
-                onChange={(e) => setFilter("assistantId", e.target.value)}
-              >
-                <option value="" className="bg-[#0A0A0E]">Todos os Assistentes</option>
-                {data?.assistants.map((a) => (
-                  <option key={a.id} value={a.id} className="bg-[#0A0A0E]">{a.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="h-4 w-px bg-white/10 hidden sm:block" />
-
-          {/* Campaign Select */}
-          <div className="flex-1 min-w-[200px]">
-            <div className="flex items-center gap-2 group">
-              <div className="w-7 h-7 rounded-lg bg-[#E8002D]/10 flex items-center justify-center border border-[#E8002D]/20 group-hover:bg-[#E8002D]/20 transition-all">
-                <PhoneCall className="w-3.5 h-3.5 text-[#E8002D] shrink-0" />
-              </div>
-              <select
-                className="bg-transparent text-white/80 text-xs font-bold focus:outline-none cursor-pointer border-none p-0 appearance-none hover:text-white transition-colors w-full"
-                value={selectedQueue || ""}
-                onChange={(e) => setFilter("queueId", e.target.value)}
-              >
-                <option value="" className="bg-[#0A0A0E]">Todas as Campanhas</option>
-                {visibleCampaigns.map((c) => (
-                  <option key={c.id} value={c.id} className="bg-[#0A0A0E]">{c.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="h-4 w-px bg-white/10 hidden lg:block" />
-
-          {/* Período */}
-          <div className="flex items-center gap-1 bg-white/5 p-1 rounded-xl border border-white/5 no-print">
-            {[7, 30, 90].map((d) => (
-              <button
-                key={d}
-                onClick={() => setFilter("days", String(d))}
-                className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                  selectedDays === String(d) 
-                    ? "bg-[#E8002D] text-white shadow-[0_0_15px_rgba(232,0,45,0.3)]" 
-                    : "text-white/30 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                {d}D
-              </button>
+      <div className="gc" style={{ padding: 20, marginBottom: 24, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Filter style={{ width: 14, height: 14, color: "var(--text-3)" }} />
+          <select
+            className="cx-select"
+            value={selectedAssistant || ""}
+            onChange={(e) => setFilter("assistantId", e.target.value)}
+          >
+            <option value="">Todos os Assistentes</option>
+            {data?.assistants.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
             ))}
-          </div>
+          </select>
         </div>
+
+        <select
+          className="cx-select"
+          value={selectedQueue || ""}
+          onChange={(e) => setFilter("queueId", e.target.value)}
+        >
+          <option value="">Todas as Campanhas</option>
+          {visibleCampaigns.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+
+        <div style={{ marginLeft: "auto" }} className="cx-period-tabs">
+          {[7, 30, 90].map((d) => (
+            <button
+              key={d}
+              onClick={() => setFilter("days", String(d))}
+              className={`cx-period-tab ${selectedDays === String(d) ? "active" : ""}`}
+            >
+              {d}D
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={() => load(true)}
+          className="cx-refresh-btn"
+          disabled={refreshing}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px" }}
+        >
+          <RefreshCw style={{ width: 14, height: 14, ...(refreshing ? { animation: "cx-spin .8s linear infinite" } : {}) }} />
+          Sincronizar
+        </button>
       </div>
+
       {/* Barra de minutos contratados */}
       {minutesData && (
-        <div className="gc p-6 mb-8 relative overflow-hidden group border-white/5">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/2 rounded-bl-full -z-0 group-hover:scale-110 transition-transform duration-500" />
-          
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center border border-white/5 ${minutesData.blocked ? "bg-[#E8002D]/20 animate-pulse text-[#E8002D]" : "bg-white/5 text-white/40"}`}>
-                <Zap className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-white/30 uppercase tracking-[2px] mb-1">Consumo de Minutos</p>
-                <h3 className="text-xl font-black text-white tracking-tight">
-                  {usedMinutes} <span className="text-white/20 text-sm font-bold uppercase tracking-widest mx-1">de</span> {minutesData.contracted} min
-                </h3>
-                {minutesData.blocked && (
-                  <span className="inline-flex items-center gap-1.5 text-[10px] font-black text-[#E8002D] uppercase tracking-wider mt-2">
-                    <AlertTriangle className="w-3 h-3" />
-                    Conta Suspensa • Esgotado
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 max-w-md space-y-4">
-              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
-                <span className="text-white/30">Progresso Mensal</span>
-                <span className="text-white font-mono">{minutesPct}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-white/5 border border-white/5 overflow-hidden">
-                <div
-                  className="h-full rounded-full transition-all duration-1000"
-                  style={{
-                    width: `${Math.min(100, minutesPct)}%`,
-                    background: minutesData.blocked 
-                      ? "linear-gradient(to right, #E8002D, #FF4D6D)" 
-                      : minutesPct >= 90 
-                        ? "linear-gradient(to right, #F97316, #FACC15)" 
-                        : "linear-gradient(to right, #00D68F, #00C2D6)",
-                    boxShadow: `0 0 10px ${minutesData.blocked ? "rgba(232,0,45,0.2)" : "rgba(0,214,143,0.1)"}`
-                  }}
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={handleRequestMinutes}
-              disabled={sendingEmail}
-              className={`btn-premium px-6 py-3 ${minutesData.blocked ? "scale-105" : ""}`}
-            >
-              {sendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-              <span className="font-black uppercase tracking-[1.5px] text-[10px]">Solicitar Upgrade</span>
-            </button>
+        <div className="gc cx-minutes-bar" style={{ marginBottom: 24 }}>
+          <div className="cx-min-label">
+            <Zap style={{ width: 14, height: 14, display: "inline", verticalAlign: "middle", marginRight: 6 }} />
+            {usedMinutes} / {minutesData.contracted} min
+            {minutesData.blocked && (
+              <span style={{ color: "var(--red)", marginLeft: 8, fontSize: 10, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase" as const }}>
+                Suspensa
+              </span>
+            )}
           </div>
+          <div className="cx-min-track">
+            <div className="cx-min-fill" style={{ width: `${Math.min(100, minutesPct)}%` }} />
+          </div>
+          <div className="cx-min-value">{minutesPct}%</div>
         </div>
       )}
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+        <div className="cx-loading" style={{ height: 256 }}>
+          <div className="cx-spinner" />
+          Carregando analytics...
         </div>
       ) : !data ? (
-        <div className="gc p-12 text-center">
-          <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4 border border-white/5">
-            <Activity className="w-8 h-8 text-white/10" />
-          </div>
-          <h3 className="text-lg font-black text-white uppercase tracking-widest mb-2">Sem Dados Analíticos</h3>
-          <p className="text-sm text-white/30 font-medium">Inicie uma campanha para gerar insights neste dashboard.</p>
+        <div className="gc" style={{ padding: 48, textAlign: "center" }}>
+          <Activity style={{ width: 32, height: 32, margin: "0 auto 16px", opacity: 0.15 }} />
+          <div className="cx-card-title" style={{ marginBottom: 8 }}>Sem Dados Analíticos</div>
+          <div className="cx-card-sub">Inicie uma campanha para gerar insights neste dashboard.</div>
         </div>
       ) : (
-        <div className="space-y-8 animate-fadeIn">
-          {/* Top Row: Core Metrics */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard title="Total de Leads" value={data.totalLeads.toLocaleString("pt-BR")} icon={Users} color="text-indigo-400" bg="bg-indigo-500/10" />
-            <StatCard title="Total de Chamadas" value={data.totalCalls.toLocaleString("pt-BR")} icon={PhoneCall} color="text-cyan-400" bg="bg-cyan-500/10" />
-            <StatCard title="Taxa de Atendimento" value={`${answeredPct}%`} sub={`${data.answeredCalls.toLocaleString()} atendidas`} icon={Activity} color="text-[#00D68F]" bg="bg-[#00D68F]/10" />
+        <div>
+          {/* KPI Grid */}
+          <div className="cx-kpi-grid" style={{ marginBottom: 24 }}>
+            <StatCard title="Total de Leads" value={data.totalLeads.toLocaleString("pt-BR")} icon={Users} gradClass="grad-red" iconBg="rgba(232,0,45,0.15)" />
+            <StatCard title="Total de Chamadas" value={data.totalCalls.toLocaleString("pt-BR")} icon={PhoneCall} gradClass="grad-cyan" iconBg="rgba(0,194,255,0.12)" />
+            <StatCard title="Taxa de Atendimento" value={`${answeredPct}%`} sub={`${data.answeredCalls.toLocaleString()} atendidas`} icon={Activity} gradClass="grad-green" iconBg="rgba(0,214,143,0.12)" />
             <StatCard
               title="Conversões"
               value={data.structuredOutputsConfigured ? (successPct != null ? `${successPct}%` : "—") : "—"}
               sub={data.structuredOutputsConfigured ? `${data.structuredSuccessCalls}/${data.structuredWithOutput}` : "Offline"}
               icon={CheckCircle2}
-              color="text-[#00D68F]"
-              bg="bg-[#00D68F]/10"
+              gradClass="grad-green"
+              iconBg="rgba(0,214,143,0.12)"
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {!isMember && data.totalCost != null && (
-              <StatCard title="Investimento Total" value={fmtCurrency(data.totalCost)} icon={DollarSign} color="text-amber-400" bg="bg-amber-500/10" />
-            )}
-            <StatCard title="Tempo Médio (AOD)" value={formatDurationShort(data.avgDurationSec)} sub="Apenas chamadas produtivas" icon={Timer} color="text-purple-400" bg="bg-purple-500/10" />
-            {!isMember && data.costPerConversion != null && (
-              <StatCard title="Custo por Conversão" value={fmtCurrency(data.costPerConversion)} icon={TrendingUp} color="text-emerald-400" bg="bg-emerald-500/10" />
-            )}
-          </div>
+          {/* Mid Section: Heatmap + Right Panel */}
+          <div className="cx-mid-grid" style={{ marginBottom: 24 }}>
+            {/* Heatmap */}
+            <HeatmapSection data={data} />
 
-          {/* Progress bars + Cost */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">Taxa de Atendimento</h3>
-              <div className="space-y-3">
-                {[
-                  { label: "Atendidas", icon: Phone, value: data.answeredCalls, color: "bg-emerald-500", textColor: "text-emerald-700" },
-                  { label: "Não atendidas", icon: PhoneOff, value: data.notAnsweredCalls, color: "bg-red-400", textColor: "text-red-500" },
-                  ...(data.statusBreakdown["ura-suspeita"] > 0 ? [{ label: "Poss. URA / Caixa postal", icon: AlertTriangle, value: data.statusBreakdown["ura-suspeita"], color: "bg-amber-400", textColor: "text-amber-600" }] : []),
-                ].map(({ label, icon: Icon, value, color, textColor }) => (
-                  <div key={label}>
-                    <div className="flex justify-between text-xs text-gray-600 mb-1.5">
-                      <span className={`flex items-center gap-1.5 font-medium ${textColor}`}>
-                        <Icon className="w-3.5 h-3.5" /> {label}
-                      </span>
-                      <span className="font-semibold">{value} ({pct(value, data.totalCalls)})</span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className={`h-full ${color} rounded-full transition-all`} style={{ width: pct(value, data.totalCalls) }} />
+            {/* Right Panel */}
+            <div className="cx-rp">
+              {/* Donut: Answer Rate */}
+              <div className="gc cx-donut-section">
+                <div className="cx-card-title" style={{ marginBottom: 14 }}>Taxa de Atendimento</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                  <div className="cx-donut-wrap">
+                    <svg viewBox="0 0 36 36">
+                      <circle cx="18" cy="18" r="15.915" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3.5" />
+                      <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--green)" strokeWidth="3.5"
+                        strokeDasharray={`${answeredPct} ${100 - answeredPct}`}
+                        strokeDashoffset="25" strokeLinecap="round" />
+                    </svg>
+                    <div className="cx-donut-center">
+                      <div className="cx-donut-pct">{answeredPct}%</div>
+                      <div className="cx-donut-lbl">Connect</div>
                     </div>
                   </div>
-                ))}
-                {data.structuredOutputsConfigured && data.structuredWithOutput > 0 && (
-                  <div>
-                    <div className="flex justify-between text-xs text-gray-600 mb-1.5">
-                      <span className="flex items-center gap-1.5 font-medium text-indigo-600">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Conversões
-                      </span>
-                      <span className="font-semibold">
-                        {data.structuredSuccessCalls} ({pct(data.structuredSuccessCalls, data.structuredWithOutput)})
-                      </span>
-                    </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: pct(data.structuredSuccessCalls, data.structuredWithOutput) }} />
-                    </div>
+                  <div className="cx-rate-rows">
+                    {[
+                      { label: "Atendidas", value: data.answeredCalls, color: "var(--green)" },
+                      { label: "Não atendidas", value: data.notAnsweredCalls, color: "#E8002D" },
+                    ].map(({ label, value, color }) => (
+                      <div key={label}>
+                        <div className="cx-rr-meta">
+                          <span className="cx-rr-name">{label}</span>
+                          <span className="cx-rr-val">{value} <span className="cx-rr-pct">({pct(value, data.totalCalls)})</span></span>
+                        </div>
+                        <div className="cx-rr-bar">
+                          <div className="cx-rr-fill" style={{ width: pct(value, data.totalCalls), background: color }} />
+                        </div>
+                      </div>
+                    ))}
+                    {data.structuredOutputsConfigured && data.structuredWithOutput > 0 && (
+                      <div>
+                        <div className="cx-rr-meta">
+                          <span className="cx-rr-name">Conversões</span>
+                          <span className="cx-rr-val">{data.structuredSuccessCalls} <span className="cx-rr-pct">({pct(data.structuredSuccessCalls, data.structuredWithOutput)})</span></span>
+                        </div>
+                        <div className="cx-rr-bar">
+                          <div className="cx-rr-fill" style={{ width: pct(data.structuredSuccessCalls, data.structuredWithOutput), background: "var(--purple)" }} />
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
+
+              {/* Costs */}
+              {!isMember && (
+                <div className="gc cx-costs-section">
+                  <div className="cx-card-title">Análise de Custos</div>
+                  <div className="cx-cost-grid">
+                    <div className="cx-cost-item">
+                      <div className="cx-ci-lbl">Custo total</div>
+                      <div className="cx-ci-val cx-ci-accent">${data.totalCost.toFixed(2)}</div>
+                    </div>
+                    {data.totalCalls > 0 && (
+                      <div className="cx-cost-item">
+                        <div className="cx-ci-lbl">Por chamada</div>
+                        <div className="cx-ci-val">${(data.totalCost / data.totalCalls).toFixed(4)}</div>
+                      </div>
+                    )}
+                    {data.answeredCalls > 0 && (
+                      <div className="cx-cost-item">
+                        <div className="cx-ci-lbl">Por atendida</div>
+                        <div className="cx-ci-val">${(data.totalCost / data.answeredCalls).toFixed(4)}</div>
+                      </div>
+                    )}
+                    {data.totalDurationSec > 0 && (
+                      <div className="cx-cost-item">
+                        <div className="cx-ci-lbl">Por minuto</div>
+                        <div className="cx-ci-val">${(data.totalCost / (data.totalDurationSec / 60)).toFixed(4)}</div>
+                      </div>
+                    )}
+                    {data.totalLeads > 0 && (
+                      <div className="cx-cost-item">
+                        <div className="cx-ci-lbl">Por lead</div>
+                        <div className="cx-ci-val">${(data.totalCost / data.totalLeads).toFixed(4)}</div>
+                      </div>
+                    )}
+                    {data.costPerConversion != null && (
+                      <div className="cx-cost-item">
+                        <div className="cx-ci-lbl">Por conversão</div>
+                        <div className="cx-ci-val cx-ci-accent">${data.costPerConversion.toFixed(2)}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-
-            {!isMember && (
-              <div className="card p-5">
-                <div className="flex items-center gap-2 mb-4">
-                  <DollarSign className="w-4 h-4 text-amber-500" />
-                  <h3 className="text-sm font-semibold text-gray-700">Análise de Custos</h3>
-                </div>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                    <span className="text-sm text-gray-600">Custo total</span>
-                    <span className="font-mono font-semibold text-gray-900">${data.totalCost.toFixed(4)}</span>
-                  </div>
-                  {data.totalCalls > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                      <span className="text-sm text-gray-600">Custo por chamada</span>
-                      <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.totalCalls).toFixed(4)}</span>
-                    </div>
-                  )}
-                  {data.answeredCalls > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                      <span className="text-sm text-gray-600">Custo por chamada atendida</span>
-                      <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.answeredCalls).toFixed(4)}</span>
-                    </div>
-                  )}
-                  {data.totalDurationSec > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                      <span className="text-sm text-gray-600">Custo por minuto</span>
-                      <span className="font-mono font-semibold text-gray-900">${(data.totalCost / (data.totalDurationSec / 60)).toFixed(4)}</span>
-                    </div>
-                  )}
-                  {data.totalLeads > 0 && (
-                    <div className="flex justify-between items-center py-2 border-b border-gray-50">
-                      <span className="text-sm text-gray-600">Custo por lead</span>
-                      <span className="font-mono font-semibold text-gray-900">${(data.totalCost / data.totalLeads).toFixed(4)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm text-gray-600">Tempo total em ligação</span>
-                    <span className="font-semibold text-gray-900">{formatDurationLong(data.totalDurationSec)}</span>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className="card p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="w-4 h-4 text-indigo-500" />
-                <h3 className="text-sm font-semibold text-gray-700">Volume por Dia da Semana</h3>
-              </div>
+          {/* Charts: Weekly + Hourly volume */}
+          <div className="cx-bot-grid" style={{ marginBottom: 24 }}>
+            <div className="gc cx-chart-card">
+              <div className="cx-card-title">Volume por Dia da Semana</div>
               {weekData.every((v) => v === 0) ? (
-                <p className="text-sm text-gray-400 text-center py-8">Sem dados ainda</p>
+                <div className="cx-card-sub" style={{ textAlign: "center", padding: "32px 0" }}>Sem dados ainda</div>
               ) : (
-                <BarChart data={weekData} labels={WEEKDAY_LABELS.slice(1)} maxVal={maxWeek} color="bg-indigo-500" />
+                <div className="cx-bar-chart">
+                  {weekData.map((val, i) => (
+                    <div key={i} className="cx-bar-col">
+                      <div className="cx-bar-fill" style={{ height: maxWeek > 0 ? `${Math.max(2, Math.round((val / maxWeek) * 100))}%` : "0" }} title={`${WEEKDAY_LABELS[i + 1]}: ${val}`} />
+                      <span className="cx-bar-lbl">{WEEKDAY_LABELS[i + 1]}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-            <div className="card p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <BarChart3 className="w-4 h-4 text-purple-500" />
-                <h3 className="text-sm font-semibold text-gray-700">Volume por Hora do Dia</h3>
-              </div>
+            <div className="gc cx-chart-card">
+              <div className="cx-card-title">Volume por Hora do Dia</div>
               {hourData.every((v) => v === 0) ? (
-                <p className="text-sm text-gray-400 text-center py-8">Sem dados ainda</p>
+                <div className="cx-card-sub" style={{ textAlign: "center", padding: "32px 0" }}>Sem dados ainda</div>
               ) : (
-                <BarChart data={hourData} labels={HOUR_LABELS} maxVal={maxHour} color="bg-purple-400" />
+                <div className="cx-bar-chart">
+                  {hourData.map((val, i) => (
+                    <div key={i} className="cx-bar-col">
+                      <div className="cx-bar-fill" style={{ height: maxHour > 0 ? `${Math.max(2, Math.round((val / maxHour) * 100))}%` : "0" }} title={`${HOUR_LABELS[i]}: ${val}`} />
+                      <span className="cx-bar-lbl">{i % 3 === 0 ? HOUR_LABELS[i] : ""}</span>
+                    </div>
+                  ))}
+                </div>
               )}
-              <p className="text-xs text-gray-400 mt-2">* Horários no fuso local do tenant</p>
+              <div className="cx-card-sub" style={{ marginTop: 8 }}>* Horários no fuso local do tenant</div>
             </div>
           </div>
 
-          {/* Heatmap */}
-          <HeatmapSection data={data} />
+          {/* Bottom Grid: Talk Time + End Reasons */}
+          <div className="cx-bot-grid" style={{ marginBottom: 24 }}>
+            <TalkTimeSection data={data} />
+            <EndReasonsSection data={data} />
+          </div>
 
-          {/* Talk Time Breakdown */}
-          <TalkTimeSection data={data} />
-
-          {/* Call End Reasons */}
-          <EndReasonsSection data={data} />
-
-          {/* ── Insights de IA ── */}
-          <div className="card p-5 space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-indigo-500" />
-                <h3 className="text-sm font-semibold text-gray-700">Insights de IA — Análise de Gargalo</h3>
+          {/* ── AI Insights ── */}
+          <div className="gc cx-ai-card" style={{ marginBottom: 24 }}>
+            <div className="cx-ai-icon">
+              <Sparkles style={{ width: 18, height: 18, color: "var(--red)" }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="cx-ai-title">Insights de IA — Análise de Gargalo</div>
+              <div className="cx-ai-body">
+                {!selectedQueue && (
+                  <span>Selecione uma campanha no filtro acima para habilitar a análise de IA.</span>
+                )}
               </div>
               <button
                 onClick={handleRunAiAnalysis}
                 disabled={loadingAi || !selectedQueue}
                 title={!selectedQueue ? "Selecione uma campanha para analisar" : ""}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors border
-                  disabled:opacity-50 disabled:cursor-not-allowed
-                  bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200"
+                className="cx-refresh-btn"
+                style={{ marginTop: 12, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 16px", fontSize: 12 }}
               >
-                {loadingAi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                {loadingAi ? "Gerando análise…" : "Analisar Gargalos (10–40s)"}
+                {loadingAi ? <Loader2 style={{ width: 14, height: 14, animation: "cx-spin .8s linear infinite" }} /> : <Sparkles style={{ width: 14, height: 14 }} />}
+                {loadingAi ? "Gerando análise..." : "Analisar Gargalos (10–40s)"}
               </button>
-            </div>
 
-            {!selectedQueue && (
-              <p className="text-xs text-gray-400">Selecione uma campanha no filtro acima para habilitar a análise de IA.</p>
-            )}
-
-            {/* Resultado atual */}
-            {aiAnalysis && (
-              <div className="rounded-xl bg-gradient-to-br from-indigo-50 to-white border border-indigo-100 p-5">
-                <p className="text-xs font-semibold text-indigo-500 uppercase tracking-wide mb-3">Análise gerada agora</p>
-                <div className="prose prose-sm max-w-none
-                  prose-headings:text-gray-800 prose-headings:font-semibold
-                  prose-ul:marker:text-indigo-400
-                  prose-li:text-gray-700
-                  prose-p:text-gray-700 prose-p:leading-relaxed">
-                  <Markdown>{aiAnalysis}</Markdown>
+              {/* Current AI result */}
+              {aiAnalysis && (
+                <div style={{ marginTop: 16 }}>
+                  <div className="cx-prose">
+                    <Markdown>{aiAnalysis}</Markdown>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
-          {/* ── Histórico de Análises ── */}
+          {/* ── Analysis History ── */}
           {aiHistory.length > 0 && (
-            <div className="card p-5 space-y-3">
-              <div className="flex items-center gap-2">
-                <History className="w-4 h-4 text-gray-400" />
-                <h3 className="text-sm font-semibold text-gray-700">Histórico de Análises</h3>
-                <span className="text-xs text-gray-400 ml-auto">{aiHistory.length} registro{aiHistory.length !== 1 ? "s" : ""}</span>
+            <div className="gc cx-analysis-card">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                <div className="cx-card-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <History style={{ width: 16, height: 16, color: "var(--text-3)" }} />
+                  Histórico de Análises
+                </div>
+                <span className="cx-card-sub">{aiHistory.length} registro{aiHistory.length !== 1 ? "s" : ""}</span>
               </div>
 
-              <div className="space-y-2">
-                {aiHistory.map((item) => {
-                  const isExpanded = expandedId === item.id;
-                  const campaignName = item.dial_queues?.name
-                    ?? data?.campaigns.find((c) => c.id === item.queue_id)?.name
-                    ?? "Campanha removida";
-                  const date = new Date(item.created_at).toLocaleString("pt-BR", {
-                    day: "2-digit", month: "2-digit", year: "numeric",
-                    hour: "2-digit", minute: "2-digit",
-                  });
-                  const preview = item.content.replace(/#{1,6}\s/g, "").replace(/\*\*/g, "").slice(0, 160);
+              {aiHistory.map((item) => {
+                const isExpanded = expandedId === item.id;
+                const campaignName = item.dial_queues?.name
+                  ?? data?.campaigns.find((c) => c.id === item.queue_id)?.name
+                  ?? "Campanha removida";
+                const date = new Date(item.created_at).toLocaleString("pt-BR", {
+                  day: "2-digit", month: "2-digit", year: "numeric",
+                  hour: "2-digit", minute: "2-digit",
+                });
+                const preview = item.content.replace(/#{1,6}\s/g, "").replace(/\*\*/g, "").slice(0, 160);
 
-                  return (
-                    <div key={item.id} className="rounded-lg border border-gray-100 overflow-hidden">
-                      <button
-                        onClick={() => setExpandedId(isExpanded ? null : item.id)}
-                        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-xs font-semibold text-indigo-600 truncate">{campaignName}</span>
-                            <span className="text-xs text-gray-400 shrink-0">{date}</span>
-                          </div>
-                          {!isExpanded && (
-                            <p className="text-xs text-gray-500 truncate">{preview}…</p>
-                          )}
+                return (
+                  <div key={item.id} className="cx-analysis-item" onClick={() => setExpandedId(isExpanded ? null : item.id)}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--red)" }}>{campaignName}</span>
+                          <span className="cx-card-sub">{date}</span>
                         </div>
-                        {isExpanded
-                          ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
-                          : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
-                      </button>
-
-                      {isExpanded && (
-                        <div className="px-4 pb-4 pt-1 border-t border-gray-100 bg-gray-50">
-                          <div className="prose prose-sm max-w-none
-                            prose-headings:text-gray-800 prose-headings:font-semibold
-                            prose-ul:marker:text-indigo-400
-                            prose-li:text-gray-700
-                            prose-p:text-gray-700 prose-p:leading-relaxed">
-                            <Markdown>{item.content}</Markdown>
-                          </div>
-                        </div>
-                      )}
+                        {!isExpanded && (
+                          <div className="cx-card-sub" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{preview}...</div>
+                        )}
+                      </div>
+                      {isExpanded
+                        ? <ChevronUp style={{ width: 16, height: 16, color: "var(--text-3)", flexShrink: 0 }} />
+                        : <ChevronDown style={{ width: 16, height: 16, color: "var(--text-3)", flexShrink: 0 }} />}
                     </div>
-                  );
-                })}
-              </div>
+
+                    {isExpanded && (
+                      <div className="cx-prose" style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--glass-border)" }}>
+                        <Markdown>{item.content}</Markdown>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
