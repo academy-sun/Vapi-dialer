@@ -724,7 +724,9 @@ export default function AnalyticsPage() {
                 <div className="cx-bar-chart">
                   {weekData.map((val, i) => (
                     <div key={i} className="cx-bar-col">
-                      <div className="cx-bar-fill" style={{ height: maxWeek > 0 ? `${Math.max(2, Math.round((val / maxWeek) * 100))}%` : "0" }} title={`${WEEKDAY_LABELS[i + 1]}: ${val}`} />
+                      <div className="cx-bar-area">
+                        <div className="cx-bar-fill" style={{ height: maxWeek > 0 ? `${Math.max(2, Math.round((val / maxWeek) * 100))}%` : "0" }} title={`${WEEKDAY_LABELS[i + 1]}: ${val}`} />
+                      </div>
                       <span className="cx-bar-lbl">{WEEKDAY_LABELS[i + 1]}</span>
                     </div>
                   ))}
@@ -739,7 +741,9 @@ export default function AnalyticsPage() {
                 <div className="cx-bar-chart">
                   {hourData.map((val, i) => (
                     <div key={i} className="cx-bar-col">
-                      <div className="cx-bar-fill" style={{ height: maxHour > 0 ? `${Math.max(2, Math.round((val / maxHour) * 100))}%` : "0" }} title={`${HOUR_LABELS[i]}: ${val}`} />
+                      <div className="cx-bar-area">
+                        <div className="cx-bar-fill" style={{ height: maxHour > 0 ? `${Math.max(2, Math.round((val / maxHour) * 100))}%` : "0" }} title={`${HOUR_LABELS[i]}: ${val}`} />
+                      </div>
                       <span className="cx-bar-lbl">{i % 3 === 0 ? HOUR_LABELS[i] : ""}</span>
                     </div>
                   ))}
