@@ -211,33 +211,33 @@ function valueToLabel(v: unknown): string {
 function InteresseBadge({ call }: { call: Call }) {
   if (call.success_evaluation === true) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">
-        <CheckCircle2 className="w-3 h-3" /> Sucesso
+      <span className="badge badge-green" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <CheckCircle2 style={{ width: 12, height: 12 }} /> Sucesso
       </span>
     );
   }
   if (call.success_evaluation === false) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700">
-        <XCircle className="w-3 h-3" /> Fracasso
+      <span className="badge badge-red" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <XCircle style={{ width: 12, height: 12 }} /> Fracasso
       </span>
     );
   }
   if (call.interesse) {
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700">
+      <span className="badge badge-blue">
         {valueToLabel(call.interesse)}
       </span>
     );
   }
-  return <span className="text-gray-300 text-xs">—</span>;
+  return <span style={{ color: 'var(--text-3)', fontSize: 12 }}>—</span>;
 }
 
 /** Painel de avaliação detalhada no drawer */
 function EvaluationPanel({ call }: { call: CallDetail }) {
   const result: Record<string, unknown> = {};
   if (call.outputs_flat) Object.assign(result, call.outputs_flat);
-  
+
   if (call.interesse) result["Interesse"] = call.interesse;
   if (call.success_evaluation != null) result["Avaliação"] = call.success_evaluation ? "Sim" : "Não";
   if (call.resumo) result["resumo"] = call.resumo;
@@ -262,19 +262,19 @@ function EvaluationPanel({ call }: { call: CallDetail }) {
   const score = call.score ?? call.performance_score ?? result["Performance Global Score"];
 
   return (
-    <div className="space-y-3">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* Score global destacado */}
       {score != null && (
-        <div className="flex items-center gap-2 bg-indigo-50 rounded-xl px-3 py-2.5">
-          <Star className="w-4 h-4 text-indigo-500 shrink-0" />
-          <span className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Score Global</span>
-          <span className="ml-auto text-lg font-bold text-indigo-700">{String(score)}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,194,255,0.08)', borderRadius: 12, padding: '10px 12px', border: '1px solid rgba(0,194,255,0.15)' }}>
+          <Star style={{ width: 16, height: 16, color: 'var(--cyan)', flexShrink: 0 }} />
+          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--cyan)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Score Global</span>
+          <span style={{ marginLeft: 'auto', fontSize: 18, fontWeight: 800, color: 'var(--cyan)', fontFamily: "'JetBrains Mono', monospace" }}>{String(score)}</span>
         </div>
       )}
 
       {/* Campos curtos em grid */}
       {shortEntries.length > 0 && (
-        <div className="grid grid-cols-2 gap-2">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {shortEntries.map(([k, v]) => {
             const label = RESULT_PRIORITY_FIELDS[k] ?? k;
             const isScore = k === "Performance Global Score";
@@ -282,18 +282,18 @@ function EvaluationPanel({ call }: { call: CallDetail }) {
             const isSuccess = isSuccessValue(v);
             const isFailure = isFailureValue(v);
             return (
-              <div key={k} className="bg-gray-50 rounded-lg px-2.5 py-2">
-                <p className="text-xs text-gray-400 font-medium mb-0.5 truncate">{label}</p>
+              <div key={k} style={{ background: 'var(--glass-bg)', borderRadius: 10, padding: '8px 10px', border: '1px solid var(--glass-border)' }}>
+                <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</p>
                 {isSuccess ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-                    <CheckCircle2 className="w-3 h-3" /> Sim
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--green)' }}>
+                    <CheckCircle2 style={{ width: 12, height: 12 }} /> Sim
                   </span>
                 ) : isFailure ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-600">
-                    <XCircle className="w-3 h-3" /> Não
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--red)' }}>
+                    <XCircle style={{ width: 12, height: 12 }} /> Não
                   </span>
                 ) : (
-                  <p className="text-sm font-semibold text-gray-800 truncate">{valueToLabel(v)}</p>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{valueToLabel(v)}</p>
                 )}
               </div>
             );
@@ -306,8 +306,8 @@ function EvaluationPanel({ call }: { call: CallDetail }) {
         const label = RESULT_PRIORITY_FIELDS[k] ?? k;
         return (
           <div key={k}>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">{label}</p>
-            <p className="text-xs text-gray-700 bg-gray-50 rounded-lg px-3 py-2.5 leading-relaxed">
+            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</p>
+            <p style={{ fontSize: 12, color: 'var(--text-2)', background: 'var(--glass-bg)', borderRadius: 10, padding: '10px 12px', lineHeight: 1.6, border: '1px solid var(--glass-border)' }}>
               {valueToLabel(v)}
             </p>
           </div>
@@ -509,11 +509,11 @@ export default function CallsPage() {
     <div>
       {/* Error banner */}
       {pageError && (
-        <div className="alert-error flex items-center gap-3 mb-4 rounded-xl px-4 py-3">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span className="text-sm">{pageError}</span>
-          <button onClick={() => setPageError(null)} className="ml-auto text-red-400 hover:text-red-600">
-            <X className="w-4 h-4" />
+        <div className="alert-error" style={{ marginBottom: 16 }}>
+          <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
+          <span style={{ fontSize: 13 }}>{pageError}</span>
+          <button onClick={() => setPageError(null)} style={{ marginLeft: 'auto', color: 'var(--red)', opacity: 0.7 }}>
+            <X style={{ width: 16, height: 16 }} />
           </button>
         </div>
       )}
@@ -532,22 +532,22 @@ export default function CallsPage() {
             )}
           </p>
         </div>
-        <button onClick={() => loadCalls(true)} className="btn-secondary" disabled={refreshing}>
-          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+        <button onClick={() => loadCalls(true)} className="btn btn-secondary" disabled={refreshing}>
+          <RefreshCw style={{ width: 16, height: 16, animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
           Atualizar
         </button>
       </div>
 
       {/* Filters */}
-      <div className="card px-4 py-3 mb-5 space-y-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <Filter className="w-4 h-4 text-gray-400 shrink-0" />
+      <div className="gc" style={{ padding: '14px 18px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Filter style={{ width: 16, height: 16, color: 'var(--text-3)', flexShrink: 0 }} />
 
           {queues.length > 0 && (
-            <div className="flex items-center gap-2">
-              <ListOrdered className="w-4 h-4 text-gray-400 shrink-0" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ListOrdered style={{ width: 16, height: 16, color: 'var(--text-3)', flexShrink: 0 }} />
               <select
-                className="select-native text-sm py-2.5"
+                className="cx-select"
                 value={filterQueue}
                 onChange={(e) => setFilterQueue(e.target.value)}
               >
@@ -559,28 +559,30 @@ export default function CallsPage() {
             </div>
           )}
 
-          <div className="relative">
-            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+          <div style={{ position: 'relative' }}>
+            <Phone style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: 'var(--text-3)', pointerEvents: 'none' }} />
             <input
               type="text"
-              className="form-input pl-9 max-w-xs text-sm"
+              className="form-input"
+              style={{ paddingLeft: 32, maxWidth: 220, fontSize: 13 }}
               placeholder="Buscar por telefone ou nome..."
               value={searchPhone}
               onChange={(e) => setSearchPhone(e.target.value)}
             />
           </div>
-          <div className="relative">
-            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+          <div style={{ position: 'relative' }}>
+            <Hash style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: 'var(--text-3)', pointerEvents: 'none' }} />
             <input
               type="text"
-              className="form-input pl-9 max-w-xs text-sm font-mono"
+              className="form-input"
+              style={{ paddingLeft: 32, maxWidth: 220, fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}
               placeholder="Buscar por ID da chamada"
               value={searchCallId}
               onChange={(e) => setSearchCallId(e.target.value)}
             />
           </div>
           <select
-            className="select-native text-sm py-2.5 max-w-xs"
+            className="cx-select"
             value={filterReason}
             onChange={(e) => setFilterReason(e.target.value)}
           >
@@ -596,7 +598,7 @@ export default function CallsPage() {
           </select>
           {/* Filtro por Critério de Sucesso */}
           <select
-            className="select-native text-sm py-2.5"
+            className="cx-select"
             value={filterInteresse}
             onChange={(e) => setFilterInteresse(e.target.value)}
           >
@@ -610,22 +612,22 @@ export default function CallsPage() {
           {(hasActiveFilters || filterInteresse !== "all") && (
             <button
               onClick={() => { setFilterReason("all"); setSearchPhone(""); setSearchCallId(""); setFilterQueue("all"); setFilterInteresse("all"); }}
-              className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"
+              style={{ fontSize: 12, color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: 4, transition: 'color .15s' }}
             >
-              <X className="w-3.5 h-3.5" /> Limpar filtros
+              <X style={{ width: 14, height: 14 }} /> Limpar filtros
             </button>
           )}
         </div>
 
         {/* Filtro duração curta + Retrabalho */}
-        <div className="flex items-center gap-3 pt-1 border-t border-gray-100 flex-wrap">
-          <Timer className="w-4 h-4 text-gray-400 shrink-0" />
-          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 10, marginTop: 10, borderTop: '1px solid var(--glass-border)', flexWrap: 'wrap' }}>
+          <Timer style={{ width: 16, height: 16, color: 'var(--text-3)', flexShrink: 0 }} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-2)', cursor: 'pointer' }}>
             <input
               type="checkbox"
-              className="rounded"
               checked={shortDurationMode}
               onChange={(e) => setShortDurationMode(e.target.checked)}
+              style={{ accentColor: 'var(--red)' }}
             />
             Atendidas com duração menor que
           </label>
@@ -635,12 +637,13 @@ export default function CallsPage() {
                 type="number"
                 min="1"
                 max="600"
-                className="form-input w-20 text-sm"
+                className="form-input"
+                style={{ width: 80, fontSize: 13 }}
                 value={maxDuration}
                 onChange={(e) => setMaxDuration(e.target.value)}
               />
-              <span className="text-sm text-gray-500">segundos</span>
-              <span className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded-lg">
+              <span style={{ fontSize: 13, color: 'var(--text-3)' }}>segundos</span>
+              <span style={{ fontSize: 11, color: 'var(--red)', background: 'var(--red-lo)', padding: '4px 8px', borderRadius: 8 }}>
                 Leads que atenderam mas desligaram rápido — candidatos a re-trabalho
               </span>
             </>
@@ -648,20 +651,22 @@ export default function CallsPage() {
 
           {/* Botão Criar Lista de Retrabalho */}
           {filteredCalls.length > 0 && (
-            <div className="ml-auto relative">
+            <div style={{ marginLeft: 'auto', position: 'relative' }}>
               {!showRetrabalhoModal ? (
                 <button
                   onClick={() => { setRetrabalhoName(`Retrabalho ${new Date().toLocaleDateString("pt-BR")}`); setShowRetrabalhoModal(true); }}
-                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors"
+                  className="cx-filter-btn"
+                  style={{ gap: 6 }}
                 >
-                  <Plus className="w-3.5 h-3.5" />
+                  <Plus style={{ width: 14, height: 14 }} />
                   Criar lista de retrabalho ({filteredCalls.length})
                 </button>
               ) : (
-                <div className="flex items-center gap-2 bg-white border border-indigo-200 rounded-lg px-3 py-2 shadow-sm">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--glass-bg-2)', border: '1px solid var(--glass-border)', borderRadius: 10, padding: '8px 12px' }}>
                   <input
                     type="text"
-                    className="form-input text-xs py-1.5 w-52"
+                    className="form-input"
+                    style={{ fontSize: 12, padding: '6px 10px', width: 200 }}
                     placeholder="Nome da lista..."
                     value={retrabalhoName}
                     onChange={(e) => setRetrabalhoName(e.target.value)}
@@ -671,12 +676,13 @@ export default function CallsPage() {
                   <button
                     onClick={createRetrabalhoList}
                     disabled={retrabalhoLoading || !retrabalhoName.trim()}
-                    className="btn-primary text-xs py-1.5 px-3 shrink-0"
+                    className="btn btn-primary"
+                    style={{ fontSize: 12, padding: '6px 12px', flexShrink: 0 }}
                   >
-                    {retrabalhoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Criar"}
+                    {retrabalhoLoading ? <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} /> : "Criar"}
                   </button>
-                  <button onClick={() => setShowRetrabalhoModal(false)} className="text-gray-400 hover:text-gray-600">
-                    <X className="w-4 h-4" />
+                  <button onClick={() => setShowRetrabalhoModal(false)} style={{ color: 'var(--text-3)' }}>
+                    <X style={{ width: 16, height: 16 }} />
                   </button>
                 </div>
               )}
@@ -687,8 +693,8 @@ export default function CallsPage() {
 
       {/* Sort controls */}
       {!loading && sortedCalls.length > 0 && (
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <span className="text-xs text-gray-400 font-medium">Ordenar por:</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 500 }}>Ordenar por:</span>
           {(["created_at", "duration", "score", ...(isAdminOrOwner ? ["cost"] : [])] as ("created_at" | "duration" | "score" | "cost")[]).map((col) => {
             const labels: Record<string, string> = { created_at: "Data", duration: "Duração", score: "Score", cost: "Custo" };
             const active = sortBy === col;
@@ -699,43 +705,48 @@ export default function CallsPage() {
                   if (active) setSortDir(d => d === "desc" ? "asc" : "desc");
                   else { setSortBy(col); setSortDir("desc"); }
                 }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
                 style={{
-                  background: active ? "#FF1A1A" : "white",
-                  color: active ? "white" : "#6b7280",
-                  border: `1px solid ${active ? "#FF1A1A" : "#e5e7eb"}`,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '4px 10px',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  transition: 'all .15s',
+                  background: active ? 'var(--red)' : 'var(--glass-bg)',
+                  color: active ? '#fff' : 'var(--text-3)',
+                  border: `1px solid ${active ? 'var(--red)' : 'var(--glass-border)'}`,
                 }}
               >
                 {labels[col]}
-                {active && (sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />)}
+                {active && (sortDir === "desc" ? <ChevronDown style={{ width: 12, height: 12 }} /> : <ChevronUp style={{ width: 12, height: 12 }} />)}
               </button>
             );
           })}
         </div>
       )}
 
-      {/* ── Tabela — sempre largura total, sem layout shift ── */}
+      {/* Table */}
       {loading ? (
-        <div className="table-wrapper">
-          <div className="divide-y divide-gray-50">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="px-5 py-4 flex gap-5">
-                <div className="skeleton h-4 w-36" />
-                <div className="skeleton h-4 w-24 rounded-full" />
-                <div className="skeleton h-4 w-16" />
-                <div className="skeleton h-4 w-20" />
-              </div>
-            ))}
-          </div>
+        <div className="gc" style={{ overflow: 'hidden' }}>
+          {[...Array(8)].map((_, i) => (
+            <div key={i} style={{ padding: '14px 18px', display: 'flex', gap: 18, borderBottom: '1px solid var(--glass-border)' }}>
+              <div className="skeleton" style={{ height: 16, width: 140 }} />
+              <div className="skeleton" style={{ height: 16, width: 96, borderRadius: 999 }} />
+              <div className="skeleton" style={{ height: 16, width: 64 }} />
+              <div className="skeleton" style={{ height: 16, width: 80 }} />
+            </div>
+          ))}
         </div>
       ) : sortedCalls.length === 0 ? (
-        <div className="card">
+        <div className="gc">
           <div className="empty-state">
             <div className="empty-state-icon">
-              <svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
-                <circle cx="32" cy="32" r="24" fill="#e0e7ff" />
-                <path d="M24 24c0-1.1.9-2 2-2h2l3 7-2 2c1.5 3 4 5.5 7 7l2-2 7 3v2c0 1.1-.9 2-2 2-10 0-19-9-19-19Z" fill="#6366f1" opacity=".6" />
-                <path d="M24 24c0-1.1.9-2 2-2h2l3 7-2 2c1.5 3 4 5.5 7 7l2-2 7 3v2c0 1.1-.9 2-2 2-10 0-19-9-19-19Z" stroke="#4f46e5" strokeWidth="1.5" fill="none" />
+              <svg viewBox="0 0 64 64" fill="none" style={{ width: '100%', height: '100%' }}>
+                <circle cx="32" cy="32" r="24" fill="rgba(232,0,45,0.1)" />
+                <path d="M24 24c0-1.1.9-2 2-2h2l3 7-2 2c1.5 3 4 5.5 7 7l2-2 7 3v2c0 1.1-.9 2-2 2-10 0-19-9-19-19Z" fill="var(--red)" opacity=".4" />
+                <path d="M24 24c0-1.1.9-2 2-2h2l3 7-2 2c1.5 3 4 5.5 7 7l2-2 7 3v2c0 1.1-.9 2-2 2-10 0-19-9-19-19Z" stroke="var(--red)" strokeWidth="1.5" fill="none" />
               </svg>
             </div>
             <p className="empty-state-title">
@@ -749,19 +760,19 @@ export default function CallsPage() {
           </div>
         </div>
       ) : (
-        <div className="table-wrapper">
-          <table className="table">
+        <div className="gc" style={{ overflow: 'hidden' }}>
+          <table className="cx-table">
             <thead>
               <tr>
-                <th><span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" />Telefone</span></th>
+                <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Phone style={{ width: 14, height: 14 }} />Telefone</span></th>
                 <th>Nome</th>
                 <th>Resultado</th>
-                <th><span className="flex items-center gap-1.5"><Timer className="w-3.5 h-3.5" />Duração</span></th>
+                <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Timer style={{ width: 14, height: 14 }} />Duração</span></th>
                 <th>Interesse</th>
-                <th><span className="flex items-center gap-1.5"><Star className="w-3.5 h-3.5" />Score</span></th>
-                {isAdminOrOwner && <th><span className="flex items-center gap-1.5"><DollarSign className="w-3.5 h-3.5" />Custo</span></th>}
+                <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Star style={{ width: 14, height: 14 }} />Score</span></th>
+                {isAdminOrOwner && <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><DollarSign style={{ width: 14, height: 14 }} />Custo</span></th>}
                 <th>Próx. Tentativa</th>
-                <th><span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Data</span></th>
+                <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Calendar style={{ width: 14, height: 14 }} />Data</span></th>
               </tr>
             </thead>
             <tbody>
@@ -777,46 +788,49 @@ export default function CallsPage() {
                   <tr
                     key={call.id}
                     onClick={() => openDetail(call.id)}
-                    className={`cursor-pointer ${isSelected ? "bg-red-50/40 ring-1 ring-inset ring-red-100" : "hover:bg-gray-50/80"}`}
+                    style={{
+                      cursor: 'pointer',
+                      background: isSelected ? 'rgba(232,0,45,0.06)' : undefined,
+                    }}
                   >
-                    <td className="font-mono font-medium text-gray-900">
+                    <td className="mono" style={{ fontWeight: 500, color: 'var(--text-1)' }}>
                       {call.lead_phone ? formatPhone(call.lead_phone) : "—"}
                     </td>
-                    <td className="text-sm text-gray-700">
-                      {call.lead_name || <span className="text-gray-300">—</span>}
+                    <td style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                      {call.lead_name || <span style={{ color: 'var(--text-3)' }}>—</span>}
                     </td>
                     <td>
-                      <span className={reason.badge}>{reason.label}</span>
+                      <span className={`badge ${reason.badge}`}>{reason.label}</span>
                     </td>
-                    <td className="text-gray-600 font-mono text-sm">
+                    <td className="mono" style={{ color: 'var(--text-2)', fontSize: 13 }}>
                       {formatDuration(call.duration_seconds)}
                     </td>
                     <td>
                       <InteresseBadge call={call} />
                     </td>
-                    <td className="text-gray-600 font-mono text-sm">
+                    <td className="mono" style={{ color: 'var(--text-2)', fontSize: 13 }}>
                       {score != null ? String(score) : "—"}
                     </td>
                     {isAdminOrOwner && (
-                      <td className="text-gray-600 font-mono text-sm">
+                      <td className="mono" style={{ color: 'var(--text-2)', fontSize: 13 }}>
                         {call.cost != null ? `$${call.cost.toFixed(4)}` : "—"}
                       </td>
                     )}
                     <td>
                       {(() => {
                         const nextAt = call.leads?.next_attempt_at ? new Date(call.leads.next_attempt_at) : null;
-                        if (!nextAt) return <span className="text-gray-300 text-xs">—</span>;
+                        if (!nextAt) return <span style={{ color: 'var(--text-3)', fontSize: 11 }}>—</span>;
                         const isPast = nextAt < new Date();
-                        if (isPast) return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600">Imediato</span>;
+                        if (isPast) return <span className="badge badge-yellow" style={{ fontSize: 10 }}>Imediato</span>;
                         return (
-                          <span title={nextAt.toLocaleString("pt-BR")} className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-600 cursor-help">
+                          <span title={nextAt.toLocaleString("pt-BR")} className="badge badge-blue" style={{ fontSize: 10, cursor: 'help' }}>
                             {nextAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                           </span>
                         );
                       })()}
                     </td>
                     <td>
-                      <span title={full} className="text-gray-500 cursor-help">
+                      <span title={full} style={{ color: 'var(--text-3)', cursor: 'help', fontSize: 12 }}>
                         {relative}
                       </span>
                     </td>
@@ -826,23 +840,26 @@ export default function CallsPage() {
             </tbody>
           </table>
 
-          <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">Linhas:</span>
+          <div style={{ padding: '12px 18px', borderTop: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Linhas:</span>
               {[15, 50, 100].map((n) => (
                 <button
                   key={n}
                   onClick={() => { setPageSize(n); setCurrentPage(1); }}
-                  className="text-xs px-2 py-1 rounded-md border transition-all"
                   style={{
-                    background: pageSize === n ? "#FF1A1A" : "white",
-                    color: pageSize === n ? "white" : "#6b7280",
-                    borderColor: pageSize === n ? "#FF1A1A" : "#e5e7eb",
+                    fontSize: 12,
+                    padding: '4px 8px',
+                    borderRadius: 8,
+                    border: `1px solid ${pageSize === n ? 'var(--red)' : 'var(--glass-border)'}`,
+                    background: pageSize === n ? 'var(--red)' : 'var(--glass-bg)',
+                    color: pageSize === n ? '#fff' : 'var(--text-3)',
+                    transition: 'all .15s',
                   }}
                 >{n}</button>
               ))}
             </div>
-            <p className="text-xs text-gray-400 flex-1 text-center">
+            <p style={{ fontSize: 11, color: 'var(--text-3)', flex: 1, textAlign: 'center' }}>
               {pagedCalls.length > 0
                 ? `${(safePage - 1) * pageSize + 1}–${(safePage - 1) * pageSize + pagedCalls.length} de ${sortedCalls.length}`
                 : "0 chamadas"}
@@ -850,96 +867,112 @@ export default function CallsPage() {
                 <> · Fila: <strong>{queues.find(q => q.id === filterQueue)?.name}</strong></>
               )}
             </p>
-            <div className="flex items-center gap-1">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={safePage <= 1}
-                className="text-xs px-2.5 py-1 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="cx-filter-btn"
+                style={{ fontSize: 12, padding: '4px 10px', opacity: safePage <= 1 ? 0.4 : 1, cursor: safePage <= 1 ? 'not-allowed' : 'pointer' }}
               >← Anterior</button>
-              <span className="text-xs text-gray-500 px-2">{safePage} / {totalPages}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-3)', padding: '0 8px' }}>{safePage} / {totalPages}</span>
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={safePage >= totalPages}
-                className="text-xs px-2.5 py-1 rounded-md border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="cx-filter-btn"
+                style={{ fontSize: 12, padding: '4px 10px', opacity: safePage >= totalPages ? 0.4 : 1, cursor: safePage >= totalPages ? 'not-allowed' : 'pointer' }}
               >Próximo →</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Drawer lateral — painel fixo deslizante (não afeta layout da tabela) ── */}
+      {/* Drawer lateral */}
       {selected && (
         <>
-          {/* Backdrop semitransparente — clique fora para fechar */}
+          {/* Backdrop */}
           <div
-            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[1px]"
+            className="modal-overlay"
+            style={{ background: 'rgba(0,0,0,0.40)', backdropFilter: 'blur(2px)', alignItems: 'stretch', justifyContent: 'flex-end' }}
             onClick={() => setSelected(null)}
           />
 
           {/* Painel fixo da direita */}
           <div
-            className="fixed right-0 top-0 h-full z-50 flex flex-col bg-white shadow-2xl border-l border-gray-200"
-            style={{ width: "440px" }}
+            style={{
+              position: 'fixed',
+              right: 0,
+              top: 0,
+              height: '100%',
+              zIndex: 51,
+              display: 'flex',
+              flexDirection: 'column',
+              background: 'var(--glass-bg)',
+              backdropFilter: 'blur(24px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+              borderLeft: '1px solid var(--glass-border)',
+              boxShadow: '0 0 64px rgba(0,0,0,0.5)',
+              width: 440,
+            }}
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center">
-                  <PhoneCall className="w-3.5 h-3.5 text-red-600" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--glass-border)', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 10, background: 'var(--red-lo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <PhoneCall style={{ width: 14, height: 14, color: 'var(--red)' }} />
                 </div>
                 <div>
-                  <h2 className="text-sm font-semibold text-gray-900">Detalhe da Chamada</h2>
-                  <p className="text-xs text-gray-400 font-mono truncate max-w-[240px]">
+                  <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>Detalhe da Chamada</h2>
+                  <p style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 240 }}>
                     {isAdminOrOwner ? selected.vapi_call_id : `${selected.vapi_call_id.slice(0, 8)}…`}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelected(null)}
-                className="btn-icon text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                className="btn-icon"
               >
-                <X className="w-4 h-4" />
+                <X style={{ width: 16, height: 16 }} />
               </button>
             </div>
 
             {/* Conteúdo com scroll */}
-            <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+            <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
               {/* Info básica — telefone + resultado */}
-              <div className="flex items-start justify-between gap-3">
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
                 <div>
-                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-0.5">Telefone</p>
-                  <p className="font-mono text-base font-semibold text-gray-900">
+                  <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Telefone</p>
+                  <p className="mono" style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-1)' }}>
                     {selected.lead_phone ? formatPhone(selected.lead_phone) : "—"}
                   </p>
                 </div>
-                <div className="text-right shrink-0">
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   {(() => {
                     const r = REASON_CONFIG[selected.ended_reason ?? ""] ?? { label: selected.ended_reason ?? "—", badge: "badge-gray" };
-                    return <span className={r.badge}>{r.label}</span>;
+                    return <span className={`badge ${r.badge}`}>{r.label}</span>;
                   })()}
                 </div>
               </div>
 
               {/* Métricas rápidas */}
-              <div className={`grid gap-2 ${isAdminOrOwner ? "grid-cols-3" : "grid-cols-2"}`}>
-                <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
-                  <p className="text-xs text-gray-400 font-medium">Duração</p>
-                  <p className="font-mono text-sm font-bold text-gray-800 mt-0.5">
+              <div style={{ display: 'grid', gap: 8, gridTemplateColumns: isAdminOrOwner ? '1fr 1fr 1fr' : '1fr 1fr' }}>
+                <div style={{ background: 'var(--glass-bg)', borderRadius: 12, padding: '10px 12px', textAlign: 'center', border: '1px solid var(--glass-border)' }}>
+                  <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Duração</p>
+                  <p className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)', marginTop: 2 }}>
                     {formatDuration(selected.duration_seconds)}
                   </p>
                 </div>
                 {isAdminOrOwner && (
-                  <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
-                    <p className="text-xs text-gray-400 font-medium">Custo</p>
-                    <p className="font-mono text-sm font-bold text-gray-800 mt-0.5">
+                  <div style={{ background: 'var(--glass-bg)', borderRadius: 12, padding: '10px 12px', textAlign: 'center', border: '1px solid var(--glass-border)' }}>
+                    <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Custo</p>
+                    <p className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)', marginTop: 2 }}>
                       {selected.cost != null ? `$${selected.cost.toFixed(4)}` : "—"}
                     </p>
                   </div>
                 )}
-                <div className="bg-gray-50 rounded-xl px-3 py-2.5 text-center">
-                  <p className="text-xs text-gray-400 font-medium">Data</p>
-                  <p className="text-xs font-semibold text-gray-700 mt-0.5">
+                <div style={{ background: 'var(--glass-bg)', borderRadius: 12, padding: '10px 12px', textAlign: 'center', border: '1px solid var(--glass-border)' }}>
+                  <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Data</p>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginTop: 2 }}>
                     {new Date(selected.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
@@ -948,7 +981,7 @@ export default function CallsPage() {
               {/* Avaliação estruturada */}
               {(selected.outputs_flat || selected.interesse || selected.success_evaluation || selected.resumo) && (
                 <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Avaliação</p>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Avaliação</p>
                   <EvaluationPanel call={selected} />
                 </div>
               )}
@@ -956,8 +989,8 @@ export default function CallsPage() {
               {/* Resumo do assistente */}
               {selected.summary && (
                 <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Resumo</p>
-                  <p className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-3 leading-relaxed">
+                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Resumo</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-2)', background: 'var(--glass-bg)', borderRadius: 10, padding: '12px 14px', lineHeight: 1.6, border: '1px solid var(--glass-border)' }}>
                     {selected.summary}
                   </p>
                 </div>
@@ -966,33 +999,32 @@ export default function CallsPage() {
               {/* Gravação */}
               {selected.recording_url && (
                 <div>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                    <Mic className="w-3.5 h-3.5" /> Gravação
+                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Mic style={{ width: 14, height: 14 }} /> Gravação
                   </p>
-                  <div className="bg-gray-50 rounded-xl px-3 py-3 space-y-2">
+                  <div style={{ background: 'var(--glass-bg)', borderRadius: 12, padding: 12, border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <audio
                       controls
                       src={selected.recording_url}
-                      className="w-full"
-                      style={{ height: "36px" }}
+                      style={{ width: '100%', height: 36 }}
                     />
-                    <div className="flex gap-3">
+                    <div style={{ display: 'flex', gap: 12 }}>
                       <a
                         href={selected.recording_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
+                        style={{ fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
                       >
-                        <ExternalLink className="w-3 h-3" /> Mono
+                        <ExternalLink style={{ width: 12, height: 12 }} /> Mono
                       </a>
                       {selected.stereo_recording_url && (
                         <a
                           href={selected.stereo_recording_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-red-600 hover:text-red-800 flex items-center gap-1"
+                          style={{ fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
                         >
-                          <ExternalLink className="w-3 h-3" /> Estéreo
+                          <ExternalLink style={{ width: 12, height: 12 }} /> Estéreo
                         </a>
                       )}
                     </div>
@@ -1005,32 +1037,32 @@ export default function CallsPage() {
                 <div>
                   <button
                     onClick={() => setShowTranscript((v) => !v)}
-                    className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-full hover:text-gray-600 py-1"
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '100%', padding: '4px 0', transition: 'color .15s' }}
                   >
                     Transcrição
-                    {showTranscript ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+                    {showTranscript ? <ChevronUp style={{ width: 14, height: 14, marginLeft: 'auto' }} /> : <ChevronDown style={{ width: 14, height: 14, marginLeft: 'auto' }} />}
                   </button>
                   {showTranscript && (
-                    <pre className="mt-2 text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-3 whitespace-pre-wrap font-mono leading-relaxed">
+                    <pre style={{ marginTop: 8, fontSize: 12, color: 'var(--text-2)', background: 'var(--glass-bg)', borderRadius: 10, padding: 12, whiteSpace: 'pre-wrap', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6, border: '1px solid var(--glass-border)' }}>
                       {selected.transcript}
                     </pre>
                   )}
                 </div>
               )}
 
-              {/* Vapi ID — ID completo para admin/owner, truncado para member */}
-              <div className="pt-2 border-t border-gray-50">
+              {/* Vapi ID */}
+              <div style={{ paddingTop: 8, borderTop: '1px solid var(--glass-border)' }}>
                 {isAdminOrOwner ? (
                   <>
-                    <p className="text-xs font-semibold text-gray-300 uppercase tracking-wide mb-1.5">Vapi Call ID</p>
-                    <p className="font-mono text-xs text-gray-400 break-all bg-gray-50 rounded px-2 py-1.5 select-all">
+                    <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Vapi Call ID</p>
+                    <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', wordBreak: 'break-all', background: 'var(--glass-bg)', borderRadius: 8, padding: '6px 8px', userSelect: 'all', border: '1px solid var(--glass-border)' }}>
                       {selected.vapi_call_id}
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="text-xs font-semibold text-gray-300 uppercase tracking-wide mb-1.5">Call ID</p>
-                    <p className="font-mono text-xs text-gray-400 bg-gray-50 rounded px-2 py-1.5">
+                    <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Call ID</p>
+                    <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--glass-bg)', borderRadius: 8, padding: '6px 8px', border: '1px solid var(--glass-border)' }}>
                       {selected.vapi_call_id.slice(0, 8)}…
                     </p>
                   </>
@@ -1045,7 +1077,7 @@ export default function CallsPage() {
       <div className="toast-container">
         {toasts.map((t) => (
           <div key={t.id} className={t.type === "success" ? "toast-success" : "toast-error"}>
-            {t.type === "success" ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4" />}
+            {t.type === "success" ? <Check style={{ width: 16, height: 16 }} /> : <AlertTriangle style={{ width: 16, height: 16 }} />}
             {t.message}
           </div>
         ))}

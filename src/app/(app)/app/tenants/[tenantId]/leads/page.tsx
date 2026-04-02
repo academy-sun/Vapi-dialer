@@ -95,13 +95,13 @@ function CreateListModal({ onClose, onCreate }: {
   return (
     <div className="modal-overlay animate-fadeIn" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="card-header flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">Nova Lista de Leads</h2>
-          <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600">
-            <X className="w-4 h-4" />
+        <div className="card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>Nova Lista de Leads</h2>
+          <button onClick={onClose} className="btn-icon">
+            <X style={{ width: 16, height: 16 }} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="card-body space-y-4">
+        <form onSubmit={handleSubmit} className="card-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
             <label className="form-label">Nome da lista</label>
             <input
@@ -113,9 +113,9 @@ function CreateListModal({ onClose, onCreate }: {
               autoFocus
             />
           </div>
-          <div className="flex gap-3 justify-end pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
-            <button type="submit" disabled={loading || !name.trim()} className="btn-primary">
+          <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", paddingTop: "8px" }}>
+            <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
+            <button type="submit" disabled={loading || !name.trim()} className="btn btn-primary">
               {loading ? "Criando..." : "Criar Lista"}
             </button>
           </div>
@@ -180,32 +180,32 @@ function AddLeadModal({ onClose, onAdd, listName }: {
 
   return (
     <div className="modal-overlay animate-fadeIn" onClick={onClose}>
-      <div className="modal max-w-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="card-header flex items-center justify-between">
+      <div className="modal" style={{ maxWidth: "32rem" }} onClick={(e) => e.stopPropagation()}>
+        <div className="card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h2 className="text-base font-semibold text-gray-900">Adicionar Lead</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Lista: <span className="font-medium text-gray-600">{listName}</span>
+            <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>Adicionar Lead</h2>
+            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
+              Lista: <span style={{ fontWeight: 600, color: "var(--text-2)" }}>{listName}</span>
             </p>
           </div>
-          <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600">
-            <X className="w-4 h-4" />
+          <button onClick={onClose} className="btn-icon">
+            <X style={{ width: 16, height: 16 }} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="card-body space-y-4">
+        <form onSubmit={handleSubmit} className="card-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {error && (
             <div className="alert-error">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="text-sm">{error}</span>
+              <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
+              <span style={{ fontSize: "13px" }}>{error}</span>
             </div>
           )}
 
           {/* Telefone */}
           <div>
-            <label className="form-label flex items-center gap-1.5">
-              <Phone className="w-3.5 h-3.5 text-gray-500" />
-              Telefone <span className="text-red-500 ml-0.5">*</span>
+            <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Phone style={{ width: 14, height: 14, color: "var(--text-3)" }} />
+              Telefone <span style={{ color: "var(--red)", marginLeft: "2px" }}>*</span>
             </label>
             <input
               type="tel"
@@ -216,16 +216,16 @@ function AddLeadModal({ onClose, onAdd, listName }: {
               autoFocus
               required
             />
-            <p className="text-xs text-gray-400 mt-1.5">
-              Aceita com ou sem <code className="bg-gray-100 px-1 rounded font-mono">+55</code>, com ou sem máscara.
+            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "6px" }}>
+              Aceita com ou sem <code className="mono" style={{ background: "var(--glass-bg-2)", padding: "1px 5px", borderRadius: "4px", fontSize: "11px" }}>+55</code>, com ou sem máscara.
             </p>
           </div>
 
           {/* Primeiro nome */}
           <div>
-            <label className="form-label flex items-center gap-1.5">
+            <label className="form-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               Primeiro nome
-              <code className="text-xs font-mono bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">{"{{first_name}}"}</code>
+              <code className="mono" style={{ fontSize: "11px", background: "var(--glass-bg-2)", color: "var(--purple)", padding: "2px 6px", borderRadius: "4px" }}>{"{{first_name}}"}</code>
             </label>
             <input
               type="text"
@@ -238,22 +238,24 @@ function AddLeadModal({ onClose, onAdd, listName }: {
 
           {/* Campos extras dinâmicos */}
           {extras.length > 0 && (
-            <div className="space-y-2">
-              <div className="grid grid-cols-[1fr_1fr_auto] gap-2 mb-1">
-                <span className="text-xs font-medium text-gray-500 px-1">Nome do campo</span>
-                <span className="text-xs font-medium text-gray-500 px-1">Valor</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "8px", marginBottom: "4px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-3)", padding: "0 4px" }}>Nome do campo</span>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-3)", padding: "0 4px" }}>Valor</span>
                 <span />
               </div>
               {extras.map((ex) => (
-                <div key={ex.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
+                <div key={ex.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "8px", alignItems: "center" }}>
                   <input
-                    className="form-input text-sm font-mono"
+                    className="form-input mono"
+                    style={{ fontSize: "13px" }}
                     placeholder="ex: empresa"
                     value={ex.key}
                     onChange={(e) => updateExtra(ex.id, "key", e.target.value)}
                   />
                   <input
-                    className="form-input text-sm"
+                    className="form-input"
+                    style={{ fontSize: "13px" }}
                     placeholder="valor"
                     value={ex.value}
                     onChange={(e) => updateExtra(ex.id, "value", e.target.value)}
@@ -261,9 +263,10 @@ function AddLeadModal({ onClose, onAdd, listName }: {
                   <button
                     type="button"
                     onClick={() => removeExtra(ex.id)}
-                    className="btn-icon text-gray-400 hover:text-red-500"
+                    className="btn-icon"
+                    style={{ color: "var(--text-3)" }}
                   >
-                    <X className="w-4 h-4" />
+                    <X style={{ width: 16, height: 16 }} />
                   </button>
                 </div>
               ))}
@@ -274,29 +277,34 @@ function AddLeadModal({ onClose, onAdd, listName }: {
           <button
             type="button"
             onClick={addExtra}
-            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-gray-200 text-sm text-gray-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+            style={{
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+              padding: "8px", borderRadius: "var(--radius-sm)", border: "1px dashed var(--glass-border)",
+              fontSize: "13px", color: "var(--text-3)", background: "none", cursor: "pointer",
+              transition: "all .15s",
+            }}
           >
-            <Plus className="w-4 h-4" />
+            <Plus style={{ width: 16, height: 16 }} />
             Adicionar campo extra
           </button>
 
           {extras.length > 0 && (
-            <p className="text-xs text-indigo-600 bg-indigo-50 rounded-lg px-3 py-2">
+            <p style={{ fontSize: "11px", color: "var(--purple)", background: "rgba(168,85,247,0.08)", borderRadius: "var(--radius-sm)", padding: "8px 12px" }}>
               Campos extras ficam disponíveis no assistente Vapi como{" "}
               {extras.filter((e) => e.key.trim()).slice(0, 2).map((e) => (
-                <code key={e.id} className="font-mono bg-white px-1 rounded mx-0.5">{`{{${e.key.trim()}}}`}</code>
+                <code key={e.id} className="mono" style={{ background: "var(--glass-bg-2)", padding: "1px 5px", borderRadius: "4px", margin: "0 2px", fontSize: "11px" }}>{`{{${e.key.trim()}}}`}</code>
               ))}
               {extras.filter((e) => e.key.trim()).length > 2 && "…"}
             </p>
           )}
 
-          <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
-            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
-            <button type="submit" disabled={loading || !phone.trim()} className="btn-primary">
+          <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", paddingTop: "8px", borderTop: "1px solid var(--glass-border)" }}>
+            <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
+            <button type="submit" disabled={loading || !phone.trim()} className="btn btn-primary">
               {loading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" />Salvando...</>
+                <><Loader2 style={{ width: 16, height: 16, animation: "spin 1s linear infinite" }} />Salvando...</>
               ) : (
-                <><UserPlus className="w-4 h-4" />Adicionar Lead</>
+                <><UserPlus style={{ width: 16, height: 16 }} />Adicionar Lead</>
               )}
             </button>
           </div>
@@ -376,19 +384,19 @@ function InboundWebhookPanel({
   }
 
   if (loading) {
-    return <div className="skeleton h-32 rounded-xl" />;
+    return <div className="skeleton" style={{ height: "128px", borderRadius: "var(--radius)" }} />;
   }
 
   return (
-    <div className="card">
+    <div className="gc">
       <div className="card-header">
-        <div className="flex items-center justify-between">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
-              <Link2 className="w-4 h-4 text-indigo-500" />
+            <h3 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)", display: "flex", alignItems: "center", gap: "6px" }}>
+              <Link2 style={{ width: 16, height: 16, color: "var(--purple)" }} />
               Webhook de Entrada
             </h3>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "2px" }}>
               Receba leads automaticamente de CRMs, n8n, formulários, etc.
             </p>
           </div>
@@ -396,31 +404,34 @@ function InboundWebhookPanel({
             <button
               onClick={generateSecret}
               disabled={generating}
-              className="btn-secondary text-xs gap-1.5"
+              className="btn btn-secondary btn-sm"
+              style={{ gap: "6px" }}
               title="Regenerar secret"
             >
-              {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              {generating ? <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} /> : <RefreshCw style={{ width: 14, height: 14 }} />}
               Regenerar
             </button>
           )}
         </div>
       </div>
-      <div className="card-body space-y-3">
+      <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {/* URL */}
         <div>
-          <label className="form-label text-xs">URL do Webhook (POST)</label>
-          <div className="flex gap-2">
+          <label className="form-label" style={{ fontSize: "11px" }}>URL do Webhook (POST)</label>
+          <div style={{ display: "flex", gap: "8px" }}>
             <input
               readOnly
               value={webhookUrl}
-              className="form-input font-mono text-xs bg-gray-50 flex-1"
+              className="form-input mono"
+              style={{ fontSize: "11px", flex: 1 }}
             />
             <button
               onClick={() => copyToClipboard(webhookUrl, "url")}
-              className={`btn-secondary px-3 shrink-0 ${copied === "url" ? "text-emerald-600" : ""}`}
+              className={`btn btn-secondary`}
+              style={{ padding: "8px 12px", flexShrink: 0, color: copied === "url" ? "var(--green)" : undefined }}
               title="Copiar URL"
             >
-              {copied === "url" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied === "url" ? <Check style={{ width: 16, height: 16 }} /> : <Copy style={{ width: 16, height: 16 }} />}
             </button>
           </div>
         </div>
@@ -428,36 +439,39 @@ function InboundWebhookPanel({
         {/* Secret */}
         {secret ? (
           <div>
-            <label className="form-label text-xs">Secret (Authorization: Bearer)</label>
-            <div className="flex gap-2">
+            <label className="form-label" style={{ fontSize: "11px" }}>Secret (Authorization: Bearer)</label>
+            <div style={{ display: "flex", gap: "8px" }}>
               <input
                 readOnly
                 type={showSecret ? "text" : "password"}
                 value={secret}
-                className="form-input font-mono text-xs bg-gray-50 flex-1"
+                className="form-input mono"
+                style={{ fontSize: "11px", flex: 1 }}
               />
               <button
                 onClick={() => setShowSecret((p) => !p)}
-                className="btn-secondary px-3 shrink-0"
+                className="btn btn-secondary"
+                style={{ padding: "8px 12px", flexShrink: 0 }}
                 title={showSecret ? "Ocultar" : "Mostrar"}
               >
-                {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                {showSecret ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
               </button>
               <button
                 onClick={() => copyToClipboard(secret, "secret")}
-                className={`btn-secondary px-3 shrink-0 ${copied === "secret" ? "text-emerald-600" : ""}`}
+                className={`btn btn-secondary`}
+                style={{ padding: "8px 12px", flexShrink: 0, color: copied === "secret" ? "var(--green)" : undefined }}
                 title="Copiar secret"
               >
-                {copied === "secret" ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copied === "secret" ? <Check style={{ width: 16, height: 16 }} /> : <Copy style={{ width: 16, height: 16 }} />}
               </button>
             </div>
           </div>
         ) : (
-          <div className="rounded-lg bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-800 flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+          <div className="alert-warning" style={{ gap: "8px" }}>
+            <AlertCircle style={{ width: 16, height: 16, flexShrink: 0, marginTop: "2px" }} />
             <div>
-              <p className="font-semibold">Sem secret configurado</p>
-              <p className="mt-0.5 text-amber-700">
+              <p style={{ fontWeight: 700, fontSize: "12px" }}>Sem secret configurado</p>
+              <p style={{ marginTop: "2px", fontSize: "12px", opacity: 0.8 }}>
                 Sem secret, qualquer requisição é aceita (útil para testes). Gere um secret para proteger o endpoint em produção.
               </p>
             </div>
@@ -465,9 +479,9 @@ function InboundWebhookPanel({
         )}
 
         {/* Body de exemplo */}
-        <div className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5">
-          <p className="text-xs font-semibold text-gray-500 mb-1.5">Exemplo de body JSON:</p>
-          <pre className="text-xs font-mono text-gray-700 leading-relaxed whitespace-pre-wrap">
+        <div style={{ borderRadius: "var(--radius-sm)", background: "var(--glass-bg-2)", border: "1px solid var(--glass-border)", padding: "10px 12px" }}>
+          <p style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", marginBottom: "6px" }}>Exemplo de body JSON:</p>
+          <pre className="mono" style={{ fontSize: "11px", color: "var(--text-2)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
 {`{
   "phone": "+5511999990001",
   "name": "João Silva",
@@ -480,12 +494,13 @@ function InboundWebhookPanel({
           <button
             onClick={generateSecret}
             disabled={generating}
-            className="btn-primary w-full justify-center"
+            className="btn btn-primary"
+            style={{ width: "100%", justifyContent: "center" }}
           >
             {generating ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Gerando...</>
+              <><Loader2 style={{ width: 16, height: 16, animation: "spin 1s linear infinite" }} /> Gerando...</>
             ) : (
-              <><Link2 className="w-4 h-4" /> Gerar Webhook Secret</>
+              <><Link2 style={{ width: 16, height: 16 }} /> Gerar Webhook Secret</>
             )}
           </button>
         )}
@@ -661,15 +676,15 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="card">
+    <div className="gc">
       {/* Header com barra de steps */}
       <div className="card-header">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-sm font-semibold text-gray-900">Importar Leads via CSV</h3>
-          <p className="text-xs text-gray-400">Lista: <span className="font-medium text-gray-600">{listName}</span></p>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+          <h3 style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)" }}>Importar Leads via CSV</h3>
+          <p style={{ fontSize: "11px", color: "var(--text-3)" }}>Lista: <span style={{ fontWeight: 600, color: "var(--text-2)" }}>{listName}</span></p>
         </div>
         {/* Barra de progresso dos steps */}
-        <div className="flex items-center gap-2 mt-3">
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "12px" }}>
           {[
             { n: 1, label: "Upload" },
             { n: 2, label: "Mapear colunas" },
@@ -677,19 +692,19 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
           ].map(({ n, label }, i) => (
             <React.Fragment key={n}>
               {i > 0 && (
-                <div className={`flex-1 h-0.5 ${step > i ? "bg-indigo-500" : "bg-gray-200"}`} />
+                <div style={{ flex: 1, height: "2px", background: step > i ? "var(--red)" : "var(--glass-border)" }} />
               )}
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
-                  step > n
-                    ? "bg-emerald-500 text-white"
-                    : step === n
-                    ? "bg-indigo-600 text-white"
-                    : "bg-gray-100 text-gray-400"
-                }`}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                <div style={{
+                  width: "24px", height: "24px", borderRadius: "50%",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "11px", fontWeight: 700,
+                  background: step > n ? "var(--green)" : step === n ? "var(--red)" : "var(--glass-bg-2)",
+                  color: step >= n ? "#fff" : "var(--text-3)",
+                }}>
                   {step > n ? "✓" : n}
                 </div>
-                <span className={`text-xs ${step === n ? "font-semibold text-gray-900" : "text-gray-400"}`}>
+                <span style={{ fontSize: "11px", fontWeight: step === n ? 700 : 400, color: step === n ? "var(--text-1)" : "var(--text-3)" }}>
                   {label}
                 </span>
               </div>
@@ -701,9 +716,9 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
       <div className="card-body">
         {/* Erro global */}
         {error && (
-          <div className="alert-error mb-4">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <span className="text-sm">{error}</span>
+          <div className="alert-error" style={{ marginBottom: "16px" }}>
+            <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
+            <span style={{ fontSize: "13px" }}>{error}</span>
           </div>
         )}
 
@@ -716,10 +731,12 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
           >
-            <input ref={fileRef} type="file" accept=".csv,.xlsx" className="hidden" onChange={handleFileInput} />
-            <Upload className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
-            <p className="text-sm font-semibold text-gray-700">Arraste um arquivo CSV ou XLSX, ou clique para selecionar</p>
-            <p className="text-xs text-gray-400 mt-1">Aceita <strong className="text-gray-500">CSV</strong> e <strong className="text-gray-500">XLSX</strong> · Mapeie as colunas no próximo passo · Duplicatas ignoradas automaticamente</p>
+            <input ref={fileRef} type="file" accept=".csv,.xlsx" style={{ display: "none" }} onChange={handleFileInput} />
+            <Upload style={{ width: 32, height: 32, color: "var(--red)", margin: "0 auto 12px" }} />
+            <p style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)" }}>Arraste um arquivo CSV ou XLSX, ou clique para selecionar</p>
+            <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "4px" }}>
+              Aceita <strong style={{ color: "var(--text-2)" }}>CSV</strong> e <strong style={{ color: "var(--text-2)" }}>XLSX</strong> · Mapeie as colunas no próximo passo · Duplicatas ignoradas automaticamente
+            </p>
           </div>
         )}
 
@@ -729,19 +746,19 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
             {/* Alertas de validação */}
             {phoneMappedCount === 0 && (
               <div className="alert-warning">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
-                <span className="text-sm">Mapeie exatamente uma coluna para <strong>phone</strong> antes de importar.</span>
+                <AlertTriangle style={{ width: 16, height: 16, flexShrink: 0 }} />
+                <span style={{ fontSize: "13px" }}>Mapeie exatamente uma coluna para <strong>phone</strong> antes de importar.</span>
               </div>
             )}
             {phoneMappedCount > 1 && (
               <div className="alert-error">
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="text-sm">Você mapeou {phoneMappedCount} colunas para phone. Escolha apenas uma.</span>
+                <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
+                <span style={{ fontSize: "13px" }}>Você mapeou {phoneMappedCount} colunas para phone. Escolha apenas uma.</span>
               </div>
             )}
 
             {/* Label contador */}
-            <p style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>
+            <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.05em", margin: 0 }}>
               {csvHeaders.length} colunas detectadas — defina o destino de cada uma
             </p>
 
@@ -751,15 +768,14 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
                 <div key={col} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   {/* Coluna original — largura fixa */}
                   <div style={{ flex: "0 0 180px" }}>
-                    <span style={{
+                    <span className="mono" style={{
                       display: "block",
                       padding: "8px 12px",
-                      background: "#f9fafb",
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      fontSize: "13px",
-                      fontFamily: "monospace",
-                      color: "#374151",
+                      background: "var(--glass-bg-2)",
+                      border: "1px solid var(--glass-border)",
+                      borderRadius: "var(--radius-sm)",
+                      fontSize: "12px",
+                      color: "var(--text-1)",
                       whiteSpace: "nowrap",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -769,12 +785,12 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
                   </div>
 
                   {/* Seta */}
-                  <span style={{ color: "#d1d5db", fontSize: "16px", flexShrink: 0 }}>→</span>
+                  <span style={{ color: "var(--text-3)", fontSize: "16px", flexShrink: 0 }}>→</span>
 
                   {/* Select de destino — ocupa o espaço restante */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <select
-                      className="select-native"
+                      className="cx-select"
                       style={{ width: "100%" }}
                       value={mappings[col] ?? "__custom__"}
                       onChange={(e) => setMappings(prev => ({ ...prev, [col]: e.target.value }))}
@@ -804,23 +820,23 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
             {/* Preview das primeiras 3 linhas */}
             {previewRows.length > 0 && (
               <div>
-                <p style={{ fontSize: "11px", fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>
+                <p style={{ fontSize: "10px", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "8px" }}>
                   Preview — primeiras {previewRows.length} linhas
                 </p>
-                <div style={{ overflowX: "auto", border: "1px solid #e5e7eb", borderRadius: "8px" }}>
-                  <table style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse" }}>
+                <div style={{ overflowX: "auto", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-sm)" }}>
+                  <table className="cx-table">
                     <thead>
-                      <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
+                      <tr>
                         {csvHeaders.map(h => (
-                          <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
+                          <th key={h}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {previewRows.map((row, i) => (
-                        <tr key={i} style={{ borderBottom: i < previewRows.length - 1 ? "1px solid #f3f4f6" : "none" }}>
+                        <tr key={i}>
                           {csvHeaders.map(h => (
-                            <td key={h} style={{ padding: "8px 12px", fontFamily: "monospace", color: "#374151", whiteSpace: "nowrap" }}>{row[h] ?? "—"}</td>
+                            <td key={h} className="mono" style={{ whiteSpace: "nowrap" }}>{row[h] ?? "—"}</td>
                           ))}
                         </tr>
                       ))}
@@ -831,19 +847,19 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
             )}
 
             {/* Botões de navegação */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px", borderTop: "1px solid #f3f4f6" }}>
-              <button onClick={reset} className="btn-secondary">
-                <X className="w-4 h-4" /> Cancelar
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "12px", borderTop: "1px solid var(--glass-border)" }}>
+              <button onClick={reset} className="btn btn-secondary">
+                <X style={{ width: 16, height: 16 }} /> Cancelar
               </button>
               <button
                 onClick={handleImport}
                 disabled={!canImport || importing}
-                className="btn-primary"
+                className="btn btn-primary"
               >
                 {importing ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Importando...</>
+                  <><Loader2 style={{ width: 16, height: 16, animation: "spin 1s linear infinite" }} /> Importando...</>
                 ) : (
-                  <><Upload className="w-4 h-4" /> Importar ({Object.values(mappings).filter(v => v !== "__ignore__").length} colunas)</>
+                  <><Upload style={{ width: 16, height: 16 }} /> Importar ({Object.values(mappings).filter(v => v !== "__ignore__").length} colunas)</>
                 )}
               </button>
             </div>
@@ -852,21 +868,25 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
 
         {/* ── STEP 3: Resultado ── */}
         {step === 3 && result && (
-          <div className="py-6 space-y-4">
-            <div className="text-center space-y-2">
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto ${result.imported > 0 ? "bg-emerald-50" : "bg-amber-50"}`}>
+          <div style={{ padding: "24px 0", display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{
+                width: "56px", height: "56px", borderRadius: "50%",
+                display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto",
+                background: result.imported > 0 ? "rgba(0,214,143,0.12)" : "rgba(255,184,0,0.12)",
+              }}>
                 {result.imported > 0
-                  ? <CheckCircle2 className="w-7 h-7 text-emerald-500" />
-                  : <AlertTriangle className="w-7 h-7 text-amber-500" />
+                  ? <CheckCircle2 style={{ width: 28, height: 28, color: "var(--green)" }} />
+                  : <AlertTriangle style={{ width: 28, height: 28, color: "var(--yellow)" }} />
                 }
               </div>
-              <p className="text-base font-semibold text-gray-900">
+              <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>
                 {result.imported > 0
                   ? `${result.imported} leads importados com sucesso`
                   : "Nenhum lead importado"}
               </p>
               {result.skipped > 0 && (
-                <p className="text-sm text-gray-400">
+                <p style={{ fontSize: "13px", color: "var(--text-3)" }}>
                   {result.skipped} linha{result.skipped !== 1 ? "s" : ""} ignorada{result.skipped !== 1 ? "s" : ""} (telefone inválido ou duplicado)
                 </p>
               )}
@@ -874,24 +894,24 @@ function CsvImportWizard({ tenantId, listId, listName, onImportComplete }: CsvIm
 
             {/* Detalhes dos erros */}
             {result.errors.length > 0 && (
-              <div className="bg-red-50 border border-red-100 rounded-lg p-4 text-left space-y-1.5">
-                <p className="text-xs font-semibold text-red-700 flex items-center gap-1.5">
-                  <XCircle className="w-3.5 h-3.5" /> {result.errors.length} erro{result.errors.length !== 1 ? "s" : ""} de validação
+              <div style={{ background: "rgba(232,0,45,0.08)", border: "1px solid rgba(232,0,45,0.15)", borderRadius: "var(--radius-sm)", padding: "16px", textAlign: "left", display: "flex", flexDirection: "column", gap: "6px" }}>
+                <p style={{ fontSize: "11px", fontWeight: 700, color: "#ff4d6d", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <XCircle style={{ width: 14, height: 14 }} /> {result.errors.length} erro{result.errors.length !== 1 ? "s" : ""} de validação
                 </p>
-                <ul className="text-xs text-red-600 space-y-0.5 max-h-32 overflow-y-auto">
+                <ul style={{ fontSize: "11px", color: "#ff4d6d", display: "flex", flexDirection: "column", gap: "2px", maxHeight: "128px", overflowY: "auto", listStyle: "none", padding: 0, margin: 0 }}>
                   {result.errors.map((e, i) => (
-                    <li key={i} className="font-mono">{e}</li>
+                    <li key={i} className="mono">{e}</li>
                   ))}
                 </ul>
                 {result.errors.length === 20 && (
-                  <p className="text-xs text-red-400 italic">Mostrando primeiros 20 erros.</p>
+                  <p style={{ fontSize: "11px", color: "var(--text-3)", fontStyle: "italic" }}>Mostrando primeiros 20 erros.</p>
                 )}
               </div>
             )}
 
-            <div className="flex justify-center">
-              <button onClick={reset} className="btn-secondary">
-                <Upload className="w-4 h-4" /> Importar outro arquivo
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <button onClick={reset} className="btn btn-secondary">
+                <Upload style={{ width: 16, height: 16 }} /> Importar outro arquivo
               </button>
             </div>
           </div>
@@ -951,28 +971,29 @@ function LinkToCampaignModal({
   return (
     <div className="modal-overlay animate-fadeIn" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="card-header flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-900">Incluir em campanha</h2>
-          <button onClick={onClose} className="btn-icon text-gray-400 hover:text-gray-600">
-            <X className="w-4 h-4" />
+        <div className="card-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>Incluir em campanha</h2>
+          <button onClick={onClose} className="btn-icon">
+            <X style={{ width: 16, height: 16 }} />
           </button>
         </div>
-        <form onSubmit={handleSubmit} className="card-body space-y-4">
-          <p className="text-sm text-gray-500">
-            Copiar leads de <strong className="text-gray-700">{list.name}</strong> para a lista de uma campanha existente.
+        <form onSubmit={handleSubmit} className="card-body" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <p style={{ fontSize: "13px", color: "var(--text-2)" }}>
+            Copiar leads de <strong style={{ color: "var(--text-1)" }}>{list.name}</strong> para a lista de uma campanha existente.
             Duplicatas são ignoradas automaticamente.
           </p>
 
           {eligible.length === 0 ? (
             <div className="alert-error">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="text-sm">Nenhuma campanha disponível (todas já usam esta lista).</span>
+              <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
+              <span style={{ fontSize: "13px" }}>Nenhuma campanha disponível (todas já usam esta lista).</span>
             </div>
           ) : (
             <div>
               <label className="form-label">Campanha de destino</label>
               <select
-                className="select-native"
+                className="cx-select"
+                style={{ width: "100%" }}
                 value={selectedQueueId}
                 onChange={(e) => setSelectedQueueId(e.target.value)}
                 required
@@ -986,17 +1007,18 @@ function LinkToCampaignModal({
 
           {error && (
             <div className="alert-error">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="text-sm">{error}</span>
+              <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
+              <span style={{ fontSize: "13px" }}>{error}</span>
             </div>
           )}
 
-          <div className="flex gap-3 justify-end pt-2">
-            <button type="button" onClick={onClose} className="btn-secondary">Cancelar</button>
-            <button type="submit" disabled={loading || eligible.length === 0} className="btn-primary">
+          <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", paddingTop: "8px" }}>
+            <button type="button" onClick={onClose} className="btn btn-secondary">Cancelar</button>
+            <button type="submit" disabled={loading || eligible.length === 0} className="btn btn-primary">
               {loading
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Incluindo...</>
-                : <><ArrowRight className="w-4 h-4" /> Incluir leads</>}
+                ? <><Loader2 style={{ width: 16, height: 16, animation: "spin 1s linear infinite" }} /> Incluindo...</>
+                : <><ArrowRight style={{ width: 16, height: 16 }} /> Incluir leads</>
+              }
             </button>
           </div>
         </form>
@@ -1191,11 +1213,11 @@ export default function LeadsPage() {
     <div>
       {/* Error banner */}
       {pageError && (
-        <div className="alert-error flex items-center gap-3 mb-4 rounded-xl px-4 py-3">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span className="text-sm">{pageError}</span>
-          <button onClick={() => setPageError(null)} className="ml-auto text-red-400 hover:text-red-600">
-            <X className="w-4 h-4" />
+        <div className="alert-error" style={{ marginBottom: "16px", borderRadius: "var(--radius-sm)" }}>
+          <AlertCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
+          <span style={{ fontSize: "13px", flex: 1 }}>{pageError}</span>
+          <button onClick={() => setPageError(null)} className="btn-icon" style={{ marginLeft: "auto" }}>
+            <X style={{ width: 16, height: 16 }} />
           </button>
         </div>
       )}
@@ -1206,23 +1228,23 @@ export default function LeadsPage() {
           <h1 className="page-title">Lead Lists</h1>
           <p className="page-subtitle">Gerencie suas listas de contatos para discagem</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
-          <Plus className="w-4 h-4" />
+        <button onClick={() => setShowCreate(true)} className="btn btn-primary">
+          <Plus style={{ width: 16, height: 16 }} />
           Nova Lista
         </button>
       </div>
 
       {/* Empty state */}
       {lists.length === 0 ? (
-        <div className="card">
+        <div className="gc">
           <div className="empty-state">
             <div className="empty-state-icon">
-              <svg viewBox="0 0 64 64" fill="none" className="w-full h-full">
-                <rect x="8" y="12" width="48" height="40" rx="4" fill="#e0e7ff" />
-                <rect x="16" y="22" width="24" height="3" rx="1.5" fill="#a5b4fc" />
-                <rect x="16" y="30" width="32" height="3" rx="1.5" fill="#c7d2fe" />
-                <rect x="16" y="38" width="20" height="3" rx="1.5" fill="#ddd6fe" />
-                <circle cx="50" cy="50" r="10" fill="#6366f1" />
+              <svg viewBox="0 0 64 64" fill="none" style={{ width: "100%", height: "100%" }}>
+                <rect x="8" y="12" width="48" height="40" rx="4" fill="rgba(232,0,45,0.15)" />
+                <rect x="16" y="22" width="24" height="3" rx="1.5" fill="rgba(232,0,45,0.35)" />
+                <rect x="16" y="30" width="32" height="3" rx="1.5" fill="rgba(232,0,45,0.25)" />
+                <rect x="16" y="38" width="20" height="3" rx="1.5" fill="rgba(232,0,45,0.18)" />
+                <circle cx="50" cy="50" r="10" fill="var(--red)" />
                 <path d="M46 50h8M50 46v8" stroke="white" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </div>
@@ -1230,142 +1252,133 @@ export default function LeadsPage() {
             <p className="empty-state-desc">
               Crie sua primeira lista para começar a importar contatos e disparar campanhas de discagem.
             </p>
-            <button onClick={() => setShowCreate(true)} className="btn-primary">
-              <Plus className="w-4 h-4" />
+            <button onClick={() => setShowCreate(true)} className="btn btn-primary">
+              <Plus style={{ width: 16, height: 16 }} />
               Criar Primeira Lista
             </button>
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="gc leads-layout">
 
           {/* Coluna esquerda: seleção de lista */}
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">Suas Listas</h2>
-            {lists.map((list) => (
-              <div
-                key={list.id}
-                className={`card transition-all ${
-                  list.id === selectedListId
-                    ? "ring-2 ring-indigo-500 bg-indigo-50/50"
-                    : "hover:shadow-md hover:border-gray-200"
-                }`}
-              >
-                {editingListId === list.id ? (
-                  /* ── Modo edição inline ── */
-                  <div className="px-4 py-3 flex items-center gap-2">
-                    <input
-                      type="text"
-                      className="form-input flex-1 text-sm py-1.5"
-                      value={editingListName}
-                      onChange={(e) => setEditingListName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") renameList(list.id, editingListName);
-                        if (e.key === "Escape") setEditingListId(null);
-                      }}
-                      autoFocus
-                    />
-                    <button
-                      onClick={() => renameList(list.id, editingListName)}
-                      disabled={!editingListName.trim()}
-                      className="btn-primary btn-sm px-2 py-1"
-                      title="Salvar"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setEditingListId(null)}
-                      className="btn-secondary btn-sm px-2 py-1"
-                      title="Cancelar"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ) : (
-                  /* ── Modo normal ── */
-                  <div
-                    className="px-4 py-4 flex items-center justify-between cursor-pointer"
-                    onClick={() => handleSelectList(list.id)}
-                    onDoubleClick={() => handleConfirmList(list.id)}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                        list.id === selectedListId ? "bg-indigo-100" : "bg-gray-100"
-                      }`}>
-                        <Users className={`w-4 h-4 ${list.id === selectedListId ? "text-indigo-600" : "text-gray-500"}`} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{list.name}</p>
-                        <p className="text-xs text-gray-400">
-                          {new Date(list.created_at).toLocaleDateString("pt-BR")}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0 ml-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setLinkingList(list);
-                        }}
-                        className="w-7 h-7 flex items-center justify-center rounded hover:bg-indigo-100 text-gray-400 hover:text-indigo-600 transition-colors"
-                        title="Incluir em campanha existente"
-                      >
-                        <Link2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingListId(list.id);
-                          setEditingListName(list.name);
-                        }}
-                        className="w-7 h-7 flex items-center justify-center rounded hover:bg-indigo-100 text-gray-400 hover:text-indigo-600 transition-colors"
-                        title="Renomear lista"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteList(list.id, list.name);
-                        }}
-                        className="w-7 h-7 flex items-center justify-center rounded hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
-                        title="Apagar lista"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleConfirmList(list.id);
-                        }}
-                        className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${
-                          list.id === selectedListId
-                            ? "bg-indigo-100 text-indigo-600"
-                            : "hover:bg-gray-200 text-gray-400 hover:text-gray-600"
-                        }`}
-                        title="Abrir lista de leads"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-            {selectedListId && !listConfirmed && (
-              <button
-                onClick={() => setListConfirmed(true)}
-                className="btn-primary w-full justify-center mt-3"
-              >
-                <Check className="w-4 h-4" />
-                Trabalhar com &quot;{activeList?.name}&quot;
+          <div className="leads-listpanel">
+            <div className="leads-listpanel-header">
+              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: ".8px", color: "var(--text-3)", textTransform: "uppercase", marginBottom: "10px" }}>Suas Listas</div>
+              <button onClick={() => setShowCreate(true)} className="cx-refresh-btn" style={{ width: "100%", justifyContent: "center", padding: "8px", fontSize: "11px" }}>
+                <Plus style={{ width: 12, height: 12 }} /> Nova Lista
               </button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {lists.map((list) => (
+                <div key={list.id}>
+                  {editingListId === list.id ? (
+                    /* ── Modo edição inline ── */
+                    <div style={{ padding: "9px 14px", display: "flex", alignItems: "center", gap: "8px" }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ flex: 1, fontSize: "12px", padding: "6px 8px" }}
+                        value={editingListName}
+                        onChange={(e) => setEditingListName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") renameList(list.id, editingListName);
+                          if (e.key === "Escape") setEditingListId(null);
+                        }}
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => renameList(list.id, editingListName)}
+                        disabled={!editingListName.trim()}
+                        className="leads-action-btn active"
+                        title="Salvar"
+                      >
+                        <Check style={{ width: 14, height: 14 }} />
+                      </button>
+                      <button
+                        onClick={() => setEditingListId(null)}
+                        className="leads-action-btn"
+                        title="Cancelar"
+                      >
+                        <X style={{ width: 14, height: 14 }} />
+                      </button>
+                    </div>
+                  ) : (
+                    /* ── Modo normal ── */
+                    <div
+                      className={`leads-list-item${list.id === selectedListId && listConfirmed ? " active" : ""}`}
+                      onClick={() => handleSelectList(list.id)}
+                      onDoubleClick={() => handleConfirmList(list.id)}
+                      style={{ position: "relative" }}
+                    >
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                        {list.name}
+                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "2px", flexShrink: 0 }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setLinkingList(list);
+                          }}
+                          className="leads-action-btn"
+                          title="Incluir em campanha existente"
+                        >
+                          <Link2 style={{ width: 12, height: 12 }} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingListId(list.id);
+                            setEditingListName(list.name);
+                          }}
+                          className="leads-action-btn"
+                          title="Renomear lista"
+                        >
+                          <Pencil style={{ width: 12, height: 12 }} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteList(list.id, list.name);
+                          }}
+                          className="leads-action-btn danger"
+                          title="Apagar lista"
+                        >
+                          <Trash2 style={{ width: 12, height: 12 }} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleConfirmList(list.id);
+                          }}
+                          className={`leads-action-btn${list.id === selectedListId && listConfirmed ? " active" : ""}`}
+                          title="Abrir lista de leads"
+                        >
+                          <ChevronRight style={{ width: 14, height: 14 }} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {selectedListId && !listConfirmed && (
+              <div style={{ padding: "10px 14px", borderTop: "1px solid var(--glass-border)" }}>
+                <button
+                  onClick={() => setListConfirmed(true)}
+                  className="cx-refresh-btn"
+                  style={{ width: "100%", justifyContent: "center", padding: "8px", fontSize: "11px" }}
+                >
+                  <Check style={{ width: 12, height: 12 }} />
+                  Trabalhar com &quot;{activeList?.name}&quot;
+                </button>
+              </div>
             )}
           </div>
 
           {/* Coluna direita: importar CSV + tabela */}
           {listConfirmed ? (
-          <div className="lg:col-span-2 space-y-5">
+          <div className="leads-main" style={{ overflowY: "auto", padding: "18px", display: "flex", flexDirection: "column", gap: "18px" }}>
 
             {/* ── CSV Import Wizard ── */}
             {selectedListId && (
@@ -1390,11 +1403,11 @@ export default function LeadsPage() {
 
             {/* ── Tabela de leads ── */}
             <div>
-              <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide shrink-0">
+              <div className="leads-toolbar" style={{ padding: "0 0 12px", border: "none" }}>
+                <h3 style={{ fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: ".7px", color: "var(--text-3)", flexShrink: 0 }}>
                   Leads da Lista{" "}
                   {leadsTotal !== null && leadsTotal > 0 && (
-                    <span className="text-gray-400 font-normal normal-case">
+                    <span style={{ fontWeight: 400, textTransform: "none" }}>
                       {searchLead.trim()
                         ? `(${leads.length} resultado${leads.length !== 1 ? "s" : ""} de ${leadsTotal.toLocaleString("pt-BR")})`
                         : `(${leadsTotal.toLocaleString("pt-BR")})`}
@@ -1402,34 +1415,35 @@ export default function LeadsPage() {
                   )}
                 </h3>
                 {selectedListId && (
-                  <div className="relative flex-1 max-w-xs">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                  <div className="leads-search-wrap" style={{ maxWidth: "280px" }}>
+                    <Phone className="leads-search-icon" style={{ width: 13, height: 13 }} />
                     <input
                       type="text"
-                      className="form-input pl-9 py-1.5 text-sm w-full"
+                      className="leads-search-input"
                       placeholder="Buscar por telefone ou nome..."
                       value={searchLead}
                       onChange={(e) => setSearchLead(e.target.value)}
                     />
                     {searchLead && (
-                      <button onClick={() => setSearchLead("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500">
-                        <X className="w-3.5 h-3.5" />
+                      <button onClick={() => setSearchLead("")} className="leads-search-clear">
+                        <X style={{ width: 13, height: 13 }} />
                       </button>
                     )}
                   </div>
                 )}
-                <div className="flex items-center gap-2">
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginLeft: "auto" }}>
                   {/* Botão de reset aparece só se há leads travados em 'calling' */}
                   {stuckCount > 0 && (
                     <button
                       onClick={resetStuckLeads}
                       disabled={resettingStuck}
-                      className="btn-secondary text-xs gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
+                      className="cx-filter-btn"
+                      style={{ fontSize: "11px", gap: "6px", color: "var(--yellow)", borderColor: "rgba(255,184,0,0.25)" }}
                       title={`${stuckCount} lead${stuckCount > 1 ? "s" : ""} preso${stuckCount > 1 ? "s" : ""} em "Em ligação" — clique para resetar para a fila`}
                     >
                       {resettingStuck
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <RotateCcw className="w-3.5 h-3.5" />
+                        ? <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
+                        : <RotateCcw style={{ width: 14, height: 14 }} />
                       }
                       Resetar travados ({stuckCount})
                     </button>
@@ -1437,9 +1451,10 @@ export default function LeadsPage() {
                   {selectedListId && (
                     <button
                       onClick={() => setShowAddLead(true)}
-                      className="btn-secondary text-xs gap-1.5"
+                      className="cx-refresh-btn"
+                      style={{ fontSize: "11px", padding: "6px 12px" }}
                     >
-                      <UserPlus className="w-3.5 h-3.5" />
+                      <UserPlus style={{ width: 13, height: 13 }} />
                       Adicionar Lead
                     </button>
                   )}
@@ -1447,150 +1462,153 @@ export default function LeadsPage() {
               </div>
 
               {loadingLeads ? (
-                <div className="card">
-                  <div className="divide-y divide-gray-50">
+                <div className="gc" style={{ padding: "0" }}>
+                  <div>
                     {[...Array(5)].map((_, i) => (
-                      <div key={i} className="px-5 py-4 flex gap-4">
-                        <div className="skeleton h-4 w-32" />
-                        <div className="skeleton h-4 w-28" />
-                        <div className="skeleton h-4 w-20" />
-                        <div className="skeleton h-4 w-12" />
+                      <div key={i} style={{ padding: "16px 20px", display: "flex", gap: "16px", borderBottom: i < 4 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+                        <div className="skeleton" style={{ height: "16px", width: "128px" }} />
+                        <div className="skeleton" style={{ height: "16px", width: "112px" }} />
+                        <div className="skeleton" style={{ height: "16px", width: "80px" }} />
+                        <div className="skeleton" style={{ height: "16px", width: "48px" }} />
                       </div>
                     ))}
                   </div>
                 </div>
               ) : leads.length > 0 || searchLead.trim() ? (
-                <div className="table-wrapper">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>
-                          <span className="flex items-center gap-1.5">
-                            <Phone className="w-3.5 h-3.5" />
-                            Telefone
-                          </span>
-                        </th>
-                        <th>Nome / Empresa</th>
-                        <th>Campos extras</th>
-                        <th>Atendido?</th>
-                        <th>Status</th>
-                        <th>Tent.</th>
-                        <th className="w-10"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredLeads.length === 0 ? (
+                <div className="gc" style={{ overflow: "hidden" }}>
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="cx-table">
+                      <thead>
                         <tr>
-                          <td colSpan={6} className="text-center py-8 text-gray-400 text-sm">
-                            {loadingLeads
-                              ? "Buscando..."
-                              : `Nenhum lead encontrado para "${searchLead}"`}
-                          </td>
+                          <th>
+                            <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <Phone style={{ width: 13, height: 13 }} />
+                              Telefone
+                            </span>
+                          </th>
+                          <th>Nome / Empresa</th>
+                          <th>Campos extras</th>
+                          <th>Atendido?</th>
+                          <th>Status</th>
+                          <th>Tent.</th>
+                          <th style={{ width: "40px" }}></th>
                         </tr>
-                      ) : filteredLeads.map((lead) => {
-                        const statusCfg = STATUS_CONFIG[lead.status] ?? { label: lead.status, badge: "badge-gray" };
-                        const { name, company, nome, empresa, ...rest } = lead.data_json ?? {};
-                        const displayName = name ?? nome;
-                        const displayCompany = company ?? empresa;
-                        const extras = Object.entries(rest).map(([k, v]) => `${k}: ${v}`).join(" · ");
-
-                        // Atendido: baseado em last_outcome
-                        // Fonte canônica — idêntica à usada no menu Campanhas (queues/page.tsx)
-                        const ANSWERED = new Set([
-                          "customer-ended-call",
-                          "assistant-ended-call",
-                          "exceeded-max-duration",
-                        ]);
-                        const NO_ANSWER = new Set([
-                          // Vapi v1
-                          "no-answer", "busy", "voicemail",
-                          "machine_end_silence", "machine_end_other",
-                          // Vapi v2
-                          "customer-did-not-answer", "customer-busy", "silence-timed-out",
-                          // Erros técnicos (provider fault) — não foi atendido
-                          "pipeline-error", "transport-error",
-                        ]);
-                        const answered =
-                          lead.last_outcome == null ? null
-                          : ANSWERED.has(lead.last_outcome) ? true
-                          : NO_ANSWER.has(lead.last_outcome) ||
-                            lead.last_outcome.startsWith("sip-") ||
-                            lead.last_outcome.startsWith("pipeline-error") ? false
-                          : null;
-
-                        // Próxima tentativa
-                        const nextAt = lead.next_attempt_at ? new Date(lead.next_attempt_at) : null;
-                        const nextAtLabel = nextAt
-                          ? nextAt < new Date()
-                            ? "Imediato"
-                            : nextAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-                          : null;
-
-                        return (
-                          <tr key={lead.id}>
-                            <td className="font-mono font-medium text-gray-900 text-xs">{lead.phone_e164}</td>
-                            <td>
-                              {displayName ? (
-                                <div>
-                                  <p className="text-sm font-medium text-gray-800">{displayName}</p>
-                                  {displayCompany && <p className="text-xs text-gray-400">{displayCompany}</p>}
-                                </div>
-                              ) : (
-                                <span className="text-gray-300 text-xs">—</span>
-                              )}
-                            </td>
-                            <td className="text-gray-400 text-xs max-w-[180px] truncate" title={extras}>{extras || "—"}</td>
-                            <td>
-                              {answered === true && (
-                                <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
-                                  <CheckCircle2 className="w-3.5 h-3.5" /> Sim
-                                </span>
-                              )}
-                              {answered === false && (
-                                <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-400">
-                                  <XCircle className="w-3.5 h-3.5" /> Não
-                                </span>
-                              )}
-                              {answered === null && <span className="text-gray-300 text-xs">—</span>}
-                            </td>
-                            <td>
-                              <div className="space-y-0.5">
-                                <span className={statusCfg.badge}>{statusCfg.label}</span>
-                                {nextAtLabel && lead.status === "queued" && (
-                                  <p className="text-xs text-indigo-500 mt-0.5">
-                                    Retry: {nextAtLabel}
-                                  </p>
-                                )}
-                              </div>
-                            </td>
-                            <td className="text-gray-500 text-center">{lead.attempt_count}</td>
-                            <td>
-                              <button
-                                onClick={() => deleteLead(lead.id, lead.phone_e164)}
-                                className="w-7 h-7 flex items-center justify-center rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors ml-auto"
-                                title="Apagar lead"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                      </thead>
+                      <tbody>
+                        {filteredLeads.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "var(--text-3)", fontSize: "13px" }}>
+                              {loadingLeads
+                                ? "Buscando..."
+                                : `Nenhum lead encontrado para "${searchLead}"`}
                             </td>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                        ) : filteredLeads.map((lead) => {
+                          const statusCfg = STATUS_CONFIG[lead.status] ?? { label: lead.status, badge: "badge-gray" };
+                          const { name, company, nome, empresa, ...rest } = lead.data_json ?? {};
+                          const displayName = name ?? nome;
+                          const displayCompany = company ?? empresa;
+                          const extras = Object.entries(rest).map(([k, v]) => `${k}: ${v}`).join(" · ");
+
+                          // Atendido: baseado em last_outcome
+                          // Fonte canônica — idêntica à usada no menu Campanhas (queues/page.tsx)
+                          const ANSWERED = new Set([
+                            "customer-ended-call",
+                            "assistant-ended-call",
+                            "exceeded-max-duration",
+                          ]);
+                          const NO_ANSWER = new Set([
+                            // Vapi v1
+                            "no-answer", "busy", "voicemail",
+                            "machine_end_silence", "machine_end_other",
+                            // Vapi v2
+                            "customer-did-not-answer", "customer-busy", "silence-timed-out",
+                            // Erros técnicos (provider fault) — não foi atendido
+                            "pipeline-error", "transport-error",
+                          ]);
+                          const answered =
+                            lead.last_outcome == null ? null
+                            : ANSWERED.has(lead.last_outcome) ? true
+                            : NO_ANSWER.has(lead.last_outcome) ||
+                              lead.last_outcome.startsWith("sip-") ||
+                              lead.last_outcome.startsWith("pipeline-error") ? false
+                            : null;
+
+                          // Próxima tentativa
+                          const nextAt = lead.next_attempt_at ? new Date(lead.next_attempt_at) : null;
+                          const nextAtLabel = nextAt
+                            ? nextAt < new Date()
+                              ? "Imediato"
+                              : nextAt.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+                            : null;
+
+                          return (
+                            <tr key={lead.id}>
+                              <td className="mono" style={{ fontWeight: 600, color: "var(--text-1)", fontSize: "12px" }}>{lead.phone_e164}</td>
+                              <td>
+                                {displayName ? (
+                                  <div>
+                                    <p style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-1)" }}>{displayName}</p>
+                                    {displayCompany && <p style={{ fontSize: "11px", color: "var(--text-3)" }}>{displayCompany}</p>}
+                                  </div>
+                                ) : (
+                                  <span style={{ color: "var(--text-3)", fontSize: "12px" }}>—</span>
+                                )}
+                              </td>
+                              <td style={{ fontSize: "12px", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={extras}>{extras || "—"}</td>
+                              <td>
+                                {answered === true && (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: 600, color: "var(--green)" }}>
+                                    <CheckCircle2 style={{ width: 14, height: 14 }} /> Sim
+                                  </span>
+                                )}
+                                {answered === false && (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: 600, color: "var(--text-3)" }}>
+                                    <XCircle style={{ width: 14, height: 14 }} /> Não
+                                  </span>
+                                )}
+                                {answered === null && <span style={{ color: "var(--text-3)", fontSize: "12px" }}>—</span>}
+                              </td>
+                              <td>
+                                <div>
+                                  <span className={statusCfg.badge}>{statusCfg.label}</span>
+                                  {nextAtLabel && lead.status === "queued" && (
+                                    <p style={{ fontSize: "11px", color: "var(--purple)", marginTop: "2px" }}>
+                                      Retry: {nextAtLabel}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                              <td style={{ textAlign: "center" }}>{lead.attempt_count}</td>
+                              <td>
+                                <button
+                                  onClick={() => deleteLead(lead.id, lead.phone_e164)}
+                                  className="leads-action-btn danger"
+                                  style={{ marginLeft: "auto" }}
+                                  title="Apagar lead"
+                                >
+                                  <Trash2 style={{ width: 14, height: 14 }} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : (
-                <div className="card">
-                  <div className="empty-state py-12">
-                    <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
-                      <Users className="w-5 h-5 text-gray-300" />
+                <div className="gc">
+                  <div className="empty-state" style={{ padding: "48px 24px" }}>
+                    <div style={{ width: "48px", height: "48px", margin: "0 auto 16px", borderRadius: "50%", background: "var(--glass-bg-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <Users style={{ width: 20, height: 20, color: "var(--text-3)" }} />
                     </div>
                     <p className="empty-state-title">Nenhum lead nesta lista</p>
                     <p className="empty-state-desc">
                       Importe um CSV ou adicione leads manualmente para começar.
                     </p>
-                    <button onClick={() => setShowAddLead(true)} className="btn-secondary">
-                      <UserPlus className="w-4 h-4" />
+                    <button onClick={() => setShowAddLead(true)} className="btn btn-secondary">
+                      <UserPlus style={{ width: 16, height: 16 }} />
                       Adicionar primeiro lead
                     </button>
                   </div>
@@ -1599,15 +1617,15 @@ export default function LeadsPage() {
             </div>
           </div>
           ) : (
-          <div className="lg:col-span-2 flex items-center justify-center">
-            <div className="text-center py-20">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
-                <Users className="w-7 h-7 text-gray-300" />
+          <div className="leads-main" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ textAlign: "center", padding: "80px 0" }}>
+              <div style={{ width: "64px", height: "64px", margin: "0 auto 16px", borderRadius: "50%", background: "var(--glass-bg-2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Users style={{ width: 28, height: 28, color: "var(--text-3)" }} />
               </div>
-              <p className="text-base font-semibold text-gray-700 mb-2">
+              <p style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-1)", marginBottom: "8px" }}>
                 Selecione uma lista para continuar
               </p>
-              <p className="text-sm text-gray-400">
+              <p style={{ fontSize: "13px", color: "var(--text-3)" }}>
                 Escolha uma lista existente à esquerda ou crie uma nova lista.
               </p>
             </div>
@@ -1648,8 +1666,8 @@ export default function LeadsPage() {
         {toasts.map((t) => (
           <div key={t.id} className={t.type === "success" ? "toast-success" : "toast-error"}>
             {t.type === "success"
-              ? <Check className="w-4 h-4 text-emerald-400" />
-              : <AlertCircle className="w-4 h-4" />
+              ? <Check style={{ width: 16, height: 16 }} />
+              : <AlertCircle style={{ width: 16, height: 16 }} />
             }
             {t.message}
           </div>

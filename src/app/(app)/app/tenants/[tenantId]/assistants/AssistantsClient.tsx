@@ -233,8 +233,8 @@ export default function AssistantsClient() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+      <div className="cx-loading" style={{ height: 256 }}>
+        <div className="cx-spinner" />
       </div>
     );
   }
@@ -248,10 +248,10 @@ export default function AssistantsClient() {
             <p className="page-subtitle">Edite o prompt e configurações dos seus agentes de voz</p>
           </div>
         </div>
-        <div className="card p-10 text-center text-gray-400">
-          <Bot className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-          <p className="font-medium">Vapi não configurada</p>
-          <p className="text-sm mt-1">Configure sua API Key do Vapi em Configuração Vapi para ver os assistentes.</p>
+        <div className="gc empty-state">
+          <Bot className="empty-state-icon" style={{ color: "var(--text-3)" }} />
+          <p className="empty-state-title">Vapi não configurada</p>
+          <p className="empty-state-desc">Configure sua API Key do Vapi em Configuração Vapi para ver os assistentes.</p>
         </div>
       </div>
     );
@@ -266,10 +266,10 @@ export default function AssistantsClient() {
             <p className="page-subtitle">Edite o prompt e configurações dos seus agentes de voz</p>
           </div>
         </div>
-        <div className="card p-10 text-center text-gray-400">
-          <Bot className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-          <p className="font-medium">Nenhum assistente encontrado</p>
-          <p className="text-sm mt-1">Crie um assistente no painel do Vapi e ele aparecerá aqui.</p>
+        <div className="gc empty-state">
+          <Bot className="empty-state-icon" style={{ color: "var(--text-3)" }} />
+          <p className="empty-state-title">Nenhum assistente encontrado</p>
+          <p className="empty-state-desc">Crie um assistente no painel do Vapi e ele aparecerá aqui.</p>
         </div>
       </div>
     );
@@ -282,53 +282,74 @@ export default function AssistantsClient() {
           <h1 className="page-title">Assistentes</h1>
           <p className="page-subtitle">Edite o prompt e configurações dos seus agentes de voz</p>
         </div>
-        <button onClick={loadAssistants} className="btn-secondary">
-          <RefreshCw className="w-4 h-4" />
+        <button onClick={loadAssistants} className="cx-refresh-btn">
+          <RefreshCw style={{ width: 14, height: 14 }} />
           Atualizar
         </button>
       </div>
 
-      <div className="space-y-3">
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {cards.map((card) => (
-          <div key={card.id} className="card">
+          <div key={card.id} className="gc">
             {/* Header row — always visible */}
-            <div className="flex items-center">
+            <div style={{ display: "flex", alignItems: "center" }}>
               <button
                 onClick={() => toggleCard(card.id)}
-                className="flex-1 flex items-center justify-between gap-3 p-5 hover:bg-gray-50 transition-colors text-left min-w-0"
+                style={{
+                  flex: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  padding: 20,
+                  textAlign: "left",
+                  minWidth: 0,
+                  transition: "background 0.15s",
+                  borderRadius: "var(--radius) 0 0 var(--radius)",
+                }}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
-                    <Bot className="w-4 h-4 text-indigo-500" />
+                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                  <div style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: "var(--radius-sm)",
+                    background: "var(--red-lo)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}>
+                    <Bot style={{ width: 16, height: 16, color: "var(--red)" }} />
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{card.name}</p>
-                    <p className="text-xs text-gray-400 font-mono truncate">{card.id.slice(0, 20)}&hellip;</p>
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontWeight: 600, color: "var(--text-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.name}</p>
+                    <p style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "'JetBrains Mono', monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.id.slice(0, 20)}&hellip;</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {card.loading && <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  {card.loading && <div className="cx-spinner" />}
                   {card.allFields.length > 0 && (
-                    <span className="badge badge-indigo flex items-center gap-1 text-xs">
-                      <Sparkles className="w-3 h-3" />
+                    <span className="badge badge-purple" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11 }}>
+                      <Sparkles style={{ width: 12, height: 12 }} />
                       {card.allFields.length} campo{card.allFields.length !== 1 ? "s" : ""}
                     </span>
                   )}
                   {card.expanded
-                    ? <ChevronUp className="w-4 h-4 text-gray-400" />
-                    : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                    ? <ChevronUp style={{ width: 16, height: 16, color: "var(--text-3)" }} />
+                    : <ChevronDown style={{ width: 16, height: 16, color: "var(--text-3)" }} />}
                 </div>
               </button>
 
               {/* Botão Testar — fora do toggle para evitar aninhamento de <button> */}
-              <div className="pr-4 shrink-0">
+              <div style={{ paddingRight: 16, flexShrink: 0 }}>
                 <button
                   onClick={() => void startTestCall(card)}
                   disabled={testCall !== null}
-                  className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-green-50 hover:border-green-300 hover:text-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="cx-filter-btn"
+                  style={{ gap: 6, fontSize: 12, fontWeight: 500 }}
                   title="Testar assistente via WebRTC"
                 >
-                  <Phone className="w-3.5 h-3.5" />
+                  <Phone style={{ width: 14, height: 14 }} />
                   Testar
                 </button>
               </div>
@@ -336,18 +357,24 @@ export default function AssistantsClient() {
 
             {/* Expanded editor */}
             {card.expanded && (
-              <div className="border-t border-gray-100 p-5 space-y-5">
+              <div style={{
+                borderTop: "1px solid var(--glass-border)",
+                padding: 20,
+                display: "flex",
+                flexDirection: "column",
+                gap: 20,
+              }}>
                 {card.loading ? (
-                  <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Carregando configurações&hellip;
+                  <div className="cx-loading" style={{ paddingTop: 16, paddingBottom: 16 }}>
+                    <div className="cx-spinner" />
+                    <span>Carregando configurações&hellip;</span>
                   </div>
                 ) : (
                   <>
                     {card.error && (
                       <div className="alert-error">
-                        <AlertTriangle className="w-4 h-4 shrink-0" />
-                        <span className="text-sm">{card.error}</span>
+                        <AlertTriangle style={{ width: 16, height: 16, flexShrink: 0 }} />
+                        <span style={{ fontSize: 13 }}>{card.error}</span>
                       </div>
                     )}
 
@@ -367,12 +394,13 @@ export default function AssistantsClient() {
                     <div>
                       <label className="form-label">Primeira mensagem</label>
                       <textarea
-                        className="form-input min-h-[80px] resize-y"
+                        className="form-input"
+                        style={{ minHeight: 80, resize: "vertical" }}
                         value={card.editFirstMessage}
                         onChange={(e) => updateCard(card.id, { editFirstMessage: e.target.value })}
                         placeholder="Olá! Aqui é a Ana da Clínica…"
                       />
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>
                         Primeira coisa que o agente diz quando a chamada é atendida.
                       </p>
                     </div>
@@ -381,20 +409,31 @@ export default function AssistantsClient() {
                     <div>
                       <label className="form-label">Prompt do sistema</label>
                       <textarea
-                        className="form-input min-h-[240px] resize-y font-mono text-sm"
+                        className="form-input"
+                        style={{ minHeight: 240, resize: "vertical", fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}
                         value={card.editSystemPrompt}
                         onChange={(e) => updateCard(card.id, { editSystemPrompt: e.target.value })}
                         placeholder="Você é um assistente de vendas…"
                       />
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>
                         Instruções completas de comportamento do agente.
                       </p>
                     </div>
 
                     {/* Voice info (read-only) */}
                     {card.config?.voice && Object.keys(card.config.voice).length > 0 && (
-                      <div className="flex items-center gap-2 text-xs text-gray-400 p-3 bg-gray-50 rounded-lg">
-                        <Mic className="w-3.5 h-3.5 shrink-0" />
+                      <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        fontSize: 11,
+                        color: "var(--text-3)",
+                        padding: 12,
+                        background: "var(--glass-bg)",
+                        borderRadius: "var(--radius-sm)",
+                        border: "1px solid var(--glass-border)",
+                      }}>
+                        <Mic style={{ width: 14, height: 14, flexShrink: 0 }} />
                         <span>
                           Voz: {String(card.config.voice.voiceId ?? card.config.voice.voice ?? "—")}
                         </span>
@@ -402,21 +441,21 @@ export default function AssistantsClient() {
                     )}
 
                     {/* Save button */}
-                    <div className="flex items-center justify-between pt-1">
-                      <p className="text-xs text-gray-400">
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 4 }}>
+                      <p style={{ fontSize: 11, color: "var(--text-3)" }}>
                         Snapshot automático salvo antes de cada edição
                       </p>
                       <button
                         onClick={() => saveAssistant(card.id)}
                         disabled={card.saving}
-                        className="btn-primary"
+                        className="btn btn-primary"
                       >
                         {card.saving ? (
-                          <><Loader2 className="w-4 h-4 animate-spin" />Salvando&hellip;</>
+                          <><div className="cx-spinner" style={{ width: 16, height: 16 }} />Salvando&hellip;</>
                         ) : card.saved ? (
-                          <><Check className="w-4 h-4" />Salvo!</>
+                          <><Check style={{ width: 16, height: 16 }} />Salvo!</>
                         ) : (
-                          <><Save className="w-4 h-4" />Salvar Alterações</>
+                          <><Save style={{ width: 16, height: 16 }} />Salvar Alterações</>
                         )}
                       </button>
                     </div>
@@ -430,72 +469,137 @@ export default function AssistantsClient() {
 
       {/* ── Modal: Testar Assistente ── */}
       {testCall && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
+        <div className="modal-overlay">
+          <div className="modal" style={{ padding: 24 }}>
             {/* Header */}
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="font-semibold text-gray-900">Testar Assistente</h2>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <h2 style={{ fontWeight: 600, color: "var(--text-1)" }}>Testar Assistente</h2>
               {(testCall.status === "ended" || testCall.status === "error") && (
-                <button onClick={() => setTestCall(null)} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors">
-                  <X className="w-5 h-5" />
+                <button
+                  onClick={() => setTestCall(null)}
+                  className="btn-icon"
+                >
+                  <X style={{ width: 20, height: 20 }} />
                 </button>
               )}
             </div>
-            <p className="text-sm text-gray-500 mb-5 truncate">{testCall.assistantName}</p>
+            <p style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 20, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{testCall.assistantName}</p>
 
             {/* Connecting */}
             {testCall.status === "connecting" && (
-              <div className="flex flex-col items-center gap-3 py-6">
-                <div className="relative">
-                  <div className="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center">
-                    <Phone className="w-6 h-6 text-indigo-500" />
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, paddingTop: 24, paddingBottom: 24 }}>
+                <div style={{ position: "relative" }}>
+                  <div style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: "50%",
+                    background: "var(--red-lo)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}>
+                    <Phone style={{ width: 24, height: 24, color: "var(--red)" }} />
                   </div>
-                  <div className="absolute inset-0 rounded-full border-2 border-indigo-300 animate-ping opacity-60" />
+                  <div style={{
+                    position: "absolute",
+                    inset: 0,
+                    borderRadius: "50%",
+                    border: "2px solid var(--red)",
+                    animation: "cx-spin 1.5s linear infinite",
+                    opacity: 0.4,
+                  }} />
                 </div>
-                <p className="text-sm text-gray-600 font-medium">Conectando ao assistente…</p>
-                <p className="text-xs text-gray-400">Aguarde, isso pode levar alguns segundos</p>
+                <p style={{ fontSize: 13, color: "var(--text-1)", fontWeight: 500 }}>Conectando ao assistente…</p>
+                <p style={{ fontSize: 11, color: "var(--text-3)" }}>Aguarde, isso pode levar alguns segundos</p>
               </div>
             )}
 
             {/* Active call */}
             {testCall.status === "active" && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl">
-                  <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse shrink-0" />
-                  <span className="text-sm font-medium text-emerald-700">Em chamada</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: 12,
+                  background: "rgba(0,214,143,0.10)",
+                  borderRadius: "var(--radius-sm)",
+                  border: "1px solid rgba(0,214,143,0.20)",
+                }}>
+                  <div style={{
+                    width: 10,
+                    height: 10,
+                    background: "var(--green)",
+                    borderRadius: "50%",
+                    animation: "pulse 2s ease-in-out infinite",
+                    flexShrink: 0,
+                  }} />
+                  <span style={{ fontSize: 13, fontWeight: 500, color: "var(--green)" }}>Em chamada</span>
                 </div>
 
                 {/* Volume meter */}
                 <div>
-                  <p className="text-xs text-gray-400 mb-1.5">Volume do agente</p>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>Volume do agente</p>
+                  <div style={{
+                    height: 6,
+                    background: "rgba(255,255,255,0.07)",
+                    borderRadius: 999,
+                    overflow: "hidden",
+                  }}>
                     <div
-                      className="h-full bg-emerald-400 rounded-full transition-all duration-75"
-                      style={{ width: `${Math.min(100, testCall.volume * 300)}%` }}
+                      style={{
+                        height: "100%",
+                        background: "var(--green)",
+                        borderRadius: 999,
+                        transition: "width 75ms",
+                        width: `${Math.min(100, testCall.volume * 300)}%`,
+                      }}
                     />
                   </div>
                 </div>
 
                 {/* Controls */}
-                <div className="flex gap-2 pt-1">
+                <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
                   <button
                     onClick={toggleMute}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-colors ${
-                      testCall.muted
-                        ? "bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100"
-                        : "bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100"
-                    }`}
+                    className="cx-filter-btn"
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      padding: "10px 16px",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      background: testCall.muted ? "rgba(255,184,0,0.10)" : undefined,
+                      borderColor: testCall.muted ? "rgba(255,184,0,0.25)" : undefined,
+                      color: testCall.muted ? "var(--yellow)" : undefined,
+                    }}
                   >
                     {testCall.muted
-                      ? <><MicOff className="w-4 h-4" />Ativar mic</>
-                      : <><Mic className="w-4 h-4" />Mutar mic</>
+                      ? <><MicOff style={{ width: 16, height: 16 }} />Ativar mic</>
+                      : <><Mic style={{ width: 16, height: 16 }} />Mutar mic</>
                     }
                   </button>
                   <button
                     onClick={() => void stopTestCall()}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors"
+                    className="btn"
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      padding: "10px 16px",
+                      borderRadius: "var(--radius-sm)",
+                      background: "var(--red)",
+                      color: "#fff",
+                      fontSize: 13,
+                      fontWeight: 500,
+                    }}
                   >
-                    <PhoneOff className="w-4 h-4" />
+                    <PhoneOff style={{ width: 16, height: 16 }} />
                     Encerrar
                   </button>
                 </div>
@@ -504,13 +608,21 @@ export default function AssistantsClient() {
 
             {/* Ended */}
             {testCall.status === "ended" && (
-              <div className="flex flex-col items-center gap-3 py-6">
-                <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center">
-                  <CheckCircle2 className="w-7 h-7 text-emerald-500" />
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, paddingTop: 24, paddingBottom: 24 }}>
+                <div style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: "50%",
+                  background: "rgba(0,214,143,0.10)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
+                  <CheckCircle2 style={{ width: 28, height: 28, color: "var(--green)" }} />
                 </div>
-                <p className="text-sm font-medium text-gray-700">Chamada encerrada</p>
-                <p className="text-xs text-gray-400">O teste foi concluído com sucesso</p>
-                <button onClick={() => setTestCall(null)} className="btn-secondary mt-2">
+                <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-1)" }}>Chamada encerrada</p>
+                <p style={{ fontSize: 11, color: "var(--text-3)" }}>O teste foi concluído com sucesso</p>
+                <button onClick={() => setTestCall(null)} className="btn btn-secondary" style={{ marginTop: 8 }}>
                   Fechar
                 </button>
               </div>
@@ -518,13 +630,21 @@ export default function AssistantsClient() {
 
             {/* Error */}
             {testCall.status === "error" && (
-              <div className="flex flex-col items-center gap-3 py-6">
-                <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
-                  <AlertTriangle className="w-7 h-7 text-red-400" />
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, paddingTop: 24, paddingBottom: 24 }}>
+                <div style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: "50%",
+                  background: "var(--red-lo)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}>
+                  <AlertTriangle style={{ width: 28, height: 28, color: "var(--red)" }} />
                 </div>
-                <p className="text-sm font-medium text-gray-700">Erro ao conectar</p>
-                <p className="text-xs text-red-500 text-center max-w-xs">{testCall.error ?? "Erro desconhecido"}</p>
-                <button onClick={() => setTestCall(null)} className="btn-secondary mt-2">
+                <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-1)" }}>Erro ao conectar</p>
+                <p style={{ fontSize: 11, color: "var(--red)", textAlign: "center", maxWidth: 280 }}>{testCall.error ?? "Erro desconhecido"}</p>
+                <button onClick={() => setTestCall(null)} className="btn btn-secondary" style={{ marginTop: 8 }}>
                   Fechar
                 </button>
               </div>
@@ -534,10 +654,10 @@ export default function AssistantsClient() {
       )}
 
       {/* Toasts */}
-      <div className="toast-container">
+      <div className="cx-toast-container">
         {toasts.map((t) => (
-          <div key={t.id} className={t.type === "success" ? "toast-success" : "toast-error"}>
-            {t.type === "success" ? <Check className="w-4 h-4 text-emerald-400" /> : <AlertTriangle className="w-4 h-4" />}
+          <div key={t.id} className={t.type === "success" ? "cx-toast cx-toast-success" : "cx-toast cx-toast-error"}>
+            {t.type === "success" ? <Check style={{ width: 16, height: 16, color: "var(--green)" }} /> : <AlertTriangle style={{ width: 16, height: 16 }} />}
             {t.message}
           </div>
         ))}

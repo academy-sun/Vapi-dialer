@@ -8,7 +8,7 @@ import {
   Settings2, Users, ListOrdered, PhoneCall, UserCheck, LogOut,
   Plus, ChevronDown, Check, X, FlaskConical, LayoutDashboard,
   BarChart2, Bot, Bell, AlertTriangle, Search, FileBarChart2,
-  PanelLeft,
+  RefreshCw, PanelLeft,
 } from "lucide-react";
 
 interface Tenant { id: string; name: string; timezone: string; }
@@ -189,27 +189,22 @@ export default function AppShell({
   const userInitials = user.email ? user.email.substring(0, 2).toUpperCase() : "??";
 
   const navItems = (activeTenantId && rolesLoaded) ? [
-    { label: "Relatórios",       href: `/app/tenants/${activeTenantId}/analytics`,         icon: BarChart2,     sub: "Performance das campanhas de discagem"      },
-    { label: "Lista de Leads",   href: `/app/tenants/${activeTenantId}/leads`,             icon: Users,         sub: "Gerencie e importe seus leads"              },
-    { label: "Campanhas",        href: `/app/tenants/${activeTenantId}/queues`,            icon: ListOrdered,   sub: "Crie e gerencie campanhas de discagem automática" },
-    { label: "Chamadas",         href: `/app/tenants/${activeTenantId}/calls`,             icon: PhoneCall,     sub: "Histórico e detalhes de todas as chamadas"  },
-    { label: "Assistentes",      href: `/app/tenants/${activeTenantId}/assistants`,        icon: Bot,           sub: "Configure seus assistentes de IA"           },
-    { label: "Membros",          href: `/app/tenants/${activeTenantId}/members`,           icon: UserCheck,     sub: "Gerencie membros da organização"             },
+    { label: "Relatórios",       href: `/app/tenants/${activeTenantId}/analytics`,       icon: BarChart2      },
+    { label: "Lista de Leads",   href: `/app/tenants/${activeTenantId}/leads`,            icon: Users          },
+    { label: "Campanhas",        href: `/app/tenants/${activeTenantId}/queues`,           icon: ListOrdered    },
+    { label: "Chamadas",         href: `/app/tenants/${activeTenantId}/calls`,            icon: PhoneCall      },
+    { label: "Assistentes",      href: `/app/tenants/${activeTenantId}/assistants`,       icon: Bot            },
+    { label: "Membros",          href: `/app/tenants/${activeTenantId}/members`,          icon: UserCheck      },
+    ...(isAdminOrOwner ? [
+      { label: "Dossiê Comercial", href: `/app/tenants/${activeTenantId}/analytics/dossie`, icon: FileBarChart2 },
+      { label: "Configurações",    href: `/app/tenants/${activeTenantId}/vapi`,              icon: Settings2     },
+    ] : []),
   ] : [];
 
-  const adminItems = [
-    { label: "Visão Geral",       href: "/app/admin",           icon: LayoutDashboard, sub: "Painel administrativo geral" },
-    { label: "Analytics",         href: "/app/admin/analytics", icon: BarChart2,       sub: "Analytics de toda a plataforma" },
-    ...(activeTenantId && isAdminOrOwner ? [
-      { label: "Dossiê Comercial", href: `/app/tenants/${activeTenantId}/analytics/dossie`, icon: FileBarChart2, sub: "Relatório comercial detalhado" },
-      { label: "Configurações",    href: `/app/tenants/${activeTenantId}/vapi`,              icon: Settings2,     sub: "Configurações de integração VAPI" },
-    ] : []),
-    { label: "Sandbox",           href: "/app/admin/sandbox",   icon: FlaskConical,    sub: "Ambiente de testes" },
-  ];
-
-  const activeNavItem = [...navItems, ...adminItems].find(item => pathname === item.href || pathname.startsWith(item.href + "/"));
-  const topbarTitle = activeNavItem?.label ?? "CallX";
-  const topbarSub   = activeNavItem?.sub   ?? "Plataforma de discagem com IA";
+  const currentSection = (() => {
+    const m = pathname.match(/\/app\/tenants\/[^/]+\/([^/]+)/);
+    return m?.[1] ?? null;
+  })();
 
   return (
     <div className="cx-app">
@@ -328,7 +323,7 @@ export default function AppShell({
             <div className="cx-nav-label">Menu</div>
             {navItems.map(item => {
               const Icon = item.icon;
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+              const isActive = pathname === item.href || (item.href.includes("/analytics") && currentSection === "analytics");
               return (
                 <Link key={item.label} href={item.href} className={`cx-nav-item${isActive ? " active" : ""}`}>
                   <span className="cx-nav-icon"><Icon size={15} /></span>
@@ -341,18 +336,26 @@ export default function AppShell({
           {isAdmin && (
             <div className="cx-nav-section">
               <div className="cx-nav-label" style={{ color: "rgba(255,184,0,0.5)" }}>Admin</div>
-              {adminItems.map(item => {
+              {[
+                { label: "Visão Geral", href: "/app/admin",           icon: LayoutDashboard },
+                { label: "Analytics",   href: "/app/admin/analytics", icon: BarChart2       },
+                { label: "Sandbox",     href: "/app/admin/sandbox",   icon: FlaskConical    },
+              ].map(item => {
                 const Icon = item.icon;
-                const isActive = item.href === "/app/admin"
-                  ? pathname === item.href
-                  : pathname === item.href || pathname.startsWith(item.href + "/");
+                const isActive = pathname === item.href;
+                const colors: Record<string, string> = {
+                  "/app/admin": "var(--yellow)",
+                  "/app/admin/analytics": "var(--red)",
+                  "/app/admin/sandbox": "var(--green)",
+                };
                 return (
                   <Link
                     key={item.href} href={item.href}
                     className={`cx-nav-item${isActive ? " active" : ""}`}
+                    style={isActive ? {} : { color: colors[item.href] ?? "var(--text-2)" }}
                   >
                     <span className="cx-nav-icon"><Icon size={15} /></span>
-                    <span className="cx-nav-text">{item.label}</span>
+                    <span className="cx-nav-text" style={item.href === "/app/admin/analytics" ? { fontWeight: 700 } : {}}>{item.label}</span>
                   </Link>
                 );
               })}
@@ -376,18 +379,18 @@ export default function AppShell({
       {/* ══ MAIN ══════════════════════════════════════════════════════ */}
       <div className="cx-main">
 
-        {/* Topbar */}
+        {/* Topbar — renderizado pelo page.tsx via slot ou fixo aqui */}
         <header className="cx-topbar">
           <div>
-            <div className="cx-topbar-title">{topbarTitle}</div>
-            <div className="cx-topbar-sub">{topbarSub}</div>
+            <div className="cx-topbar-title">Analytics</div>
+            <div className="cx-topbar-sub">Performance das campanhas de discagem</div>
           </div>
           <div className="cx-topbar-right">
             {/* Theme toggle */}
             <button
               className="cx-theme-btn"
               onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
-              title={theme === "dark" ? "Mudar para modo claro" : "Mudar para modo escuro"}
+              title="Alternar tema"
             >
               {theme === "dark" ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

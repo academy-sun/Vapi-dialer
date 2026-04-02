@@ -128,48 +128,60 @@ function HeroMetrics({ overview, durationAvg }: {
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-        <PhoneCall className="w-4 h-4 text-indigo-500" />
-        Visão Geral
-      </h2>
+      <div className="cx-kpi-head" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 6, height: 16, borderRadius: 999, background: "var(--green)" }} />
+          <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Performance de Atendimento</h2>
+        </div>
+      </div>
 
-      {/* Hero row — métricas críticas em destaque */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      {/* Hero row */}
+      <div className="cx-bot-grid" style={{ marginBottom: 16 }}>
         {/* Atenderam */}
-        <div className="rounded-2xl p-5 flex flex-col justify-between" style={{ background: "linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)", border: "1px solid #6ee7b7" }}>
-          <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">Atenderam</p>
-          <p className="text-5xl font-black text-emerald-700 leading-none">{overview.answerRate}%</p>
-          <p className="text-sm text-emerald-600 mt-2 font-medium">
-            {overview.answeredCalls.toLocaleString("pt-BR")} de {overview.totalCalls.toLocaleString("pt-BR")} chamadas
-          </p>
+        <div className="gc" style={{ padding: 24, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 0, right: 0, width: 128, height: 128, background: "rgba(0,214,143,0.10)", borderRadius: "0 0 0 100%" }} />
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <p className="cx-kpi-label" style={{ color: "var(--green)", marginBottom: 8, letterSpacing: "2px", fontSize: 10 }}>Taxa de Atendimento</p>
+            <p className="cx-kpi-value grad-green" style={{ fontSize: 60, letterSpacing: -3 }}>{overview.answerRate}<span style={{ fontSize: 32, opacity: 0.2 }}>%</span></p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, fontSize: 12, fontWeight: 700, color: "var(--text-3)" }}>
+              <span style={{ color: "var(--text-1)" }}>{overview.answeredCalls.toLocaleString("pt-BR")}</span>
+              <span>de</span>
+              <span>{overview.totalCalls.toLocaleString("pt-BR")} chamadas</span>
+            </div>
+          </div>
         </div>
 
-        {/* Não atenderam */}
-        <div className="rounded-2xl p-5 flex flex-col justify-between" style={{ background: "linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)", border: "1px solid #fca5a5" }}>
-          <p className="text-xs font-semibold text-red-700 uppercase tracking-wide mb-1">Não atenderam</p>
-          <p className="text-5xl font-black text-red-600 leading-none">{notAnsweredPct}%</p>
-          <p className="text-sm text-red-500 mt-2 font-medium">
-            {notAnsweredCount.toLocaleString("pt-BR")} de {overview.totalCalls.toLocaleString("pt-BR")} chamadas
-          </p>
+        {/* Nao atenderam */}
+        <div className="gc" style={{ padding: 24, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 0, right: 0, width: 128, height: 128, background: "var(--red-lo)", borderRadius: "0 0 0 100%" }} />
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <p className="cx-kpi-label" style={{ color: "var(--red)", marginBottom: 8, letterSpacing: "2px", fontSize: 10 }}>Taxa de Abandono</p>
+            <p className="cx-kpi-value grad-red" style={{ fontSize: 60, letterSpacing: -3 }}>{notAnsweredPct}<span style={{ fontSize: 32, opacity: 0.2 }}>%</span></p>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, fontSize: 12, fontWeight: 700, color: "var(--text-3)" }}>
+              <span style={{ color: "var(--text-1)" }}>{notAnsweredCount.toLocaleString("pt-BR")}</span>
+              <span>de</span>
+              <span>{overview.totalCalls.toLocaleString("pt-BR")} chamadas</span>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Supporting metrics row */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
         {[
-          { label: "Total", value: overview.totalCalls.toLocaleString("pt-BR"), icon: PhoneCall, color: "#6366f1" },
-          { label: "Duração média", value: fmtDuration(durationAvg), icon: Clock, color: "#f59e0b" },
-          { label: "Custo total", value: fmtCurrency(overview.totalCost), icon: DollarSign, color: "#8b5cf6" },
-          { label: "Custo / call", value: fmtCurrency(overview.avgCostPerCall), icon: DollarSign, color: "#8b5cf6" },
-          { label: "Com inteligência", value: `${overview.structuredOutputsRate}%`, icon: BarChart3, color: "#14b8a6" },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="card p-3 flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: color + "18" }}>
-              <Icon className="w-3.5 h-3.5" style={{ color }} />
+          { label: "Total", value: overview.totalCalls.toLocaleString("pt-BR"), icon: PhoneCall, color: "var(--purple)", bg: "rgba(168,85,247,0.10)" },
+          { label: "Duração média", value: fmtDuration(durationAvg), icon: Clock, color: "var(--yellow)", bg: "rgba(255,184,0,0.10)" },
+          { label: "Custo total", value: fmtCurrency(overview.totalCost), icon: DollarSign, color: "var(--purple)", bg: "rgba(168,85,247,0.10)" },
+          { label: "Custo / call", value: fmtCurrency(overview.avgCostPerCall), icon: DollarSign, color: "var(--cyan)", bg: "rgba(0,194,255,0.10)" },
+          { label: "AI Structured", value: `${overview.structuredOutputsRate}%`, icon: Sparkles, color: "var(--green)", bg: "rgba(0,214,143,0.10)" },
+        ].map(({ label, value, icon: Icon, color, bg }) => (
+          <div key={label} className="gc" style={{ padding: 14, display: "flex", alignItems: "center", gap: 12 }}>
+            <div className="cx-kpi-icon" style={{ width: 32, height: 32, background: bg, borderRadius: 10 }}>
+              <Icon style={{ width: 16, height: 16, color }} />
             </div>
-            <div className="min-w-0">
-              <p className="text-xs text-gray-400 leading-tight">{label}</p>
-              <p className="text-sm font-bold text-gray-900 leading-tight">{value}</p>
+            <div style={{ minWidth: 0 }}>
+              <p className="cx-kpi-label" style={{ fontSize: 10, lineHeight: 1.2 }}>{label}</p>
+              <p className="mono" style={{ fontSize: 13, fontWeight: 900, color: "var(--text-1)", lineHeight: 1.2 }}>{value}</p>
             </div>
           </div>
         ))}
@@ -182,7 +194,8 @@ function HeroMetrics({ overview, durationAvg }: {
 
 function AbandonmentChart({ durationAnalysis }: { durationAnalysis: DossieData["durationAnalysis"] }) {
   const BUCKET_ORDER  = ["0–10s", "10–30s", "30–60s", "1–3min", "3–5min", "5min+"];
-  const BUCKET_COLORS = ["#ef4444", "#f97316", "#f59e0b", "#84cc16", "#10b981", "#6366f1"];
+  // CallX Palette
+  const BUCKET_COLORS = ["#E8002D", "#F97316", "#FACC15", "#A3E635", "#00D68F", "#22D3EE"];
 
   const buckets = BUCKET_ORDER.map((k, i) => ({
     label: k,
@@ -199,67 +212,61 @@ function AbandonmentChart({ durationAnalysis }: { durationAnalysis: DossieData["
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-        <TrendingDown className="w-4 h-4 text-red-500" />
-        Mapa de Abandono — quando os leads desligam
-      </h2>
-      <p className="text-xs text-gray-400 mb-3">
-        Distribuição de {total.toLocaleString("pt-BR")} chamadas atendidas por duração.
-      </p>
-      <div className="card p-5">
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <div style={{ width: 6, height: 16, borderRadius: 999, background: "var(--red)" }} />
+        <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Mapa de Engajamento Temporário</h2>
+      </div>
+
+      <div className="gc" style={{ padding: 24 }}>
         {total === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">Nenhuma chamada atendida no período.</p>
+          <p style={{ fontSize: 12, color: "var(--text-3)", textAlign: "center", padding: "32px 0", fontWeight: 700, fontStyle: "italic", textTransform: "uppercase", letterSpacing: "0.1em" }}>Nenhuma chamada processada</p>
         ) : (
           <>
             {durationAnalysis.voicemailCount > 0 && (
-              <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-100 px-3 py-2">
-                <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-700">
-                  <strong>{durationAnalysis.voicemailCount} chamadas</strong> foram para caixa postal e estão excluídas deste gráfico.
+              <div className="alert-warning" style={{ marginBottom: 24, borderRadius: 12 }}>
+                <div style={{ width: 24, height: 24, borderRadius: 10, background: "rgba(255,184,0,0.20)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <Info style={{ width: 14, height: 14, color: "var(--yellow)" }} />
+                </div>
+                <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.6 }}>
+                  <strong style={{ color: "var(--yellow)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "-0.02em" }}>{durationAnalysis.voicemailCount} chamadas</strong> foram identificadas como caixa postal e removidas desta análise de retenção humana.
                 </p>
               </div>
             )}
 
-            {/* Barras verticais com pico anotado */}
-            <div className="flex items-end gap-2" style={{ height: "180px" }}>
+            {/* Barras verticais */}
+            <div className="cx-bar-chart" style={{ height: 200, alignItems: "flex-end", gap: 12 }}>
               {buckets.map((b, i) => {
-                const barH   = maxValue > 0 ? Math.max(Math.round((b.value / maxValue) * 150), b.value > 0 ? 6 : 0) : 0;
+                const barH    = maxValue > 0 ? Math.max(Math.round((b.value / maxValue) * 160), b.value > 0 ? 4 : 0) : 0;
                 const callPct = total > 0 ? Math.round((b.value / total) * 100) : 0;
                 const isPeak  = i === peakIdx && b.value > 0;
 
                 return (
-                  <div key={b.label} className="flex-1 flex flex-col items-center justify-end" style={{ height: "180px" }}>
-                    {/* Anotação do pico */}
-                    {isPeak ? (
-                      <div className="mb-1 flex flex-col items-center">
-                        <span
-                          className="text-xs font-bold text-white px-2 py-0.5 rounded-full"
-                          style={{ background: b.color }}
-                        >
-                          {callPct}% ▲ pico
-                        </span>
-                      </div>
-                    ) : (
-                      b.value > 0 && (
-                        <span className="text-xs font-semibold text-gray-600 mb-1">{callPct}%</span>
-                      )
-                    )}
+                  <div key={b.label} className="cx-bar-col" style={{ flex: 1, height: 200, justifyContent: "flex-end" }}>
+                    <div style={{
+                      marginBottom: 8,
+                      transition: "all 0.3s",
+                      opacity: isPeak ? 1 : 0,
+                      transform: isPeak ? "scale(1)" : "scale(0.9)",
+                    }}>
+                       <span className="badge-gray" style={{ fontSize: 10, fontWeight: 900, whiteSpace: "nowrap" }}>
+                         {callPct}% {isPeak ? "▲ PICO" : ""}
+                       </span>
+                    </div>
 
-                    {/* Barra */}
                     <div
-                      className="w-full rounded-t-lg transition-all"
                       style={{
+                        width: "100%",
+                        borderRadius: "12px 12px 0 0",
                         height: `${barH}px`,
-                        background: isPeak ? b.color : b.color + "99",
-                        minHeight: b.value > 0 ? "6px" : "0",
-                        boxShadow: isPeak ? `0 0 0 2px ${b.color}40` : "none",
+                        background: `linear-gradient(to top, ${b.color}40, ${b.color})`,
+                        boxShadow: isPeak ? `0 0 20px -5px ${b.color}` : "none",
+                        transition: "all 0.5s",
                       }}
                     />
 
-                    {/* Label + count */}
-                    <div className="mt-1.5 text-center">
-                      <p className="text-xs text-gray-600 font-medium leading-tight">{b.label}</p>
-                      <p className="text-xs text-gray-400">{b.value}</p>
+                    <div style={{ marginTop: 12, textAlign: "center" }}>
+                      <p className="cx-bar-lbl" style={{ fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>{b.label}</p>
+                      <p className="mono" style={{ fontSize: 12, color: "var(--text-1)" }}>{b.value}</p>
                     </div>
                   </div>
                 );
@@ -267,26 +274,47 @@ function AbandonmentChart({ durationAnalysis }: { durationAnalysis: DossieData["
             </div>
 
             {/* Diagnóstico automático */}
-            <div className={`mt-4 flex items-start gap-2 rounded-lg px-3 py-2.5 ${
-              earlyPct > 40
-                ? "bg-red-50 border border-red-100"
-                : earlyPct > 20
-                  ? "bg-amber-50 border border-amber-100"
-                  : "bg-emerald-50 border border-emerald-100"
-            }`}>
-              <AlertCircle className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
-                earlyPct > 40 ? "text-red-500" : earlyPct > 20 ? "text-amber-500" : "text-emerald-500"
-              }`} />
-              <p className={`text-xs ${
-                earlyPct > 40 ? "text-red-700" : earlyPct > 20 ? "text-amber-700" : "text-emerald-700"
-              }`}>
-                {earlyPct > 40
-                  ? <><strong>{earlyPct}% das conversas duram menos de 30s</strong> — avalie o script de abertura e a primeira mensagem do assistente.</>
-                  : earlyPct > 20
-                    ? <><strong>{earlyPct}% das conversas encerram antes de 30s</strong> — considere revisar a abordagem inicial.</>
-                    : <>Perfil de engajamento saudável — maioria das conversas passa de 30s.</>
-                }
-              </p>
+            <div className="cx-ai-card gc" style={{
+              marginTop: 32,
+              padding: 16,
+              borderColor: earlyPct > 40 ? "rgba(232,0,45,0.20)" : earlyPct > 20 ? "rgba(255,184,0,0.20)" : "rgba(0,214,143,0.20)",
+              background: earlyPct > 40 ? "rgba(232,0,45,0.05)" : earlyPct > 20 ? "rgba(255,184,0,0.05)" : "rgba(0,214,143,0.05)",
+            }}>
+              <div className="cx-ai-icon" style={{
+                width: 32,
+                height: 32,
+                background: earlyPct > 40 ? "rgba(232,0,45,0.20)" : earlyPct > 20 ? "rgba(255,184,0,0.20)" : "rgba(0,214,143,0.20)",
+                borderColor: "rgba(255,255,255,0.05)",
+                animation: earlyPct > 40 ? "pulse 2s ease-in-out infinite" : undefined,
+              }}>
+                <AlertCircle style={{
+                  width: 16,
+                  height: 16,
+                  color: earlyPct > 40 ? "var(--red)" : earlyPct > 20 ? "var(--yellow)" : "var(--green)",
+                }} />
+              </div>
+              <div>
+                <p className="cx-ai-title" style={{
+                  fontSize: 10,
+                  fontWeight: 900,
+                  textTransform: "uppercase",
+                  letterSpacing: "2px",
+                  marginBottom: 4,
+                  background: "none",
+                  WebkitBackgroundClip: "unset",
+                  WebkitTextFillColor: earlyPct > 40 ? "var(--red)" : earlyPct > 20 ? "var(--yellow)" : "var(--green)",
+                }}>
+                  Insight do Especialista AI
+                </p>
+                <p className="cx-ai-body" style={{ fontSize: 12, lineHeight: 1.6, fontWeight: 500 }}>
+                  {earlyPct > 40
+                    ? <>Crítico: <strong style={{ color: "var(--text-1)" }}>{earlyPct}% das conversas</strong> morrem em menos de 30s. A abertura do assistente está gerando bloqueio imediato ou falha de identificação.</>
+                    : earlyPct > 20
+                      ? <>Alerta: <strong style={{ color: "var(--text-1)" }}>{earlyPct}% de abandono precoce</strong>. Melhore o gatilho de interesse nos primeiros 15 segundos da conversa.</>
+                      : <>Saudável: Baixo índice de abandono inicial. A introdução e o tom de voz do assistente estão engajando os clientes com sucesso.</>
+                  }
+                </p>
+              </div>
             </div>
           </>
         )}
@@ -309,59 +337,61 @@ function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-        <TrendingDown className="w-4 h-4 text-violet-500" />
-        Funil de Abandono — onde a conversa para
-      </h2>
-      <p className="text-xs text-gray-400 mb-3">
-        Baseado em {funnel.totalWithData.toLocaleString("pt-BR")} chamadas com dados de etapa.
-      </p>
-      <div className="card p-5">
-        <div className="flex flex-col items-center gap-0">
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <div style={{ width: 6, height: 16, borderRadius: 999, background: "var(--purple)" }} />
+        <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Gargalos por Etapas</h2>
+      </div>
+
+      <div className="gc" style={{ padding: 32 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 0, maxWidth: 640, margin: "0 auto" }}>
           {funnel.stages.map((stage, i) => {
-            const barWidth = Math.max(stage.pct, 4);
+            const barWidth = Math.max(stage.pct, 8);
             const isLast   = i === funnel.stages.length - 1;
             const color    = STAGE_COLORS[i] ?? "#6366f1";
 
             return (
-              <div key={stage.label} className="w-full flex flex-col items-center">
-                {/* Barra do funil — largura proporcional ao pct */}
-                <div className="w-full flex items-center justify-center">
+              <div key={stage.label} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                {/* Barra do funil */}
+                <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div
-                    className="relative flex items-center justify-center rounded-lg transition-all"
                     style={{
                       width: `${barWidth}%`,
-                      minWidth: "120px",
-                      height: "44px",
-                      background: color,
+                      minWidth: 160,
+                      height: 52,
+                      borderRadius: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: `linear-gradient(to right, ${color}CC, ${color})`,
+                      boxShadow: `0 8px 16px -8px ${color}66`,
+                      border: "1px solid rgba(255,255,255,0.10)",
+                      transition: "all 0.5s",
+                      cursor: "default",
                     }}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-white font-black text-lg leading-none">{stage.pct}%</span>
-                      <div className="hidden md:block">
-                        <p className="text-white text-xs font-semibold leading-tight opacity-90">{stage.label}</p>
-                        <p className="text-white text-xs opacity-70">{stage.cumulative.toLocaleString("pt-BR")} calls</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "0 24px", width: "100%", justifyContent: "space-between" }}>
+                      <div style={{ minWidth: 0 }}>
+                         <p style={{ color: "#fff", fontSize: 10, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em", opacity: 0.6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{stage.label}</p>
+                         <p style={{ color: "#fff", fontSize: 12, fontWeight: 700, opacity: 0.4 }}>{stage.cumulative.toLocaleString("pt-BR")} leads</p>
                       </div>
+                      <span className="mono" style={{ color: "#fff", fontSize: 20, fontWeight: 900 }}>{stage.pct}<span style={{ opacity: 0.2, fontSize: 14 }}>%</span></span>
                     </div>
                   </div>
                 </div>
 
-                {/* Label em mobile */}
-                <div className="md:hidden mt-1 text-center">
-                  <p className="text-xs font-medium text-gray-700">{stage.label}</p>
-                  <p className="text-xs text-gray-400">{stage.cumulative.toLocaleString("pt-BR")} calls</p>
-                </div>
-
-                {/* Seta de perda entre etapas */}
+                {/* Seta de perda */}
                 {!isLast && stage.dropoff !== null && stage.dropoff > 0 && (
-                  <div className="flex items-center gap-2 py-1.5">
-                    <div className="h-px w-8 bg-red-200" />
-                    <span className="text-xs text-red-500 font-semibold">−{stage.dropoff}% perdidos aqui</span>
-                    <div className="h-px w-8 bg-red-200" />
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0" }}>
+                    <div style={{ height: 1, width: 48, background: "var(--glass-border)" }} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 999, background: "var(--red-lo)", border: "1px solid rgba(232,0,45,0.20)" }}>
+                       <TrendingDown style={{ width: 12, height: 12, color: "var(--red)" }} />
+                       <span style={{ fontSize: 10, color: "var(--red)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "-0.02em" }}>−{stage.dropoff}% de retenção</span>
+                    </div>
+                    <div style={{ height: 1, width: 48, background: "var(--glass-border)" }} />
                   </div>
                 )}
                 {!isLast && (stage.dropoff === null || stage.dropoff === 0) && (
-                  <div className="h-4" />
+                  <div style={{ height: 16 }} />
                 )}
               </div>
             );
@@ -369,12 +399,30 @@ function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
         </div>
 
         {worstDropoff && worstDropoff.dropoff !== null && worstDropoff.dropoff > 0 && (
-          <div className="mt-5 flex items-start gap-2 rounded-lg bg-violet-50 border border-violet-100 px-3 py-2.5">
-            <AlertCircle className="w-3.5 h-3.5 text-violet-500 shrink-0 mt-0.5" />
-            <p className="text-xs text-violet-700">
-              <strong>Maior gargalo:</strong> a etapa "{worstDropoff.label}" perde{" "}
-              <strong>{worstDropoff.dropoff}%</strong> das conversas que chegaram até ela. Revise o script neste ponto.
-            </p>
+          <div className="cx-ai-card gc" style={{
+            marginTop: 40,
+            padding: 20,
+            maxWidth: 640,
+            margin: "40px auto 0",
+            background: "rgba(168,85,247,0.05)",
+            borderColor: "rgba(168,85,247,0.20)",
+          }}>
+            <div className="cx-ai-icon" style={{
+              width: 40,
+              height: 40,
+              borderRadius: 12,
+              background: "rgba(168,85,247,0.20)",
+              borderColor: "rgba(255,255,255,0.05)",
+            }}>
+              <Zap style={{ width: 20, height: 20, color: "var(--purple)" }} />
+            </div>
+            <div>
+              <p style={{ fontSize: 10, fontWeight: 900, color: "var(--purple)", textTransform: "uppercase", letterSpacing: "2px", marginBottom: 4 }}>Gargalo Estrutural Detectado</p>
+              <p className="cx-ai-body" style={{ fontSize: 12, lineHeight: 1.6, fontWeight: 500 }}>
+                A etapa <strong style={{ color: "var(--text-1)" }}>"{worstDropoff.label}"</strong> apresenta a maior taxa de evasão do fluxo, perdendo
+                <strong style={{ color: "var(--red)", marginLeft: 4 }}>{worstDropoff.dropoff}%</strong> das oportunidades. Revise a pergunta ou o trigger de resposta de IA nesta fase específica.
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -388,14 +436,18 @@ function QualityScorecard({ fields }: { fields: FieldAnalysis[] }) {
   if (fields.length === 0) return null;
 
   return (
-    <div className="card p-4">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-        <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
-        Painel de Saúde da Ligação
-        <span className="ml-auto text-gray-300 font-normal normal-case">{fields[0]?.count ?? 0} registros</span>
-      </h4>
+    <div className="gc" style={{ padding: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24, borderBottom: "1px solid var(--glass-border)", paddingBottom: 16 }}>
+        <div className="cx-kpi-icon" style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(0,214,143,0.20)" }}>
+          <ShieldCheck style={{ width: 16, height: 16, color: "var(--green)" }} />
+        </div>
+        <div>
+          <h4 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "1.5px" }}>Checklist de Qualidade</h4>
+          <p className="cx-card-sub" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{fields[0]?.count ?? 0} chamadas auditadas</p>
+        </div>
+      </div>
 
-      <div className="space-y-3">
+      <div className="cx-mot-rows" style={{ gap: 20 }}>
         {fields.map((field) => {
           const yes  = field.trueCount  ?? 0;
           const no   = field.falseCount ?? 0;
@@ -405,21 +457,20 @@ function QualityScorecard({ fields }: { fields: FieldAnalysis[] }) {
 
           return (
             <div key={field.key}>
-              <div className="flex items-center gap-2 mb-1">
-                {isGood
-                  ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  : <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                }
-                <span className="text-xs font-medium text-gray-700 flex-1 truncate">{field.key}</span>
-                <span className={`text-xs font-bold ${isGood ? "text-emerald-600" : "text-red-500"}`}>
-                  {yesPct}% sim
-                </span>
-                <span className="text-xs text-gray-400">{100 - yesPct}% não</span>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: 999, background: isGood ? "var(--green)" : "var(--red)", boxShadow: `0 0 8px ${isGood ? "var(--green)" : "var(--red)"}` }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{field.key}</span>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                   <span className="mono" style={{ fontSize: 11, fontWeight: 900, color: isGood ? "var(--green)" : "var(--red)" }}>{yesPct}%</span>
+                   <span className="cx-kpi-label" style={{ marginLeft: 4, fontSize: 10 }}>SIM</span>
+                </div>
               </div>
-              <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+              <div className="cx-mot-bar" style={{ height: 6, borderRadius: 999, border: "1px solid rgba(255,255,255,0.05)" }}>
                 <div
-                  className="h-full rounded-full"
-                  style={{ width: `${yesPct}%`, background: isGood ? "#10b981" : "#ef4444" }}
+                  className="cx-mot-fill"
+                  style={{ width: `${yesPct}%`, background: isGood ? "var(--green)" : "var(--red)", borderRadius: 999, height: "100%" }}
                 />
               </div>
             </div>
@@ -445,25 +496,26 @@ function EnumCard({ field }: { field: FieldAnalysis }) {
   ];
 
   return (
-    <div className="card p-4">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-        <BarChart3 className="w-3.5 h-3.5" />
-        {field.key}
-        <span className="ml-auto text-gray-300 font-normal normal-case">{field.count} registros</span>
-      </h4>
-      <div className="space-y-2">
+    <div className="gc cx-mot-card" style={{ padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <h4 className="cx-kpi-label" style={{ maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {field.key}
+        </h4>
+        <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>{field.count} DATA</span>
+      </div>
+      <div className="cx-mot-rows">
         {sorted.map(([label, count], i) => {
-          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+          const pctValue = total > 0 ? Math.round((count / total) * 100) : 0;
           return (
             <div key={label}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-700 font-medium truncate max-w-[60%]">{label}</span>
-                <span className="text-xs text-gray-500 shrink-0">{count} ({pct}%)</span>
+              <div className="cx-mot-row" style={{ marginBottom: 6 }}>
+                <span className="cx-mot-name" style={{ width: "auto", flex: 1, fontSize: 11, fontWeight: 700, maxWidth: "65%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                <span className="cx-mot-val" style={{ fontSize: 11, minWidth: "auto", color: "var(--text-3)" }}>{count} <span style={{ opacity: 0.4 }}>({pctValue}%)</span></span>
               </div>
-              <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+              <div className="cx-mot-bar" style={{ height: 4 }}>
                 <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${pct}%`, background: COLORS[i % COLORS.length] }}
+                  className="cx-mot-fill"
+                  style={{ width: `${pctValue}%`, background: COLORS[i % COLORS.length] }}
                 />
               </div>
             </div>
@@ -476,24 +528,22 @@ function EnumCard({ field }: { field: FieldAnalysis }) {
 
 function NumberCard({ field }: { field: FieldAnalysis }) {
   return (
-    <div className="card p-4">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-        <BarChart3 className="w-3.5 h-3.5" />
-        {field.key}
-        <span className="ml-auto text-gray-300 font-normal normal-case">{field.count} registros</span>
-      </h4>
-      <div className="flex gap-3">
-        <div className="flex-1 text-center">
-          <p className="text-2xl font-bold text-indigo-600">{field.avg}</p>
-          <p className="text-xs text-gray-500">Média</p>
+    <div className="gc" style={{ padding: 20 }}>
+       <h4 className="cx-kpi-label" style={{ marginBottom: 16 }}>
+          {field.key}
+        </h4>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+        <div style={{ textAlign: "center", padding: 12, background: "rgba(255,255,255,0.05)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.05)" }}>
+          <p className="mono" style={{ fontSize: 20, fontWeight: 900, color: "var(--text-1)", lineHeight: 1 }}>{field.avg}</p>
+          <p className="cx-kpi-label" style={{ marginTop: 6, fontSize: 9 }}>Média</p>
         </div>
-        <div className="flex-1 text-center">
-          <p className="text-xl font-semibold text-gray-700">{field.min}</p>
-          <p className="text-xs text-gray-500">Mínimo</p>
+        <div style={{ textAlign: "center", padding: 12 }}>
+          <p className="mono" style={{ fontSize: 14, fontWeight: 900, color: "var(--text-2)", lineHeight: 1 }}>{field.min}</p>
+          <p className="cx-kpi-label" style={{ marginTop: 6, fontSize: 9 }}>Mín</p>
         </div>
-        <div className="flex-1 text-center">
-          <p className="text-xl font-semibold text-gray-700">{field.max}</p>
-          <p className="text-xs text-gray-500">Máximo</p>
+        <div style={{ textAlign: "center", padding: 12 }}>
+          <p className="mono" style={{ fontSize: 14, fontWeight: 900, color: "var(--text-2)", lineHeight: 1 }}>{field.max}</p>
+          <p className="cx-kpi-label" style={{ marginTop: 6, fontSize: 9 }}>Máx</p>
         </div>
       </div>
     </div>
@@ -505,26 +555,26 @@ function TextAccordion({ field }: { field: FieldAnalysis }) {
   const samples = field.samples ?? [];
 
   return (
-    <div className="border border-gray-100 rounded-xl overflow-hidden">
+    <div className="gc" style={{ overflow: "hidden" }}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "var(--glass-bg-2)", textAlign: "left", cursor: "pointer", transition: "background 0.15s" }}
       >
-        <div className="flex items-center gap-2">
-          <Info className="w-3.5 h-3.5 text-gray-400" />
-          <span className="text-xs font-semibold text-gray-700">{field.key}</span>
-          <span className="text-xs text-gray-400">{field.count} registros</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Info style={{ width: 14, height: 14, color: "var(--text-3)" }} />
+          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>{field.key}</span>
+          <span style={{ fontSize: 12, color: "var(--text-3)" }}>{field.count} registros</span>
         </div>
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown style={{ width: 16, height: 16, color: "var(--text-3)", transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }} />
       </button>
 
       {open && (
-        <div className="px-4 py-3 space-y-2 bg-white">
+        <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
           {samples.length === 0 ? (
-            <p className="text-xs text-gray-400">Nenhuma amostra disponível.</p>
+            <p style={{ fontSize: 12, color: "var(--text-3)" }}>Nenhuma amostra disponível.</p>
           ) : (
             samples.map((s, i) => (
-              <p key={i} className="text-xs text-gray-600 bg-gray-50 rounded-lg px-3 py-2 line-clamp-3 leading-relaxed">
+              <p key={i} style={{ fontSize: 12, color: "var(--text-2)", background: "var(--glass-bg)", borderRadius: 10, padding: "8px 12px", lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                 "{s}"
               </p>
             ))
@@ -547,9 +597,9 @@ function TabbedFieldAnalysis({ fieldAnalysis, structuredCount }: {
   const tabs = (
     [
       { id: "enum"    as FieldTab, label: "Distribuições", count: enums.length },
-      { id: "boolean" as FieldTab, label: "Saúde",         count: booleans.length },
-      { id: "number"  as FieldTab, label: "Números",       count: numbers.length },
-      { id: "text"    as FieldTab, label: "Análises",      count: texts.length },
+      { id: "boolean" as FieldTab, label: "Scorecard",     count: booleans.length },
+      { id: "number"  as FieldTab, label: "Métricas",      count: numbers.length },
+      { id: "text"    as FieldTab, label: "Qualitativo",   count: texts.length },
     ] as { id: FieldTab; label: string; count: number }[]
   ).filter((t) => t.count > 0);
 
@@ -559,32 +609,35 @@ function TabbedFieldAnalysis({ fieldAnalysis, structuredCount }: {
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-1 flex items-center gap-2">
-        <BarChart3 className="w-4 h-4 text-indigo-500" />
-        Inteligência dos Dados — Structured Outputs
-      </h2>
-      <p className="text-xs text-gray-400 mb-3">
-        Baseado em {structuredCount.toLocaleString("pt-BR")} chamadas com dados estruturados.
-      </p>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 6, height: 16, borderRadius: 999, background: "#6366f1" }} />
+          <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Inteligência Estruturada</h2>
+        </div>
+         <span className="cx-kpi-label">Auditoria de {structuredCount} chamadas</span>
+      </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-3 border-b border-gray-100 pb-0">
+      <div className="cx-period-tabs" style={{ marginBottom: 24, padding: 4, background: "rgba(255,255,255,0.05)", borderRadius: 16, border: "1px solid rgba(255,255,255,0.05)", width: "fit-content" }}>
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-2 text-xs font-medium rounded-t-lg transition-colors border-b-2 -mb-px ${
-              activeTab === tab.id
-                ? "border-indigo-500 text-indigo-700 bg-indigo-50"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
+            className={`cx-period-tab ${activeTab === tab.id ? "active" : ""}`}
+            style={{
+              fontSize: 10,
+              fontWeight: 900,
+              textTransform: "uppercase",
+              letterSpacing: "1.5px",
+              borderRadius: 12,
+              padding: "8px 20px",
+              ...(activeTab === tab.id
+                ? { background: "rgba(255,255,255,0.10)", color: "var(--text-1)", boxShadow: "0 0 15px rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }
+                : {}),
+            }}
           >
             {tab.label}
-            <span className={`ml-1.5 text-xs px-1.5 py-0.5 rounded-full ${
-              activeTab === tab.id ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-400"
-            }`}>
-              {tab.count}
-            </span>
+            <span className="mono" style={{ marginLeft: 8, opacity: 0.5 }}>{tab.count}</span>
           </button>
         ))}
       </div>
@@ -593,19 +646,19 @@ function TabbedFieldAnalysis({ fieldAnalysis, structuredCount }: {
       {activeTab === "boolean" && <QualityScorecard fields={booleans} />}
 
       {activeTab === "enum" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
           {enums.map((f) => <EnumCard key={f.key} field={f} />)}
         </div>
       )}
 
       {activeTab === "number" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
           {numbers.map((f) => <NumberCard key={f.key} field={f} />)}
         </div>
       )}
 
       {activeTab === "text" && (
-        <div className="space-y-2">
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {texts.map((f) => <TextAccordion key={f.key} field={f} />)}
         </div>
       )}
@@ -628,50 +681,63 @@ function OpportunitiesSection({
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-        <Zap className="w-4 h-4 text-amber-500" />
-        Oportunidades Não Trabalhadas
-      </h2>
-      <div className="card p-4 border-l-4 border-amber-400">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <p className="text-xs text-gray-500 mb-1">Chamadas com falha técnica</p>
-            <p className="text-3xl font-bold text-amber-600">{card.techIssueCount}</p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {card.techIssuePct}% do total · erro de infraestrutura, não rejeição de conteúdo
-            </p>
-            <p className="text-xs text-gray-500 mt-2 leading-relaxed">
-              Estas ligações falharam por problemas técnicos (pipeline, transporte ou latência),
-              não por falta de interesse do lead. São elegíveis para nova tentativa.
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <div style={{ width: 6, height: 16, borderRadius: 999, background: "var(--yellow)" }} />
+        <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Oportunidades de Recuperação</h2>
+      </div>
+
+      <div className="gc" style={{ padding: 4, overflow: "hidden" }}>
+        <div style={{ display: "flex", flexDirection: "row" }}>
+          {/* Main Info */}
+          <div style={{ flex: 1, padding: 24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+               <div className="cx-kpi-icon" style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(255,184,0,0.20)" }}>
+                 <Zap style={{ width: 16, height: 16, color: "var(--yellow)" }} />
+               </div>
+               <p className="cx-kpi-label" style={{ letterSpacing: "2px" }}>Potencial de Rechamada</p>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+               <p className="cx-kpi-value grad-white" style={{ fontSize: 48 }}>{card.techIssueCount}</p>
+               <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,184,0,0.60)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Falhas Técnicas</p>
+            </div>
+
+            <p style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 500, lineHeight: 1.6, maxWidth: 560 }}>
+              Identificamos <strong style={{ color: "var(--text-1)" }}>{card.techIssuePct}% das chamadas</strong> com interrupções por transporte (SIP), latência crítica ou erro de pipeline.
+              Estes leads demonstraram interesse mas a conexão foi perdida.
             </p>
           </div>
 
-          <div className="md:w-56 shrink-0">
+          {/* Financial Impact */}
+          <div style={{ width: 288, flexShrink: 0, background: "rgba(255,255,255,0.02)", borderLeft: "1px solid rgba(255,255,255,0.05)", padding: 24, display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", overflow: "hidden" }}>
+             <div style={{ position: "absolute", top: 0, right: 0, width: 128, height: 128, background: "rgba(255,184,0,0.05)", borderRadius: "0 0 0 100%" }} />
+
             {card.hasConfig && card.potentialValue != null ? (
-              <div className="rounded-xl p-4 text-center h-full flex flex-col items-center justify-center" style={{ background: "#f59e0b18" }}>
-                <TrendingUp className="w-5 h-5 text-amber-600 mb-1.5" />
-                <p className="text-xs text-amber-700 font-medium mb-1">Oportunidade estimada</p>
-                <p className="text-2xl font-bold text-amber-700">{fmtBRL(card.potentialValue)}</p>
-                <p className="text-xs text-amber-600 mt-1">
-                  {card.techIssueCount} × {fmtBRL(card.avgDealValue!)} ticket médio
+              <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
+                <p style={{ fontSize: 10, fontWeight: 900, color: "var(--yellow)", textTransform: "uppercase", letterSpacing: "2px", marginBottom: 8 }}>Impacto em Vendas</p>
+                 <div className="mono" style={{ fontSize: 30, fontWeight: 900, color: "var(--text-1)", lineHeight: 1, marginBottom: 8, letterSpacing: "-0.02em" }}>
+                   {fmtBRL(card.potentialValue)}
+                 </div>
+                <p className="cx-kpi-label" style={{ fontSize: 10 }}>
+                  Ticket Médio: {fmtBRL(card.avgDealValue!)}
                 </p>
-                <p className="text-xs text-amber-500 mt-2 leading-tight">
-                  Não são vendas perdidas — são leads que merecem nova tentativa
-                </p>
+                <div style={{ marginTop: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                   <div style={{ padding: "6px 12px", borderRadius: 10, background: "var(--yellow)", color: "var(--bg)", fontSize: 10, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", cursor: "default" }}>
+                     Recuperar Agora
+                   </div>
+                </div>
               </div>
             ) : (
-              <div className="rounded-xl p-4 text-center h-full flex flex-col items-center justify-center border border-dashed border-gray-200 bg-gray-50">
-                <Settings2 className="w-5 h-5 text-gray-400 mb-1.5" />
-                <p className="text-xs text-gray-500 font-medium mb-1">Configure o ticket médio</p>
-                <p className="text-xs text-gray-400 leading-tight mb-3">
-                  Defina o valor de conversão da campanha para calcular o impacto financeiro
-                </p>
+              <div style={{ position: "relative", zIndex: 1, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <Settings2 style={{ width: 24, height: 24, color: "var(--text-3)", marginBottom: 12, opacity: 0.4 }} />
+                <p style={{ fontSize: 10, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8, lineHeight: 1.4 }}>Projeção Financeira Desabilitada</p>
+                <p style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 500, lineHeight: 1.4, marginBottom: 16 }}>Configure o ticket médio nas configurações da campanha para ver o impacto.</p>
                 {campaignId && (
                   <a
                     href={`/app/tenants/${tenantId}/queues`}
-                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1"
+                    style={{ fontSize: 10, fontWeight: 900, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.1em", display: "flex", alignItems: "center", gap: 4, textDecoration: "none" }}
                   >
-                    Ir para Campanhas <ArrowRight className="w-3 h-3" />
+                    CONFIGURAR <ArrowRight style={{ width: 12, height: 12 }} />
                   </a>
                 )}
               </div>
@@ -690,37 +756,38 @@ function ICPSection({ correlations }: { correlations: DossieData["correlations"]
 
   return (
     <section>
-      <h2 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-        <Users className="w-4 h-4 text-amber-500" />
-        Detector de ICP — Engajamento por Segmento
-      </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <div style={{ width: 6, height: 16, borderRadius: 999, background: "var(--cyan)" }} />
+        <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Detector de ICP (Persona Ideal)</h2>
+      </div>
+
+      <div className="cx-bot-grid">
         {Object.entries(correlations).map(([field, groups]) => {
           const sorted = Object.entries(groups).sort((a, b) => b[1].avgDuration - a[1].avgDuration);
           const maxDur = Math.max(...sorted.map((g) => g[1].avgDuration), 1);
           return (
-            <div key={field} className="card p-4">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                {field} × Duração Média
+            <div key={field} className="gc" style={{ padding: 24 }}>
+              <h4 className="cx-kpi-label" style={{ marginBottom: 20, paddingBottom: 12, borderBottom: "1px solid var(--glass-border)", letterSpacing: "2px" }}>
+                {field} <span style={{ color: "rgba(0,194,255,0.40)", marginLeft: 4 }}>× ENGAGEMENT</span>
               </h4>
-              <div className="space-y-2.5">
+              <div className="cx-mot-rows" style={{ gap: 16 }}>
                 {sorted.map(([label, stats]) => {
                   const pct = Math.round((stats.avgDuration / maxDur) * 100);
                   return (
                     <div key={label}>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-gray-700 truncate max-w-[55%]">{label}</span>
-                        <span className="text-xs text-gray-500 shrink-0">
-                          {fmtDuration(stats.avgDuration)} · {stats.count} calls
-                        </span>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", maxWidth: "50%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
+                        <div style={{ textAlign: "right" }}>
+                           <span className="mono" style={{ fontSize: 11, fontWeight: 900, color: "var(--text-1)" }}>{fmtDuration(stats.avgDuration)}</span>
+                           <span className="cx-kpi-label" style={{ marginLeft: 8, fontSize: 10, letterSpacing: "-0.02em" }}>{stats.count} CALLS</span>
+                        </div>
                       </div>
-                      <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+                      <div className="cx-mot-bar" style={{ height: 4 }}>
                         <div
-                          className="h-full rounded-full"
-                          style={{ width: `${pct}%`, background: "#f59e0b" }}
+                          className="cx-mot-fill"
+                          style={{ width: `${pct}%`, background: "rgba(0,194,255,0.60)", boxShadow: "0 0 8px rgba(34,211,238,0.2)" }}
                         />
                       </div>
-                      <p className="text-xs text-gray-400 mt-0.5">{getEngagementLabel(stats.avgDuration)}</p>
                     </div>
                   );
                 })}
@@ -743,7 +810,7 @@ export default function DossiePage() {
   const [loading, setLoading]             = useState(false);
   const [data, setData]                   = useState<DossieData | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
-  
+
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
   const supabase = createClient();
@@ -811,49 +878,61 @@ export default function DossiePage() {
         @media print {
           nav, header, aside, .no-print { display: none !important; }
           .print-root { padding: 0 !important; }
-          .card { break-inside: avoid; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+          .gc { break-inside: avoid; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
           body { background: white !important; }
         }
       `}</style>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 no-print">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "#6366f118" }}>
-            <FileBarChart2 className="w-5 h-5 text-indigo-600" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">Dossiê Comercial</h1>
-            <p className="text-xs text-gray-500">Raio-X da operação de vendas por campanha</p>
-          </div>
+      <div className="no-print" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32 }}>
+        <div>
+           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+             <div style={{ width: 8, height: 8, borderRadius: 999, background: "var(--green)", boxShadow: "0 0 8px var(--green)", animation: "pulse 2s ease-in-out infinite" }} />
+             <span className="cx-kpi-label" style={{ letterSpacing: "2px" }}>Advanced Reporting</span>
+           </div>
+          <h1 style={{ fontSize: 30, fontWeight: 900, color: "var(--text-1)", letterSpacing: "-0.02em" }}>Dossiê Comercial</h1>
         </div>
 
         {data && (
-          <div className="flex items-center gap-3 no-print">
-            <button 
-              onClick={handleRunAiAnalysis} 
+          <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <button
+              onClick={handleRunAiAnalysis}
               disabled={loadingAi}
-              className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 border border-indigo-200"
+              className="cx-refresh-btn"
+              style={{ padding: "10px 20px" }}
             >
-              {loadingAi ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              {loadingAi ? "Gerando Análise..." : "Analisar Gargalos (10-40s)"}
+              {loadingAi ? <Loader2 style={{ width: 16, height: 16, animation: "cx-spin 0.8s linear infinite" }} /> : <Sparkles style={{ width: 16, height: 16 }} />}
+              <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 11 }}>
+                {loadingAi ? "Gerando Análise..." : "Analisar Gargalos"}
+              </span>
             </button>
-            <button onClick={handlePrint} className="btn-secondary gap-2">
-              <Printer className="w-4 h-4" />
-              Exportar / Imprimir
+            <button onClick={handlePrint} className="cx-filter-btn" style={{ padding: "10px 20px" }}>
+              <Printer style={{ width: 16, height: 16 }} />
+              <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 11 }}>Exportar</span>
             </button>
           </div>
         )}
       </div>
 
       {/* Filtros */}
-      <div className="card p-4 mb-6 no-print">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-48">
-            <label className="form-label">Campanha</label>
-            <div className="relative">
+      <div className="gc no-print" style={{ padding: 20, marginBottom: 32 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Settings2 style={{ width: 14, height: 14, color: "var(--text-3)" }} />
+            <span className="cx-kpi-label" style={{ letterSpacing: "1.5px" }}>Parâmetros de Análise</span>
+          </div>
+
+          <div style={{ height: 16, width: 1, background: "var(--glass-border)", margin: "0 8px" }} />
+
+          {/* Campaign Select */}
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div className="cx-kpi-icon" style={{ width: 28, height: 28, borderRadius: 10, background: "var(--red-lo)", borderColor: "rgba(232,0,45,0.20)" }}>
+                <PhoneCall style={{ width: 14, height: 14, color: "var(--red)" }} />
+              </div>
               <select
-                className="form-input pr-8 appearance-none"
+                className="cx-select"
+                style={{ background: "transparent", border: "none", flex: 1, fontWeight: 700, fontSize: 12 }}
                 value={selectedQueue}
                 onChange={(e) => { setSelectedQueue(e.target.value); load(e.target.value, days); }}
               >
@@ -862,81 +941,88 @@ export default function DossiePage() {
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             </div>
           </div>
 
-          <div>
-            <label className="form-label">Período</label>
-            <div className="flex gap-1.5">
-              {[7, 30, 90, 365].map((d) => (
-                <button
-                  key={d}
-                  onClick={() => { setDays(d); load(selectedQueue, d); }}
-                  className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
-                    days === d
-                      ? "border-indigo-500 bg-indigo-50 text-indigo-700 font-medium"
-                      : "border-gray-200 text-gray-600 hover:border-gray-300"
-                  }`}
-                >
-                  {d === 365 ? "1 ano" : `${d}d`}
-                </button>
-              ))}
-            </div>
+          <div style={{ height: 16, width: 1, background: "var(--glass-border)", margin: "0 8px" }} />
+
+          {/* Days Select */}
+          <div className="cx-period-tabs" style={{ padding: 4, background: "rgba(255,255,255,0.05)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.05)" }}>
+            {[7, 30, 90, 365].map((d) => (
+              <button
+                key={d}
+                onClick={() => { setDays(d); load(selectedQueue, d); }}
+                className={`cx-period-tab ${days === d ? "active" : ""}`}
+                style={{
+                  padding: "6px 16px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  borderRadius: 8,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.05em",
+                  ...(days === d
+                    ? { background: "var(--green)", color: "var(--bg)", border: "none", boxShadow: "0 0 12px rgba(0,214,143,0.3)" }
+                    : {}),
+                }}
+              >
+                {d === 365 ? "1 ano" : `${d}D`}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
       {/* Loading */}
       {loading && (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
-          <span className="ml-3 text-sm text-gray-500">Analisando dados da campanha...</span>
+        <div className="gc cx-loading" style={{ flexDirection: "column", padding: "128px 0" }}>
+          <div style={{ position: "relative" }}>
+            <div style={{ position: "absolute", inset: 0, background: "rgba(99,102,241,0.20)", filter: "blur(24px)", borderRadius: "50%", animation: "pulse 2s ease-in-out infinite" }} />
+            <Loader2 style={{ width: 40, height: 40, animation: "cx-spin 0.8s linear infinite", color: "var(--text-1)", position: "relative", zIndex: 1 }} />
+          </div>
+          <span className="cx-kpi-label" style={{ marginTop: 24, letterSpacing: "3px", animation: "pulse 2s ease-in-out infinite" }}>Decodificando Inteligência...</span>
         </div>
       )}
 
       {/* Sem dados */}
       {!loading && !data && selectedQueue && (
-        <div className="card p-8 text-center">
-          <AlertCircle className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">Nenhuma chamada encontrada para o período selecionado.</p>
+        <div className="gc" style={{ padding: 48, textAlign: "center", borderStyle: "dashed" }}>
+          <div style={{ width: 64, height: 64, borderRadius: 16, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px" }}>
+            <AlertCircle style={{ width: 32, height: 32, color: "var(--text-3)" }} />
+          </div>
+          <p className="cx-kpi-label" style={{ letterSpacing: "2px", marginBottom: 8 }}>Dados Insuficientes</p>
+          <p style={{ fontSize: 12, color: "var(--text-3)", maxWidth: 320, margin: "0 auto", fontWeight: 500 }}>Nenhuma chamada processada nesta campanha para o período selecionado.</p>
         </div>
       )}
 
       {/* Conteúdo do dossiê */}
       {data && !loading && (
-        <div ref={printRef} className="print-root space-y-6">
+        <div ref={printRef} className="print-root" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
 
           {/* Cabeçalho para impressão */}
-          <div className="hidden print:block mb-6">
-            <h1 className="text-2xl font-bold text-gray-900">Dossiê Comercial</h1>
-            <p className="text-sm text-gray-600">
+          <div className="hidden print:block" style={{ marginBottom: 24 }}>
+            <h1 style={{ fontSize: 24, fontWeight: 700, color: "#111" }}>Dossiê Comercial</h1>
+            <p style={{ fontSize: 14, color: "#666" }}>
               Campanha: <strong>{data.campaign?.name}</strong> · Período: últimos {data.period.days} dias
             </p>
           </div>
 
-          {/* 1. Visão Geral — hero metrics */}
+          {/* 1. Visão Geral */}
           <HeroMetrics overview={data.overview} durationAvg={data.durationAnalysis.avg} />
 
           {/* AI Analysis Card */}
           {aiAnalysis && (
-            <div className="card p-6 bg-gradient-to-br from-indigo-50 to-white border-indigo-100 shadow-sm relative overflow-hidden text-gray-800">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-bl-full -z-0" />
-              <div className="relative z-10 flex items-center gap-2.5 mb-5 border-b border-indigo-100/50 pb-3">
-                <div className="w-8 h-8 rounded-lg bg-indigo-500 flex items-center justify-center shadow-inner">
-                  <Bot className="w-4 h-4 text-white" />
+            <div className="gc" style={{ padding: 32, position: "relative", overflow: "hidden" }}>
+              <div style={{ position: "absolute", top: 0, right: 0, width: 256, height: 256, background: "rgba(99,102,241,0.05)", borderRadius: "0 0 0 100%", transition: "transform 2s" }} />
+              <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 16, marginBottom: 32, borderBottom: "1px solid var(--glass-border)", paddingBottom: 24 }}>
+                <div style={{ width: 48, height: 48, borderRadius: 16, background: "#6366f1", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 20px rgba(99,102,241,0.4)" }}>
+                  <Bot style={{ width: 24, height: 24, color: "#fff" }} />
                 </div>
-                <h3 className="text-base font-bold text-gray-900 tracking-tight">Análise de IA: Gargalos de Retenção</h3>
+                <div>
+                   <p style={{ fontSize: 10, fontWeight: 900, color: "#6366f1", textTransform: "uppercase", letterSpacing: "3px", marginBottom: 4 }}>Insight Strategy</p>
+                   <h3 style={{ fontSize: 20, fontWeight: 900, color: "var(--text-1)", letterSpacing: "-0.02em" }}>Análise de IA: Gargalos de Retenção</h3>
+                </div>
               </div>
-              <div className="relative z-10 prose prose-sm prose-indigo max-w-none 
-                prose-headings:text-gray-900 prose-headings:font-bold prose-h2:text-sm prose-h3:text-sm
-                prose-a:text-indigo-600 hover:prose-a:text-indigo-500
-                prose-strong:text-gray-900
-                prose-blockquote:border-l-indigo-300 prose-blockquote:bg-indigo-50/50 prose-blockquote:px-4 prose-blockquote:py-1 prose-blockquote:rounded-r-lg prose-blockquote:font-medium prose-blockquote:text-indigo-900 prose-blockquote:not-italic
-                prose-ul:marker:text-indigo-400
-                prose-li:text-gray-700
-                prose-p:text-gray-700 prose-p:leading-relaxed"
-              >
+              <div className="cx-prose" style={{ position: "relative", zIndex: 1 }}>
                 <Markdown>{aiAnalysis}</Markdown>
               </div>
             </div>
@@ -955,17 +1041,17 @@ export default function DossiePage() {
           {/* 4. Funil de Abandono */}
           <FunnelSection funnel={data.funnelAnalysis} />
 
-          {/* 5. Inteligência dos Dados — tabs + scorecard */}
+          {/* 5. Inteligência dos Dados */}
           {data.fieldAnalysis.length > 0 ? (
             <TabbedFieldAnalysis
               fieldAnalysis={data.fieldAnalysis}
               structuredCount={data.overview.structuredOutputsCount}
             />
           ) : (
-            <div className="card p-6 text-center">
-              <Info className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-700 mb-1">Nenhum dado estruturado encontrado</p>
-              <p className="text-xs text-gray-400 max-w-md mx-auto">
+            <div className="gc" style={{ padding: 24, textAlign: "center" }}>
+              <Info style={{ width: 32, height: 32, color: "var(--text-3)", margin: "0 auto 8px" }} />
+              <p style={{ fontSize: 14, fontWeight: 500, color: "var(--text-2)", marginBottom: 4 }}>Nenhum dado estruturado encontrado</p>
+              <p style={{ fontSize: 12, color: "var(--text-3)", maxWidth: 448, margin: "0 auto" }}>
                 Configure um Structured Output no assistente Vapi desta campanha para visualizar a análise de campos, mapa de objeções e detector de ICP.
               </p>
             </div>
@@ -975,7 +1061,7 @@ export default function DossiePage() {
           <ICPSection correlations={data.correlations} />
 
           {/* Rodapé de impressão */}
-          <div className="hidden print:block mt-8 pt-4 border-t border-gray-200 text-xs text-gray-400 text-center">
+          <div className="hidden print:block" style={{ marginTop: 32, paddingTop: 16, borderTop: "1px solid #e5e7eb", fontSize: 12, color: "#999", textAlign: "center" }}>
             Gerado em {new Date().toLocaleString("pt-BR")} · CallX by MX3
           </div>
         </div>
