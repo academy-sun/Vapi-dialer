@@ -90,6 +90,11 @@
   background: linear-gradient(90deg,transparent,rgba(255,255,255,0.7),transparent);
 }
 [data-theme="light"] .cx-hmap-cell.empty { background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.06); }
+[data-theme="light"] .cx-hmap-cell.hc1 { color: #0A0A12; }
+[data-theme="light"] .cx-hmap-cell.hc2 { color: #0A0A12; }
+[data-theme="light"] .cx-hmap-cell.hc3 { color: #0A0A12; }
+[data-theme="light"] .cx-hmap-cell.hc4 { color: #fff; }
+[data-theme="light"] .cx-hmap-cell.hc5 { color: #fff; }
 [data-theme="light"] .cx-kpi-icon { border-color: rgba(0,0,0,0.08); background: rgba(255,255,255,0.8); }
 [data-theme="light"] .cx-rr-bar { background: rgba(0,0,0,0.08); }
 [data-theme="light"] .cx-mot-bar { background: rgba(0,0,0,0.08); }
@@ -629,14 +634,17 @@ body::after {
 /* ── BAR CHART ────────────────────────────────────────────────── */
 .cx-chart-card { padding: 22px; }
 .cx-bar-chart { display: flex; align-items: flex-end; gap: 4px; margin-top: 12px; }
-.cx-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.cx-bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; }
+.cx-bar-col:hover .cx-bar-fill { filter: brightness(1.2); box-shadow: 0 0 12px rgba(232,0,45,0.4); }
+.cx-bar-col.selected .cx-bar-fill { filter: brightness(1.3); box-shadow: 0 0 16px rgba(232,0,45,0.6); }
 .cx-bar-area { width: 100%; height: 100px; display: flex; align-items: flex-end; }
 .cx-bar-fill {
   width: 100%; border-radius: 5px 5px 0 0;
   background: linear-gradient(180deg, rgba(232,0,45,0.7) 0%, rgba(232,0,45,0.35) 100%);
-  transition: height .8s var(--ease);
+  transition: height .8s var(--ease), filter .15s, box-shadow .15s;
   min-height: 2px;
 }
+.cx-bar-tooltip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); padding: 4px 8px; border-radius: 6px; background: var(--sidebar-bg); border: 1px solid var(--glass-border); font-size: 10px; font-weight: 700; color: var(--text-1); font-family: 'JetBrains Mono', monospace; white-space: nowrap; pointer-events: none; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 .cx-bar-fill.answered {
   background: linear-gradient(180deg, var(--green) 0%, rgba(0,214,143,0.4) 100%);
 }

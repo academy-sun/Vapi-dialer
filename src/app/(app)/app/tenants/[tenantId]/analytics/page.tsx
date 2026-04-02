@@ -374,6 +374,8 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [assistantNames, setAssistantNames] = useState<Record<string, string>>({});
+  const [selectedWeekBar, setSelectedWeekBar] = useState<number | null>(null);
+  const [selectedHourBar, setSelectedHourBar] = useState<number | null>(null);
   const [minutesData, setMinutesData] = useState<{
     contracted: number;
     usedSeconds: number;
@@ -723,9 +725,10 @@ export default function AnalyticsPage() {
               ) : (
                 <div className="cx-bar-chart">
                   {weekData.map((val, i) => (
-                    <div key={i} className="cx-bar-col">
-                      <div className="cx-bar-area">
-                        <div className="cx-bar-fill" style={{ height: maxWeek > 0 ? `${Math.max(2, Math.round((val / maxWeek) * 100))}%` : "0" }} title={`${WEEKDAY_LABELS[i + 1]}: ${val}`} />
+                    <div key={i} className={`cx-bar-col${selectedWeekBar === i ? " selected" : ""}`} onClick={() => setSelectedWeekBar(selectedWeekBar === i ? null : i)}>
+                      <div className="cx-bar-area" style={{ position: "relative" }}>
+                        <div className="cx-bar-fill" style={{ height: maxWeek > 0 ? `${Math.max(2, Math.round((val / maxWeek) * 100))}%` : "0" }} />
+                        {selectedWeekBar === i && <div className="cx-bar-tooltip">{val.toLocaleString("pt-BR")} chamadas</div>}
                       </div>
                       <span className="cx-bar-lbl">{WEEKDAY_LABELS[i + 1]}</span>
                     </div>
@@ -740,11 +743,12 @@ export default function AnalyticsPage() {
               ) : (
                 <div className="cx-bar-chart">
                   {hourData.map((val, i) => (
-                    <div key={i} className="cx-bar-col">
-                      <div className="cx-bar-area">
-                        <div className="cx-bar-fill" style={{ height: maxHour > 0 ? `${Math.max(2, Math.round((val / maxHour) * 100))}%` : "0" }} title={`${HOUR_LABELS[i]}: ${val}`} />
+                    <div key={i} className={`cx-bar-col${selectedHourBar === i ? " selected" : ""}`} onClick={() => setSelectedHourBar(selectedHourBar === i ? null : i)}>
+                      <div className="cx-bar-area" style={{ position: "relative" }}>
+                        <div className="cx-bar-fill" style={{ height: maxHour > 0 ? `${Math.max(2, Math.round((val / maxHour) * 100))}%` : "0" }} />
+                        {selectedHourBar === i && <div className="cx-bar-tooltip">{val.toLocaleString("pt-BR")} chamadas</div>}
                       </div>
-                      <span className="cx-bar-lbl">{i % 3 === 0 ? HOUR_LABELS[i] : ""}</span>
+                      <span className="cx-bar-lbl">{HOUR_LABELS[i]}</span>
                     </div>
                   ))}
                 </div>
