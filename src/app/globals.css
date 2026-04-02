@@ -27,8 +27,8 @@
   --glass-border: rgba(255,255,255,0.09);
   --glass-hi:     rgba(255,255,255,0.06);
 
-  --sidebar-bg: rgba(10,10,14,0.85);
-  --topbar-bg:  rgba(6,6,8,0.75);
+  --sidebar-bg: rgba(10,10,14,0.92);
+  --topbar-bg:  rgba(6,6,8,0.82);
 
   --text-1: #FFFFFF;
   --text-2: rgba(255,255,255,0.58);
@@ -650,6 +650,10 @@ body::after {
   appearance: none;
 }
 .cx-select:hover, .cx-select:focus { background: var(--glass-bg-2); border-color: rgba(255,255,255,0.15); color: var(--text-1); }
+.cx-select option { background: #16161a; color: #fff; padding: 8px 12px; font-family: 'Inter', sans-serif; font-size: 12px; }
+.cx-select option:hover, .cx-select option:checked { background: #2a2a32; }
+[data-theme="light"] .cx-select option { background: #f4f4f8; color: #0A0A12; }
+[data-theme="light"] .cx-select option:hover, [data-theme="light"] .cx-select option:checked { background: #e4e4ec; }
 
 /* ── PERIOD TABS ──────────────────────────────────────────────── */
 .cx-period-tabs { display: flex; gap: 4px; }

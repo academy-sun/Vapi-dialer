@@ -195,16 +195,16 @@ export default function AppShell({
     { label: "Chamadas",         href: `/app/tenants/${activeTenantId}/calls`,             icon: PhoneCall,     sub: "Histórico e detalhes de todas as chamadas"  },
     { label: "Assistentes",      href: `/app/tenants/${activeTenantId}/assistants`,        icon: Bot,           sub: "Configure seus assistentes de IA"           },
     { label: "Membros",          href: `/app/tenants/${activeTenantId}/members`,           icon: UserCheck,     sub: "Gerencie membros da organização"             },
-    ...(isAdminOrOwner ? [
-      { label: "Dossiê Comercial", href: `/app/tenants/${activeTenantId}/analytics/dossie`, icon: FileBarChart2, sub: "Relatório comercial detalhado" },
-      { label: "Configurações",    href: `/app/tenants/${activeTenantId}/vapi`,              icon: Settings2,     sub: "Configurações de integração VAPI" },
-    ] : []),
   ] : [];
 
   const adminItems = [
-    { label: "Visão Geral Admin", href: "/app/admin",           sub: "Painel administrativo geral" },
-    { label: "Analytics Admin",   href: "/app/admin/analytics", sub: "Analytics de toda a plataforma" },
-    { label: "Sandbox",           href: "/app/admin/sandbox",   sub: "Ambiente de testes" },
+    { label: "Visão Geral",       href: "/app/admin",           icon: LayoutDashboard, sub: "Painel administrativo geral" },
+    { label: "Analytics",         href: "/app/admin/analytics", icon: BarChart2,       sub: "Analytics de toda a plataforma" },
+    ...(activeTenantId && isAdminOrOwner ? [
+      { label: "Dossiê Comercial", href: `/app/tenants/${activeTenantId}/analytics/dossie`, icon: FileBarChart2, sub: "Relatório comercial detalhado" },
+      { label: "Configurações",    href: `/app/tenants/${activeTenantId}/vapi`,              icon: Settings2,     sub: "Configurações de integração VAPI" },
+    ] : []),
+    { label: "Sandbox",           href: "/app/admin/sandbox",   icon: FlaskConical,    sub: "Ambiente de testes" },
   ];
 
   const activeNavItem = [...navItems, ...adminItems].find(item => pathname === item.href || pathname.startsWith(item.href + "/"));
@@ -341,23 +341,13 @@ export default function AppShell({
           {isAdmin && (
             <div className="cx-nav-section">
               <div className="cx-nav-label" style={{ color: "rgba(255,184,0,0.5)" }}>Admin</div>
-              {[
-                { label: "Visão Geral", href: "/app/admin",           icon: LayoutDashboard },
-                { label: "Analytics",   href: "/app/admin/analytics", icon: BarChart2       },
-                { label: "Sandbox",     href: "/app/admin/sandbox",   icon: FlaskConical    },
-              ].map(item => {
+              {adminItems.map(item => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href;
-                const colors: Record<string, string> = {
-                  "/app/admin": "var(--yellow)",
-                  "/app/admin/analytics": "var(--red)",
-                  "/app/admin/sandbox": "var(--green)",
-                };
+                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                 return (
                   <Link
                     key={item.href} href={item.href}
                     className={`cx-nav-item${isActive ? " active" : ""}`}
-                    style={isActive ? {} : { color: colors[item.href] ?? "var(--text-2)" }}
                   >
                     <span className="cx-nav-icon"><Icon size={15} /></span>
                     <span className="cx-nav-text">{item.label}</span>
