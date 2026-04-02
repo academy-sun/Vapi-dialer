@@ -81,29 +81,20 @@ function reasonLabel(r: string) {
   return r;
 }
 
-// ── Barra simples ──────────────────────────────────────────────────────────────
-function MiniBar({ pct, color }: { pct: number; color: string }) {
-  return (
-    <div className="w-full bg-gray-100 rounded-full h-1.5 mt-1">
-      <div className={`h-1.5 rounded-full ${color}`} style={{ width: `${Math.min(100, pct)}%` }} />
-    </div>
-  );
-}
-
 // ── Card de métrica ────────────────────────────────────────────────────────────
 function MetricCard({
-  label, value, sub, icon: Icon, color,
-}: { label: string; value: string | number; sub?: string; icon: React.ElementType; color: string }) {
+  label, value, sub, icon: Icon, gradClass = "grad-white", iconBg,
+}: { label: string; value: string | number; sub?: string; icon: React.ElementType; gradClass?: string; iconBg?: string }) {
   return (
-    <div className="card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-gray-500 font-medium">{label}</span>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${color}`}>
-          <Icon className="w-4 h-4" />
+    <div className="gc cx-kpi-card">
+      <div className="cx-kpi-head">
+        <span className="cx-kpi-label">{label}</span>
+        <div className="cx-kpi-icon" style={iconBg ? { background: iconBg } : undefined}>
+          <Icon style={{ width: 16, height: 16 }} />
         </div>
       </div>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+      <div className={`cx-kpi-value ${gradClass}`}>{value}</div>
+      {sub && <div className="cx-kpi-badge">{sub}</div>}
     </div>
   );
 }
@@ -111,51 +102,35 @@ function MetricCard({
 // ── Gráfico de barras manual ───────────────────────────────────────────────────
 function CallsChart({ data, days }: { data: DayEntry[]; days: number }) {
   const maxTotal = Math.max(...data.map((d) => d.total), 1);
-  // Para muitos dias, mostrar apenas alguns labels
   const labelEvery = days <= 14 ? 1 : days <= 30 ? 3 : 7;
 
   return (
-    <div className="card p-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">Chamadas por Dia</h3>
-      <div className="flex items-end gap-0.5 h-40">
+    <div className="gc cx-chart-card">
+      <div className="cx-card-title" style={{ marginBottom: 12 }}>Chamadas por Dia</div>
+      <div className="cx-bar-chart" style={{ height: 160 }}>
         {data.map((d, i) => {
-          const totalH  = Math.round((d.total    / maxTotal) * 160);
-          const answH   = Math.round((d.answered / maxTotal) * 160);
+          const totalPct  = Math.max(2, Math.round((d.total    / maxTotal) * 100));
+          const answPct   = Math.max(2, Math.round((d.answered / maxTotal) * 100));
           const showLabel = i % labelEvery === 0;
           return (
-            <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5 group relative">
-              <div className="w-full flex flex-col-reverse" style={{ height: 160 }}>
-                {/* Barra total (cinza claro) */}
-                <div
-                  className="w-full bg-indigo-100 rounded-t transition-all"
-                  style={{ height: totalH }}
-                />
-                {/* Barra atendidas (sobre a total) */}
-                <div
-                  className="w-full bg-indigo-500 rounded-t absolute bottom-0"
-                  style={{ height: answH }}
-                />
+            <div key={d.date} className="cx-bar-col" title={`${fmtDate(d.date)}: ${d.total} total / ${d.answered} atendidas${d.cost > 0 ? ` / ${fmtCost(d.cost)}` : ""}`}>
+              <div style={{ width: "100%", flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", position: "relative" }}>
+                <div className="cx-bar-fill" style={{ height: `${totalPct}%`, opacity: 0.3 }} />
+                <div className="cx-bar-fill answered" style={{ height: `${answPct}%`, position: "absolute", bottom: 0, left: 0, right: 0 }} />
               </div>
               {showLabel && (
-                <span className="text-[9px] text-gray-400 mt-0.5 whitespace-nowrap">
-                  {fmtDate(d.date)}
-                </span>
+                <span className="cx-bar-lbl">{fmtDate(d.date)}</span>
               )}
-              {/* Tooltip */}
-              <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block z-10 bg-gray-900 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap pointer-events-none">
-                {fmtDate(d.date)}: {d.total} total / {d.answered} atendidas
-                {d.cost > 0 && ` / ${fmtCost(d.cost)}`}
-              </div>
             </div>
           );
         })}
       </div>
-      <div className="flex items-center gap-4 mt-3">
-        <span className="flex items-center gap-1.5 text-xs text-gray-500">
-          <span className="w-3 h-3 rounded-sm bg-indigo-500 inline-block" /> Atendidas
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
+        <span className="cx-card-sub" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--red)", display: "inline-block" }} /> Atendidas
         </span>
-        <span className="flex items-center gap-1.5 text-xs text-gray-500">
-          <span className="w-3 h-3 rounded-sm bg-indigo-100 inline-block" /> Total
+        <span className="cx-card-sub" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--red)", opacity: 0.3, display: "inline-block" }} /> Total
         </span>
       </div>
     </div>
@@ -183,92 +158,95 @@ export default function AdminAnalyticsPage() {
   const c = data?.cards;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center">
-            <BarChart2 className="w-5 h-5 text-white" />
+    <div>
+      {/* Filtros */}
+      <div className="gc" style={{ padding: 20, marginBottom: 24, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div className="cx-kpi-icon" style={{ width: 36, height: 36, background: "rgba(232,0,45,0.15)" }}>
+            <BarChart2 style={{ width: 18, height: 18, color: "var(--red)" }} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Analytics Global</h1>
-            <p className="text-sm text-gray-500">Visão consolidada de todos os tenants</p>
+            <div className="cx-card-title">Analytics Global</div>
+            <div className="cx-card-sub">Visão consolidada de todos os tenants</div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Filtro de período */}
+
+        <div style={{ marginLeft: "auto" }} className="cx-period-tabs">
           {[7, 30, 90].map((d) => (
             <button
               key={d}
               onClick={() => setDays(d)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                days === d
-                  ? "bg-indigo-600 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-              }`}
+              className={`cx-period-tab ${days === d ? "active" : ""}`}
             >
-              {d}d
+              {d}D
             </button>
           ))}
-          <button
-            onClick={() => load(days)}
-            disabled={loading}
-            className="btn-icon ml-2"
-            title="Atualizar"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          </button>
         </div>
+
+        <button
+          onClick={() => load(days)}
+          className="cx-refresh-btn"
+          disabled={loading}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px" }}
+        >
+          <RefreshCw style={{ width: 14, height: 14, ...(loading ? { animation: "cx-spin .8s linear infinite" } : {}) }} />
+          Atualizar
+        </button>
       </div>
 
       {loading && !data && (
-        <div className="flex items-center justify-center py-20 text-gray-400">
-          <Loader2 className="w-6 h-6 animate-spin mr-2" /> Carregando analytics...
+        <div className="cx-loading" style={{ height: 256 }}>
+          <div className="cx-spinner" />
+          Carregando analytics...
         </div>
       )}
 
       {data && (
         <>
-          {/* Cards de métricas */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {/* KPI Grid */}
+          <div className="cx-kpi-grid" style={{ marginBottom: 24 }}>
             <MetricCard
               label="Total de Chamadas"
               value={c!.totalCalls.toLocaleString("pt-BR")}
               sub={`Últimos ${days} dias`}
               icon={PhoneCall}
-              color="bg-indigo-50 text-indigo-600"
+              gradClass="grad-cyan"
+              iconBg="rgba(0,194,255,0.12)"
             />
             <MetricCard
               label="Atendidas"
               value={`${c!.answeredCalls.toLocaleString("pt-BR")} (${c!.answerRate}%)`}
               sub="Taxa de atendimento"
               icon={CheckCircle2}
-              color="bg-emerald-50 text-emerald-600"
+              gradClass="grad-green"
+              iconBg="rgba(0,214,143,0.12)"
             />
             <MetricCard
               label="Custo Total"
               value={fmtCost(c!.totalCost)}
               sub={`${fmtDuration(c!.totalDurationMinutes)} de fala`}
               icon={DollarSign}
-              color="bg-amber-50 text-amber-600"
+              gradClass="grad-red"
+              iconBg="rgba(232,0,45,0.15)"
             />
             <MetricCard
               label="Tenants Ativos"
               value={`${c!.activeTenants} / ${c!.totalTenants}`}
-              sub={`${c!.activeQueues} filas • ${c!.activeCalls} em ligação agora`}
+              sub={`${c!.activeQueues} filas · ${c!.activeCalls} em ligação agora`}
               icon={Users}
-              color="bg-violet-50 text-violet-600"
+              gradClass="grad-white"
+              iconBg="rgba(168,85,247,0.12)"
             />
           </div>
 
           {/* Live status */}
           {(c!.activeCalls > 0 || c!.activeQueues > 0) && (
-            <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            <div className="gc" style={{ padding: "14px 20px", marginBottom: 24, display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ position: "relative", width: 10, height: 10 }}>
+                <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "var(--green)", opacity: 0.4, animation: "cx-spin 1.5s ease-in-out infinite" }} />
+                <span style={{ position: "relative", display: "block", width: 10, height: 10, borderRadius: "50%", background: "var(--green)" }} />
               </span>
-              <span className="text-sm text-emerald-800 font-medium">
+              <span className="cx-card-sub" style={{ color: "var(--green)", fontWeight: 600 }}>
                 {c!.activeCalls} chamada{c!.activeCalls !== 1 ? "s" : ""} ativa{c!.activeCalls !== 1 ? "s" : ""} agora
                 {c!.activeQueues > 0 && ` · ${c!.activeQueues} fila${c!.activeQueues !== 1 ? "s" : ""} rodando`}
               </span>
@@ -276,32 +254,37 @@ export default function AdminAnalyticsPage() {
           )}
 
           {/* Gráfico */}
-          <CallsChart data={data.callsByDay} days={days} />
+          <div style={{ marginBottom: 24 }}>
+            <CallsChart data={data.callsByDay} days={days} />
+          </div>
 
           {/* Top tenants + Motivos de encerramento */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="cx-bot-grid" style={{ marginBottom: 24 }}>
             {/* Top tenants */}
-            <div className="card p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-indigo-500" />
+            <div className="gc cx-mot-card">
+              <div className="cx-card-title" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <TrendingUp style={{ width: 16, height: 16, color: "var(--red)" }} />
                 Top Tenants por Volume
-              </h3>
+              </div>
               {data.topTenants.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">Sem dados no período</p>
+                <div className="cx-card-sub" style={{ textAlign: "center", padding: "32px 0" }}>Sem dados no período</div>
               ) : (
-                <div className="space-y-3">
+                <div className="cx-mot-rows">
                   {data.topTenants.map((t) => {
                     const rate = t.total > 0 ? Math.round((t.answered / t.total) * 100) : 0;
                     const maxT = data.topTenants[0].total;
+                    const barWidth = Math.round((t.total / maxT) * 100);
                     return (
-                      <div key={t.id}>
-                        <div className="flex items-center justify-between text-xs mb-0.5">
-                          <span className="font-medium text-gray-700 truncate max-w-[140px]">{t.name}</span>
-                          <span className="text-gray-500 shrink-0 ml-2">
-                            {t.total.toLocaleString("pt-BR")} calls · {rate}% · {fmtCost(t.cost)}
-                          </span>
+                      <div key={t.id} className="cx-mot-row">
+                        <span className="cx-mot-name" title={t.name}>{t.name}</span>
+                        <div className="cx-mot-bar">
+                          <div className="cx-mot-fill" style={{ width: `${barWidth}%`, background: "var(--cyan)" }} />
                         </div>
-                        <MiniBar pct={(t.total / maxT) * 100} color="bg-indigo-400" />
+                        <span className="cx-mot-val">
+                          {t.total.toLocaleString("pt-BR")}
+                          {" "}
+                          <span className="cx-mot-pct">({rate}% · {fmtCost(t.cost)})</span>
+                        </span>
                       </div>
                     );
                   })}
@@ -310,31 +293,29 @@ export default function AdminAnalyticsPage() {
             </div>
 
             {/* Motivos de encerramento */}
-            <div className="card p-5">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-indigo-500" />
+            <div className="gc cx-mot-card">
+              <div className="cx-card-title" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <Activity style={{ width: 16, height: 16, color: "var(--red)" }} />
                 Motivos de Encerramento
-              </h3>
+              </div>
               {data.endReasons.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">Sem dados no período</p>
+                <div className="cx-card-sub" style={{ textAlign: "center", padding: "32px 0" }}>Sem dados no período</div>
               ) : (
-                <div className="space-y-2">
+                <div className="cx-mot-rows">
                   {data.endReasons.map(({ reason, count }) => {
                     const total = data.endReasons.reduce((s, r) => s + r.count, 0);
                     const pct   = total > 0 ? Math.round((count / total) * 100) : 0;
                     const isAnswered = ANSWERED.has(reason);
+                    const barColor = isAnswered ? "var(--green)" : "var(--text-3)";
                     return (
-                      <div key={reason}>
-                        <div className="flex items-center justify-between text-xs mb-0.5">
-                          <span className={`font-medium truncate max-w-[160px] ${isAnswered ? "text-emerald-700" : "text-gray-600"}`}>
-                            {reasonLabel(reason)}
-                          </span>
-                          <span className="text-gray-400 shrink-0 ml-2">{count.toLocaleString("pt-BR")} ({pct}%)</span>
+                      <div key={reason} className="cx-mot-row">
+                        <span className="cx-mot-name" title={reason}>{reasonLabel(reason)}</span>
+                        <div className="cx-mot-bar">
+                          <div className="cx-mot-fill" style={{ width: `${pct}%`, background: barColor }} />
                         </div>
-                        <MiniBar
-                          pct={pct}
-                          color={isAnswered ? "bg-emerald-400" : "bg-gray-300"}
-                        />
+                        <span className="cx-mot-val">
+                          {count.toLocaleString("pt-BR")} <span className="cx-mot-pct">({pct}%)</span>
+                        </span>
                       </div>
                     );
                   })}
@@ -345,19 +326,21 @@ export default function AdminAnalyticsPage() {
 
           {/* Custo médio por chamada */}
           {c!.totalCalls > 0 && (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="cx-kpi-grid" style={{ gridTemplateColumns: c!.answeredCalls > 0 ? "repeat(3,1fr)" : "repeat(2,1fr)", marginBottom: 24 }}>
               <MetricCard
                 label="Custo Médio / Chamada"
                 value={fmtCost(c!.totalCost / c!.totalCalls)}
                 icon={Zap}
-                color="bg-orange-50 text-orange-500"
+                gradClass="grad-red"
+                iconBg="rgba(232,0,45,0.15)"
               />
               <MetricCard
                 label="Duração Média / Chamada"
                 value={`${Math.round((c!.totalDurationMinutes * 60) / c!.totalCalls)}s`}
                 sub="Todas as chamadas"
                 icon={Clock}
-                color="bg-sky-50 text-sky-500"
+                gradClass="grad-cyan"
+                iconBg="rgba(0,194,255,0.12)"
               />
               {c!.answeredCalls > 0 && (
                 <MetricCard
@@ -365,7 +348,8 @@ export default function AdminAnalyticsPage() {
                   value={fmtCost(c!.totalCost / c!.answeredCalls)}
                   sub="Apenas chamadas atendidas"
                   icon={DollarSign}
-                  color="bg-teal-50 text-teal-500"
+                  gradClass="grad-green"
+                  iconBg="rgba(0,214,143,0.12)"
                 />
               )}
             </div>

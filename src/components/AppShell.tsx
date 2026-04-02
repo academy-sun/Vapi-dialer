@@ -343,7 +343,9 @@ export default function AppShell({
               <div className="cx-nav-label" style={{ color: "rgba(255,184,0,0.5)" }}>Admin</div>
               {adminItems.map(item => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                const isActive = item.href === "/app/admin"
+                  ? pathname === item.href
+                  : pathname === item.href || pathname.startsWith(item.href + "/");
                 return (
                   <Link
                     key={item.href} href={item.href}

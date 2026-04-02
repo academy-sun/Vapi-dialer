@@ -139,32 +139,36 @@ function SandboxContent() {
       {/* Header */}
       <div className="page-header">
         <div>
-          <Link href="/app/admin" className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 mb-2 transition-colors">
-            <ChevronLeft className="w-3.5 h-3.5" /> Visão Geral
+          <Link
+            href="/app/admin"
+            style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-3)", marginBottom: 8, transition: "color .15s", textDecoration: "none" }}
+          >
+            <ChevronLeft style={{ width: 14, height: 14 }} /> Visão Geral
           </Link>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <FlaskConical className="w-4 h-4 text-white" />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <div style={{ width: 28, height: 28, borderRadius: "var(--radius-sm)", background: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <FlaskConical style={{ width: 16, height: 16, color: "#fff" }} />
             </div>
-            <span className="text-xs font-semibold uppercase tracking-widest text-indigo-600">Painel Admin</span>
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--red)" }}>Painel Admin</span>
           </div>
           <h1 className="page-title">Sandbox de Testes</h1>
           <p className="page-subtitle">Simule chamadas, listas e webhooks sem afetar dados de produção</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-5 gap-6">
-        {/* ── Left: Controls ── */}
-        <div className="col-span-3 space-y-5">
+      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 20 }}>
+        {/* -- Left: Controls -- */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
           {/* Step 1: Tenant */}
-          <div className="card p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">1</div>
-              <h3 className="font-semibold text-gray-800">Selecionar conta</h3>
+          <div className="gc" style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <div style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>1</div>
+              <h3 className="cx-card-title">Selecionar conta</h3>
             </div>
             <select
-              className="select-native"
+              className="cx-select"
+              style={{ width: "100%" }}
               value={selectedTenant}
               onChange={(e) => setSelectedTenant(e.target.value)}
             >
@@ -177,44 +181,60 @@ function SandboxContent() {
             </select>
 
             {activeTenant && (
-              <div className={`mt-3 flex items-center gap-2 text-xs p-2.5 rounded-lg ${activeTenant.stats.vapi_configured ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+              <div
+                className={activeTenant.stats.vapi_configured ? "alert-success" : "alert-warning"}
+                style={{ marginTop: 12, fontSize: 12, padding: "8px 12px" }}
+              >
                 {activeTenant.stats.vapi_configured
-                  ? <><CheckCircle2 className="w-3.5 h-3.5" /> Vapi configurado — pronto para chamadas reais</>
-                  : <><AlertTriangle className="w-3.5 h-3.5" /> Sem chave Vapi — apenas simulações disponíveis</>
+                  ? <><CheckCircle2 style={{ width: 14, height: 14 }} /> Vapi configurado — pronto para chamadas reais</>
+                  : <><AlertTriangle style={{ width: 14, height: 14 }} /> Sem chave Vapi — apenas simulações disponíveis</>
                 }
               </div>
             )}
           </div>
 
           {/* Step 2: Queue */}
-          <div className="card p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">2</div>
-                <h3 className="font-semibold text-gray-800">Selecionar fila</h3>
+          <div className="gc" style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>2</div>
+                <h3 className="cx-card-title">Selecionar fila</h3>
               </div>
-              {loadingResources && <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />}
+              {loadingResources && (
+                <div className="cx-loading">
+                  <div className="cx-spinner" />
+                </div>
+              )}
             </div>
 
             {!selectedTenant ? (
-              <p className="text-sm text-gray-400">Selecione uma conta primeiro.</p>
+              <p style={{ fontSize: 13, color: "var(--text-3)" }}>Selecione uma conta primeiro.</p>
             ) : queues.length === 0 && !loadingResources ? (
-              <p className="text-sm text-gray-400">Nenhuma fila cadastrada nesta conta.</p>
+              <p style={{ fontSize: 13, color: "var(--text-3)" }}>Nenhuma fila cadastrada nesta conta.</p>
             ) : (
-              <div className="space-y-2">
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {queues.map((q) => (
                   <button
                     key={q.id}
                     onClick={() => setSelectedQueue(q.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border text-sm transition-all text-left ${
-                      selectedQueue === q.id
-                        ? "border-indigo-300 bg-indigo-50"
-                        : "border-gray-100 hover:border-gray-200 hover:bg-gray-50"
-                    }`}
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 12px",
+                      borderRadius: "var(--radius-sm)",
+                      border: selectedQueue === q.id ? "1px solid var(--red)" : "1px solid var(--glass-border)",
+                      background: selectedQueue === q.id ? "var(--red-lo)" : "var(--glass-bg)",
+                      fontSize: 13,
+                      textAlign: "left",
+                      transition: "all .15s",
+                      cursor: "pointer",
+                    }}
                   >
-                    <span className="flex items-center gap-2">
-                      <ListOrdered className="w-4 h-4 text-gray-400 shrink-0" />
-                      <span className="font-medium text-gray-800">{q.name}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <ListOrdered style={{ width: 16, height: 16, color: "var(--text-3)", flexShrink: 0 }} />
+                      <span style={{ fontWeight: 600, color: "var(--text-1)" }}>{q.name}</span>
                     </span>
                     <span className={`badge ${queueStatusColor[q.status] ?? "badge-gray"}`}>{q.status}</span>
                   </button>
@@ -223,12 +243,12 @@ function SandboxContent() {
             )}
 
             {lists.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-50">
-                <p className="text-xs text-gray-400 mb-2">Listas disponíveis nesta conta</p>
-                <div className="flex flex-wrap gap-2">
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid var(--glass-border)" }}>
+                <p style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 8 }}>Listas disponíveis nesta conta</p>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {lists.map((l) => (
-                    <span key={l.id} className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
-                      <Building2 className="w-2.5 h-2.5" /> {l.name}
+                    <span key={l.id} className="badge badge-gray" style={{ gap: 4 }}>
+                      <Building2 style={{ width: 10, height: 10 }} /> {l.name}
                     </span>
                   ))}
                 </div>
@@ -237,42 +257,44 @@ function SandboxContent() {
           </div>
 
           {/* Step 3: Call */}
-          <div className="card p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold shrink-0">3</div>
-              <h3 className="font-semibold text-gray-800">Disparar chamada</h3>
+          <div className="gc" style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <div style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--red)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>3</div>
+              <h3 className="cx-card-title">Disparar chamada</h3>
             </div>
 
-            <div className="space-y-4">
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <label className="form-label">Número de telefone de teste</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <div style={{ position: "relative" }}>
+                  <Phone style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", width: 16, height: 16, color: "var(--text-3)" }} />
                   <input
                     type="tel"
-                    className="form-input pl-9"
+                    className="form-input"
+                    style={{ paddingLeft: 36 }}
                     placeholder="+5511999990001 ou 11999990001"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                   />
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Use seu próprio número para não afetar leads reais</p>
+                <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 4 }}>Use seu próprio número para não afetar leads reais</p>
               </div>
 
               {/* Variables (LiquidJS) */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="form-label flex items-center gap-1.5 mb-0">
-                    <Braces className="w-3.5 h-3.5 text-indigo-400" />
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <label className="form-label" style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 0 }}>
+                    <Braces style={{ width: 14, height: 14, color: "var(--red)" }} />
                     Variáveis LiquidJS
-                    <span className="text-xs font-normal text-gray-400 ml-1">(opcional)</span>
+                    <span style={{ fontSize: 12, fontWeight: 400, color: "var(--text-3)", marginLeft: 4 }}>(opcional)</span>
                   </label>
                   <button
                     type="button"
                     onClick={addVar}
-                    className="text-xs text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                    className="cx-filter-btn"
+                    style={{ padding: "4px 10px", fontSize: 12, gap: 4 }}
                   >
-                    <Plus className="w-3.5 h-3.5" /> Adicionar
+                    <Plus style={{ width: 14, height: 14 }} /> Adicionar
                   </button>
                 </div>
 
@@ -280,28 +302,44 @@ function SandboxContent() {
                   <button
                     type="button"
                     onClick={addVar}
-                    className="w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 hover:border-indigo-300 hover:text-indigo-500 hover:bg-indigo-50 transition-colors"
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                      padding: "10px 0",
+                      borderRadius: "var(--radius-sm)",
+                      border: "2px dashed var(--glass-border)",
+                      background: "none",
+                      fontSize: 12,
+                      color: "var(--text-3)",
+                      cursor: "pointer",
+                      transition: "all .15s",
+                    }}
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus style={{ width: 14, height: 14 }} />
                     Ex: first_name = João, empresa = Acme…
                   </button>
                 ) : (
-                  <div className="space-y-1.5">
-                    <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 mb-0.5">
-                      <span className="text-xs text-gray-400 px-1">Chave</span>
-                      <span className="text-xs text-gray-400 px-1">Valor</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontSize: 12, color: "var(--text-3)", paddingLeft: 4 }}>Chave</span>
+                      <span style={{ fontSize: 12, color: "var(--text-3)", paddingLeft: 4 }}>Valor</span>
                       <span />
                     </div>
                     {variables.map((v) => (
-                      <div key={v.id} className="grid grid-cols-[1fr_1fr_auto] gap-1.5 items-center">
+                      <div key={v.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 6, alignItems: "center" }}>
                         <input
-                          className="form-input text-xs font-mono py-1.5"
+                          className="form-input mono"
+                          style={{ fontSize: 12, padding: "6px 10px" }}
                           placeholder="first_name"
                           value={v.key}
                           onChange={(e) => updateVar(v.id, "key", e.target.value)}
                         />
                         <input
-                          className="form-input text-xs py-1.5"
+                          className="form-input"
+                          style={{ fontSize: 12, padding: "6px 10px" }}
                           placeholder="João"
                           value={v.value}
                           onChange={(e) => updateVar(v.id, "value", e.target.value)}
@@ -309,15 +347,16 @@ function SandboxContent() {
                         <button
                           type="button"
                           onClick={() => removeVar(v.id)}
-                          className="btn-icon text-gray-300 hover:text-red-400 w-6 h-6"
+                          className="btn-icon"
+                          style={{ width: 24, height: 24 }}
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <X style={{ width: 14, height: 14 }} />
                         </button>
                       </div>
                     ))}
-                    <p className="text-xs text-indigo-600 bg-indigo-50 rounded px-2 py-1.5 mt-1">
+                    <p className="alert-info" style={{ fontSize: 12, padding: "6px 10px", marginTop: 4 }}>
                       {variables.filter((v) => v.key.trim()).map((v) => (
-                        <code key={v.id} className="font-mono mr-1.5 bg-white px-1 rounded">{`{{${v.key.trim()}}}`}</code>
+                        <code key={v.id} className="mono" style={{ marginRight: 6, background: "var(--glass-bg-2)", padding: "1px 5px", borderRadius: 4, fontSize: 11 }}>{`{{${v.key.trim()}}}`}</code>
                       ))}
                       {variables.filter((v) => v.key.trim()).length === 0 && "Preencha as chaves para ver as variáveis"}
                     </p>
@@ -326,18 +365,46 @@ function SandboxContent() {
               </div>
 
               {/* Dry run toggle */}
-              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+              <label style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                cursor: "pointer",
+                padding: 12,
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--glass-border)",
+                background: "var(--glass-bg)",
+                transition: "background .15s",
+              }}>
                 <div
                   onClick={() => setDryRun((v) => !v)}
-                  className={`relative w-10 h-5 rounded-full transition-colors ${dryRun ? "bg-amber-400" : "bg-indigo-600"}`}
+                  style={{
+                    position: "relative",
+                    width: 40,
+                    height: 20,
+                    borderRadius: 999,
+                    background: dryRun ? "var(--yellow)" : "var(--red)",
+                    transition: "background .2s",
+                    flexShrink: 0,
+                  }}
                 >
-                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${dryRun ? "left-0.5" : "left-5"}`} />
+                  <div style={{
+                    position: "absolute",
+                    top: 2,
+                    width: 16,
+                    height: 16,
+                    borderRadius: "50%",
+                    background: "#fff",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
+                    transition: "left .2s",
+                    left: dryRun ? 2 : 20,
+                  }} />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-800">
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-1)" }}>
                     {dryRun ? "Modo simulação (Dry Run)" : "Chamada real"}
                   </p>
-                  <p className="text-xs text-gray-400">
+                  <p style={{ fontSize: 12, color: "var(--text-3)" }}>
                     {dryRun
                       ? "Valida os dados mas não liga — seguro para testes"
                       : "Vai fazer a ligação de verdade via Vapi"}
@@ -347,100 +414,117 @@ function SandboxContent() {
 
               {/* Summary */}
               {activeQueue && selectedTenant && (
-                <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1 text-gray-500">
-                  <p><span className="font-medium text-gray-700">Conta:</span> {activeTenant?.name}</p>
-                  <p><span className="font-medium text-gray-700">Fila:</span> {activeQueue.name}</p>
-                  <p><span className="font-medium text-gray-700">Assistente:</span> <span className="font-mono">{activeQueue.assistant_id}</span></p>
-                  <p><span className="font-medium text-gray-700">Número Vapi:</span> <span className="font-mono">{activeQueue.phone_number_id}</span></p>
+                <div style={{
+                  background: "var(--glass-bg)",
+                  borderRadius: "var(--radius-sm)",
+                  padding: 12,
+                  fontSize: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 4,
+                  color: "var(--text-2)",
+                }}>
+                  <p><span style={{ fontWeight: 600, color: "var(--text-1)" }}>Conta:</span> {activeTenant?.name}</p>
+                  <p><span style={{ fontWeight: 600, color: "var(--text-1)" }}>Fila:</span> {activeQueue.name}</p>
+                  <p><span style={{ fontWeight: 600, color: "var(--text-1)" }}>Assistente:</span> <span className="mono">{activeQueue.assistant_id}</span></p>
+                  <p><span style={{ fontWeight: 600, color: "var(--text-1)" }}>Número Vapi:</span> <span className="mono">{activeQueue.phone_number_id}</span></p>
                 </div>
               )}
 
               <button
                 onClick={fireCall}
                 disabled={!canFire}
-                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium text-sm transition-all ${
-                  dryRun
-                    ? "bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40"
-                    : "bg-indigo-600 hover:bg-indigo-700 text-white disabled:opacity-40"
-                }`}
+                className={dryRun ? "btn btn-secondary" : "btn btn-primary"}
+                style={{
+                  width: "100%",
+                  padding: "10px 0",
+                  fontSize: 13,
+                  ...(dryRun ? { background: "var(--yellow)", color: "#000", border: "none", boxShadow: "0 4px 18px rgba(255,184,0,0.25)" } : {}),
+                }}
               >
                 {loading
-                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Processando…</>
+                  ? <><div className="cx-spinner" style={{ width: 16, height: 16 }} /> Processando…</>
                   : dryRun
-                    ? <><Eye className="w-4 h-4" /> Simular (Dry Run)</>
-                    : <><Play className="w-4 h-4" /> Disparar chamada real</>
+                    ? <><Eye style={{ width: 16, height: 16 }} /> Simular (Dry Run)</>
+                    : <><Play style={{ width: 16, height: 16 }} /> Disparar chamada real</>
                 }
               </button>
             </div>
           </div>
         </div>
 
-        {/* ── Right: Results + Logs ── */}
-        <div className="col-span-2 space-y-5">
+        {/* -- Right: Results + Logs -- */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
           {/* Result */}
           {result && (
-            <div className={`card p-5 border-l-4 ${result.ok ? "border-l-emerald-400" : "border-l-red-400"}`}>
-              <div className="flex items-center gap-2 mb-3">
+            <div
+              className="gc"
+              style={{
+                padding: 20,
+                borderLeft: result.ok ? "4px solid var(--green)" : "4px solid var(--red)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
                 {result.ok
-                  ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                  : <XCircle className="w-5 h-5 text-red-500" />
+                  ? <CheckCircle2 style={{ width: 20, height: 20, color: "var(--green)" }} />
+                  : <XCircle style={{ width: 20, height: 20, color: "var(--red)" }} />
                 }
-                <h3 className="font-semibold text-gray-800">
+                <h3 className="cx-card-title">
                   {result.ok ? (result.dry_run ? "Simulação OK" : "Chamada iniciada!") : "Erro"}
                 </h3>
               </div>
 
               {result.ok && result.dry_run && (
-                <p className="text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">
+                <div className="alert-success" style={{ fontSize: 13 }}>
                   {result.message}
-                </p>
+                </div>
               )}
 
               {result.ok && !result.dry_run && (
-                <div className="space-y-2 text-sm">
-                  <p className="text-gray-600">Vapi Call ID:</p>
-                  <p className="font-mono text-xs bg-gray-50 px-3 py-2 rounded-lg break-all text-indigo-700">
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13 }}>
+                  <p style={{ color: "var(--text-2)" }}>Vapi Call ID:</p>
+                  <p className="mono" style={{ fontSize: 12, background: "var(--glass-bg-2)", padding: "8px 12px", borderRadius: "var(--radius-sm)", wordBreak: "break-all", color: "var(--cyan)" }}>
                     {result.vapi_call_id}
                   </p>
-                  <p className="text-xs text-gray-400">Status: {result.vapi_status}</p>
+                  <p style={{ fontSize: 12, color: "var(--text-3)" }}>Status: {result.vapi_status}</p>
                 </div>
               )}
 
               {!result.ok && (
-                <div className="bg-red-50 rounded-lg px-3 py-2">
-                  <p className="text-sm text-red-700 break-all">{result.error}</p>
+                <div className="alert-error" style={{ fontSize: 13 }}>
+                  <span style={{ wordBreak: "break-all" }}>{result.error}</span>
                 </div>
               )}
 
               {result.summary && (
-                <div className="mt-3 pt-3 border-t border-gray-50 text-xs text-gray-400 space-y-1">
-                  <p>Fila: <span className="text-gray-600">{result.summary.queue}</span></p>
-                  <p>Telefone: <span className="font-mono text-gray-600">{result.summary.target_phone}</span></p>
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--glass-border)", fontSize: 12, color: "var(--text-3)", display: "flex", flexDirection: "column", gap: 4 }}>
+                  <p>Fila: <span style={{ color: "var(--text-2)" }}>{result.summary.queue}</span></p>
+                  <p>Telefone: <span className="mono" style={{ color: "var(--text-2)" }}>{result.summary.target_phone}</span></p>
                 </div>
               )}
             </div>
           )}
 
           {/* Activity log */}
-          <div className="card p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Zap className="w-4 h-4 text-indigo-400" />
-                <h3 className="font-semibold text-gray-800 text-sm">Log de atividade</h3>
+          <div className="gc" style={{ padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Zap style={{ width: 16, height: 16, color: "var(--red)" }} />
+                <h3 className="cx-card-title" style={{ fontSize: 13 }}>Log de atividade</h3>
               </div>
               {logs.length > 0 && (
-                <button onClick={() => setLogs([])} className="text-xs text-gray-400 hover:text-gray-600">
-                  <RefreshCw className="w-3.5 h-3.5" />
+                <button onClick={() => setLogs([])} className="btn-icon">
+                  <RefreshCw style={{ width: 14, height: 14 }} />
                 </button>
               )}
             </div>
             {logs.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-6">Nenhuma atividade ainda.</p>
+              <p style={{ fontSize: 12, color: "var(--text-3)", textAlign: "center", padding: "24px 0" }}>Nenhuma atividade ainda.</p>
             ) : (
-              <div className="space-y-1 max-h-64 overflow-y-auto">
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 256, overflowY: "auto" }}>
                 {logs.map((log, i) => (
-                  <p key={i} className="text-xs font-mono text-gray-500 py-1 border-b border-gray-50 last:border-0">
+                  <p key={i} className="mono" style={{ fontSize: 12, color: "var(--text-2)", padding: "4px 0", borderBottom: "1px solid var(--glass-border)" }}>
                     {log}
                   </p>
                 ))}
@@ -449,14 +533,14 @@ function SandboxContent() {
           </div>
 
           {/* Info card */}
-          <div className="card p-5 bg-indigo-50 border-indigo-100">
-            <h3 className="text-sm font-semibold text-indigo-800 mb-2">Como usar o Sandbox</h3>
-            <ul className="text-xs text-indigo-700 space-y-1.5">
-              <li>• <strong>Dry Run:</strong> valida tudo sem ligar</li>
-              <li>• <strong>Chamada real:</strong> liga de verdade via Vapi</li>
-              <li>• Use seu número pessoal como alvo</li>
-              <li>• Nenhum lead do banco é criado ou alterado</li>
-              <li>• O call_record NÃO é salvo no sandbox</li>
+          <div className="gc" style={{ padding: 20, background: "var(--red-lo)", borderColor: "rgba(232,0,45,0.20)" }}>
+            <h3 style={{ fontSize: 13, fontWeight: 700, color: "var(--red)", marginBottom: 8 }}>Como usar o Sandbox</h3>
+            <ul style={{ fontSize: 12, color: "var(--text-2)", display: "flex", flexDirection: "column", gap: 6, listStyle: "none" }}>
+              <li>&#8226; <strong>Dry Run:</strong> valida tudo sem ligar</li>
+              <li>&#8226; <strong>Chamada real:</strong> liga de verdade via Vapi</li>
+              <li>&#8226; Use seu número pessoal como alvo</li>
+              <li>&#8226; Nenhum lead do banco é criado ou alterado</li>
+              <li>&#8226; O call_record NÃO é salvo no sandbox</li>
             </ul>
           </div>
         </div>
@@ -468,8 +552,8 @@ function SandboxContent() {
 export default function SandboxPage() {
   return (
     <Suspense fallback={
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-400" />
+      <div className="cx-loading" style={{ height: 256 }}>
+        <div className="cx-spinner" style={{ width: 32, height: 32 }} />
       </div>
     }>
       <SandboxContent />

@@ -158,17 +158,17 @@ function HeatmapSection({ data }: { data: AnalyticsData }) {
       {/* Grid */}
       <div className="cx-hmap-hours">
         <span />
-        {Array.from({ length: 13 }, (_, i) => (
+        {Array.from({ length: 12 }, (_, i) => (
           <span key={i} className="cx-hmap-hlabel">{String(i * 2).padStart(2, "0")}h</span>
         ))}
       </div>
       {matrix.map((row, di) => (
         <div key={di} className="cx-hmap-row">
           <span className="cx-hmap-day">{WEEKDAY_LABELS[di + 1]}</span>
-          {/* Collapse 24h into 13 slots (every other hour) for the grid */}
-          {Array.from({ length: 13 }, (_, i) => {
+          {/* Collapse 24h into 12 slots (pairs: 0-1, 2-3, ... 22-23) */}
+          {Array.from({ length: 12 }, (_, i) => {
             const h = i * 2;
-            const val = row[h] + (row[h + 1] ?? 0);
+            const val = (row[h] ?? 0) + (row[h + 1] ?? 0);
             return (
               <div key={i}
                 title={`${WEEKDAY_LABELS[di + 1]} ${String(h).padStart(2, "0")}h → ${val}${mode === "rate" ? "%" : ""}`}
