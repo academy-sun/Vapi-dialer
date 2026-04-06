@@ -113,10 +113,10 @@ function CallsChart({ data, days }: { data: DayEntry[]; days: number }) {
           const answPct   = Math.max(2, Math.round((d.answered / maxTotal) * 100));
           const showLabel = i % labelEvery === 0;
           return (
-            <div key={d.date} className="cx-bar-col" title={`${fmtDate(d.date)}: ${d.total} total / ${d.answered} atendidas${d.cost > 0 ? ` / ${fmtCost(d.cost)}` : ""}`}>
-              <div className="cx-bar-area" style={{ height: 140, position: "relative" }}>
-                <div className="cx-bar-fill" style={{ height: `${totalPct}%`, opacity: 0.3 }} />
-                <div className="cx-bar-fill answered" style={{ height: `${answPct}%`, position: "absolute", bottom: 0, left: 0, right: 0 }} />
+            <div key={d.date} className="cx-bar-col" style={{ cursor: "default" }}>
+              <div style={{ width: "100%", height: 140, position: "relative" }}>
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${totalPct}%`, borderRadius: "4px 4px 0 0", background: "rgba(232,0,45,0.25)" }} />
+                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${answPct}%`, borderRadius: "4px 4px 0 0", background: "var(--green)" }} />
               </div>
               {showLabel && (
                 <span className="cx-bar-lbl">{fmtDate(d.date)}</span>
@@ -127,10 +127,10 @@ function CallsChart({ data, days }: { data: DayEntry[]; days: number }) {
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 12 }}>
         <span className="cx-card-sub" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--red)", display: "inline-block" }} /> Atendidas
+          <span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--green)", display: "inline-block" }} /> Atendidas
         </span>
         <span className="cx-card-sub" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 10, height: 10, borderRadius: 3, background: "var(--red)", opacity: 0.3, display: "inline-block" }} /> Total
+          <span style={{ width: 10, height: 10, borderRadius: 3, background: "rgba(232,0,45,0.25)", display: "inline-block" }} /> Total
         </span>
       </div>
     </div>
