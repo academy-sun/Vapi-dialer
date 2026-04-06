@@ -155,23 +155,23 @@ function HeatmapSection({ data }: { data: AnalyticsData }) {
         </div>
       </div>
 
-      {/* Grid — 8 slots: 08h,10h,12h,14h,16h,18h,20h,22h */}
-      <div className="cx-hmap-hours" style={{ gridTemplateColumns: "36px repeat(8,1fr)" }}>
+      {/* Grid — 18 slots: 6h–23h (individual hours) */}
+      <div className="cx-hmap-hours" style={{ gridTemplateColumns: "32px repeat(18,1fr)", gap: 2 }}>
         <span />
-        {[8,10,12,14,16,18,20,22].map((h) => (
+        {Array.from({ length: 18 }, (_, i) => i + 6).map((h) => (
           <span key={h} className="cx-hmap-hlabel">{h}h</span>
         ))}
       </div>
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
         {matrix.map((row, di) => (
-          <div key={di} className="cx-hmap-row" style={{ flex: 1, gridTemplateColumns: "36px repeat(8,1fr)", alignItems: "stretch" }}>
-            <span className="cx-hmap-day" style={{ display: "flex", alignItems: "center" }}>{WEEKDAY_LABELS[di + 1]}</span>
-            {[8,10,12,14,16,18,20,22].map((h) => {
-              const val = (row[h] ?? 0) + (row[h + 1] ?? 0);
+          <div key={di} className="cx-hmap-row" style={{ flex: 1, gridTemplateColumns: "32px repeat(18,1fr)", gap: 2, alignItems: "stretch" }}>
+            <span className="cx-hmap-day" style={{ display: "flex", alignItems: "center", fontSize: 9 }}>{WEEKDAY_LABELS[di + 1]}</span>
+            {Array.from({ length: 18 }, (_, i) => i + 6).map((h) => {
+              const val = row[h] ?? 0;
               return (
                 <div key={h}
                   title={`${WEEKDAY_LABELS[di + 1]} ${h}h → ${val}${mode === "rate" ? "%" : ""}`}
-                  className={heatClass(val, maxVal * 2)}>
+                  className={heatClass(val, maxVal)}>
                   {val > 0 ? val : ""}
                 </div>
               );
