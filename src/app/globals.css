@@ -89,10 +89,13 @@
 [data-theme="light"] .gc::before {
   background: linear-gradient(90deg,transparent,rgba(255,255,255,0.7),transparent);
 }
-[data-theme="light"] .cx-hmap-cell { background: rgba(232,0,45,0.03); }
-[data-theme="light"] .cx-hmap-cell.empty { background: rgba(0,0,0,0.03); }
-[data-theme="light"] .cx-hmap-cell:hover { color: #0A0A12; }
-[data-theme="light"] .cx-hmap-cell.hc4:hover, [data-theme="light"] .cx-hmap-cell.hc5:hover { color: #fff; }
+[data-theme="light"] .cx-hmap-cell { background: rgba(232,0,45,0.03); color: rgba(10,10,18,0.4); }
+[data-theme="light"] .cx-hmap-cell.empty { background: rgba(0,0,0,0.03); color: transparent; }
+[data-theme="light"] .hc1 { color: rgba(10,10,18,0.5); }
+[data-theme="light"] .hc2 { color: rgba(10,10,18,0.7); }
+[data-theme="light"] .hc3 { color: #0A0A12; }
+[data-theme="light"] .hc4 { color: #fff; }
+[data-theme="light"] .hc5 { color: #fff; }
 [data-theme="light"] .cx-kpi-icon { border-color: rgba(0,0,0,0.08); background: rgba(255,255,255,0.8); }
 [data-theme="light"] .cx-rr-bar { background: rgba(0,0,0,0.08); }
 [data-theme="light"] .cx-mot-bar { background: rgba(0,0,0,0.08); }
@@ -497,19 +500,19 @@ body::after {
 .cx-hmap-cell {
   border-radius: 5px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 700; color: transparent;
+  font-size: 9px; font-weight: 700; color: rgba(255,255,255,0.7);
   font-family: 'JetBrains Mono', monospace;
   transition: all .15s var(--ease);
   cursor: pointer; background: rgba(232,0,45,0.04);
 }
-.cx-hmap-cell:hover { color: #fff; filter: brightness(1.2); z-index: 2; box-shadow: 0 0 12px rgba(232,0,45,0.4); }
-.cx-hmap-cell.empty { background: rgba(255,255,255,0.02); }
-.cx-hmap-cell.empty:hover { color: transparent; box-shadow: none; filter: none; }
-.hc1 { background: rgba(232,0,45,0.12); }
-.hc2 { background: rgba(232,0,45,0.25); }
-.hc3 { background: rgba(232,0,45,0.42); }
-.hc4 { background: rgba(232,0,45,0.62); }
-.hc5 { background: linear-gradient(135deg,#E8002D,#ff4060); }
+.cx-hmap-cell:hover { filter: brightness(1.2); z-index: 2; box-shadow: 0 0 12px rgba(232,0,45,0.4); color: #fff; }
+.cx-hmap-cell.empty { background: rgba(255,255,255,0.02); color: transparent; }
+.cx-hmap-cell.empty:hover { box-shadow: none; filter: none; color: transparent; }
+.hc1 { background: rgba(232,0,45,0.15); color: rgba(255,255,255,0.5); }
+.hc2 { background: rgba(232,0,45,0.30); color: rgba(255,255,255,0.7); }
+.hc3 { background: rgba(232,0,45,0.50); color: rgba(255,255,255,0.85); }
+.hc4 { background: rgba(232,0,45,0.72); color: #fff; }
+.hc5 { background: linear-gradient(135deg,#E8002D,#ff4060); color: #fff; }
 
 .cx-hmap-stats {
   display: grid; grid-template-columns: repeat(4,1fr); gap: 12px;
