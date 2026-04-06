@@ -114,7 +114,7 @@ function CallsChart({ data, days }: { data: DayEntry[]; days: number }) {
           const showLabel = i % labelEvery === 0;
           return (
             <div key={d.date} className="cx-bar-col" title={`${fmtDate(d.date)}: ${d.total} total / ${d.answered} atendidas${d.cost > 0 ? ` / ${fmtCost(d.cost)}` : ""}`}>
-              <div style={{ width: "100%", flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", position: "relative" }}>
+              <div className="cx-bar-area" style={{ height: 140, position: "relative" }}>
                 <div className="cx-bar-fill" style={{ height: `${totalPct}%`, opacity: 0.3 }} />
                 <div className="cx-bar-fill answered" style={{ height: `${answPct}%`, position: "absolute", bottom: 0, left: 0, right: 0 }} />
               </div>
