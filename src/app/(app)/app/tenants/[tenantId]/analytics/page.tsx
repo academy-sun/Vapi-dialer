@@ -137,12 +137,12 @@ function HeatmapSection({ data }: { data: AnalyticsData }) {
   };
 
   return (
-    <div className="gc cx-hmap-card">
+    <div className="gc cx-hmap-card" style={{ display: "flex", flexDirection: "column" }}>
       {/* Header */}
       <div className="cx-hmap-head">
         <div>
           <div className="cx-card-title">Fluxo de Engajamento</div>
-          <div className="cx-card-sub">Dia x Hora</div>
+          <div className="cx-card-sub">Dia × Hora — horário comercial</div>
         </div>
         <div className="cx-period-tabs">
           {(["calls", "answered", "rate"] as HeatmapMode[]).map((m) => (
@@ -155,30 +155,30 @@ function HeatmapSection({ data }: { data: AnalyticsData }) {
         </div>
       </div>
 
-      {/* Grid */}
-      <div className="cx-hmap-hours">
+      {/* Grid — 8 slots: 08h,10h,12h,14h,16h,18h,20h,22h */}
+      <div className="cx-hmap-hours" style={{ gridTemplateColumns: "36px repeat(8,1fr)" }}>
         <span />
-        {Array.from({ length: 12 }, (_, i) => (
-          <span key={i} className="cx-hmap-hlabel">{String(i * 2).padStart(2, "0")}h</span>
+        {[8,10,12,14,16,18,20,22].map((h) => (
+          <span key={h} className="cx-hmap-hlabel">{h}h</span>
         ))}
       </div>
-      {matrix.map((row, di) => (
-        <div key={di} className="cx-hmap-row">
-          <span className="cx-hmap-day">{WEEKDAY_LABELS[di + 1]}</span>
-          {/* Collapse 24h into 12 slots (pairs: 0-1, 2-3, ... 22-23) */}
-          {Array.from({ length: 12 }, (_, i) => {
-            const h = i * 2;
-            const val = (row[h] ?? 0) + (row[h + 1] ?? 0);
-            return (
-              <div key={i}
-                title={`${WEEKDAY_LABELS[di + 1]} ${String(h).padStart(2, "0")}h → ${val}${mode === "rate" ? "%" : ""}`}
-                className={heatClass(val, maxVal * 2)}>
-                {val > 0 ? val : ""}
-              </div>
-            );
-          })}
-        </div>
-      ))}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+        {matrix.map((row, di) => (
+          <div key={di} className="cx-hmap-row" style={{ flex: 1, gridTemplateColumns: "36px repeat(8,1fr)", alignItems: "stretch" }}>
+            <span className="cx-hmap-day" style={{ display: "flex", alignItems: "center" }}>{WEEKDAY_LABELS[di + 1]}</span>
+            {[8,10,12,14,16,18,20,22].map((h) => {
+              const val = (row[h] ?? 0) + (row[h + 1] ?? 0);
+              return (
+                <div key={h}
+                  title={`${WEEKDAY_LABELS[di + 1]} ${h}h → ${val}${mode === "rate" ? "%" : ""}`}
+                  className={heatClass(val, maxVal * 2)}>
+                  {val > 0 ? val : ""}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
 
       {/* Summary stats */}
       <div className="cx-hmap-stats">
