@@ -99,7 +99,14 @@
 [data-theme="light"] .cx-rr-bar { background: rgba(0,0,0,0.08); }
 [data-theme="light"] .cx-mot-bar { background: rgba(0,0,0,0.08); }
 [data-theme="light"] .cx-hmap-stv { color: #0A0A12; }
-[data-theme="light"] .cx-nav-item.active { color: #fff; }
+[data-theme="light"] .cx-nav-item.active {
+  background: linear-gradient(135deg, rgba(232,0,45,0.85), rgba(232,0,45,0.7)) !important;
+  border-color: rgba(232,0,45,0.6) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 18px rgba(232,0,45,0.35) !important;
+}
+[data-theme="light"] .cx-nav-item:hover:not(.active) { background: rgba(0,0,0,0.06); color: #0A0A12; }
+[data-theme="light"] .cx-nav-item { color: rgba(10,10,18,0.6); }
 [data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
 [data-theme="light"] .cx-cost-item { background: rgba(255,255,255,0.85); border-color: rgba(0,0,0,0.08); box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
 [data-theme="light"] .cx-dur-seg { color: rgba(0,0,0,0.75); }
