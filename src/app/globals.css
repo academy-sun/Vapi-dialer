@@ -89,13 +89,13 @@
 [data-theme="light"] .gc::before {
   background: linear-gradient(90deg,transparent,rgba(255,255,255,0.7),transparent);
 }
-[data-theme="light"] .cx-hmap-cell { background: rgba(232,0,45,0.03); color: rgba(10,10,18,0.4); }
+[data-theme="light"] .cx-hmap-cell { background: rgba(232,0,45,0.04); color: rgba(10,10,18,0.3); }
 [data-theme="light"] .cx-hmap-cell.empty { background: rgba(0,0,0,0.03); color: transparent; }
-[data-theme="light"] .hc1 { color: rgba(10,10,18,0.5); }
-[data-theme="light"] .hc2 { color: rgba(10,10,18,0.7); }
-[data-theme="light"] .hc3 { color: #0A0A12; }
-[data-theme="light"] .hc4 { color: #fff; }
-[data-theme="light"] .hc5 { color: #fff; }
+[data-theme="light"] .hc1 { background: rgba(232,0,45,0.10); color: #6b0018; }
+[data-theme="light"] .hc2 { background: rgba(232,0,45,0.20); color: #6b0018; }
+[data-theme="light"] .hc3 { background: rgba(232,0,45,0.35); color: #fff; }
+[data-theme="light"] .hc4 { background: rgba(232,0,45,0.55); color: #fff; }
+[data-theme="light"] .hc5 { background: linear-gradient(135deg,#E8002D,#ff4060); color: #fff; }
 [data-theme="light"] .cx-kpi-icon { border-color: rgba(0,0,0,0.08); background: rgba(255,255,255,0.8); }
 [data-theme="light"] .cx-rr-bar { background: rgba(0,0,0,0.08); }
 [data-theme="light"] .cx-mot-bar { background: rgba(0,0,0,0.08); }
