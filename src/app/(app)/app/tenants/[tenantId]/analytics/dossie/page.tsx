@@ -126,84 +126,94 @@ function getEngagementLabel(seconds: number): string {
   return "Conversa longa";
 }
 
-// ─── 1. Hero Metrics ──────────────────────────────────────────────────────────
+// ─── 1. Score + KPI Row (dossie-top) ─────────────────────────────────────────
 
-function HeroMetrics({ overview, durationAvg }: {
+function ScoreKpiRow({ overview, durationAvg }: {
   overview: DossieData["overview"];
   durationAvg: number;
 }) {
-  const notAnsweredPct = 100 - overview.answerRate;
-  const notAnsweredCount = overview.totalCalls - overview.answeredCalls;
+  const answerPct = overview.answerRate;
+  const notAnsweredPct = 100 - answerPct;
+  const C = 2 * Math.PI * 46;
+  const aDash = (Math.min(answerPct, 93) / 100) * C;
 
   return (
-    <section>
-      <div className="cx-kpi-head" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 6, height: 16, borderRadius: 999, background: "var(--green)" }} />
-          <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Performance de Atendimento</h2>
+    <div className="dossie-top">
+      {/* Score Card with donut */}
+      <div className="dossie-score">
+        <div style={{ position: "relative", width: 56, height: 56, flexShrink: 0 }}>
+          <svg viewBox="0 0 120 120" style={{ width: "100%", height: "100%", filter: "drop-shadow(0 0 6px rgba(0,214,143,0.3))" }}>
+            <circle cx="60" cy="60" r="46" fill="none" stroke="var(--glass-border)" strokeWidth="10" />
+            <circle cx="60" cy="60" r="46" fill="none" stroke="var(--green)" strokeWidth="10" strokeDasharray={`${aDash.toFixed(1)} ${(C - aDash).toFixed(1)}`} strokeDashoffset={(C * 0.25).toFixed(1)} strokeLinecap="round" transform="rotate(-90 60 60)" />
+          </svg>
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span className="mono" style={{ fontSize: 13, fontWeight: 900, color: "var(--green)" }}>{answerPct}%</span>
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 2 }}>Atendimento</div>
+          <div style={{ fontSize: 11, color: "var(--text-2)" }}>{overview.answeredCalls} de {overview.totalCalls}</div>
+          <div style={{ fontSize: 10, color: "var(--red)", fontWeight: 700, marginTop: 3 }}>{notAnsweredPct}% não atenderam</div>
         </div>
       </div>
 
-      {/* Hero row */}
-      <div className="cx-bot-grid" style={{ marginBottom: 16 }}>
-        {/* Atenderam */}
-        <div className="gc" style={{ padding: 24, position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: 0, right: 0, width: 128, height: 128, background: "rgba(0,214,143,0.10)", borderRadius: "0 0 0 100%" }} />
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <p className="cx-kpi-label" style={{ color: "var(--green)", marginBottom: 8, letterSpacing: "2px", fontSize: 10 }}>Taxa de Atendimento</p>
-            <p className="cx-kpi-value grad-green" style={{ fontSize: 60, letterSpacing: -3 }}>{overview.answerRate}<span style={{ fontSize: 32, opacity: 0.2 }}>%</span></p>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, fontSize: 12, fontWeight: 700, color: "var(--text-3)" }}>
-              <span style={{ color: "var(--text-1)" }}>{overview.answeredCalls.toLocaleString("pt-BR")}</span>
-              <span>de</span>
-              <span>{overview.totalCalls.toLocaleString("pt-BR")} chamadas</span>
-            </div>
+      {/* 5 KPI cards */}
+      {[
+        { label: "Total", value: overview.totalCalls.toLocaleString("pt-BR"), icon: PhoneCall, color: "var(--cyan)", bg: "rgba(0,194,255,0.12)" },
+        { label: "Duração média", value: fmtDuration(durationAvg), icon: Clock, color: "var(--yellow)", bg: "rgba(255,184,0,0.12)" },
+        { label: "Custo total", value: fmtCurrency(overview.totalCost), icon: DollarSign, color: "var(--green)", bg: "rgba(0,214,143,0.12)" },
+        { label: "Custo / call", value: fmtCurrency(overview.avgCostPerCall), icon: DollarSign, color: "var(--purple)", bg: "rgba(168,85,247,0.12)" },
+        { label: "Com inteligência", value: `${overview.structuredOutputsRate}%`, icon: BarChart3, color: "var(--red)", bg: "rgba(232,0,45,0.12)" },
+      ].map(({ label, value, icon: Icon, color, bg }) => (
+        <div key={label} className="dossie-kpi">
+          <div className="dk-icon" style={{ background: bg }}>
+            <Icon style={{ width: 13, height: 13, color }} />
           </div>
+          <div className="dk-val">{value}</div>
+          <div className="dk-label">{label}</div>
         </div>
-
-        {/* Nao atenderam */}
-        <div className="gc" style={{ padding: 24, position: "relative", overflow: "hidden" }}>
-          <div style={{ position: "absolute", top: 0, right: 0, width: 128, height: 128, background: "var(--red-lo)", borderRadius: "0 0 0 100%" }} />
-          <div style={{ position: "relative", zIndex: 1 }}>
-            <p className="cx-kpi-label" style={{ color: "var(--red)", marginBottom: 8, letterSpacing: "2px", fontSize: 10 }}>Taxa de Abandono</p>
-            <p className="cx-kpi-value grad-red" style={{ fontSize: 60, letterSpacing: -3 }}>{notAnsweredPct}<span style={{ fontSize: 32, opacity: 0.2 }}>%</span></p>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, fontSize: 12, fontWeight: 700, color: "var(--text-3)" }}>
-              <span style={{ color: "var(--text-1)" }}>{notAnsweredCount.toLocaleString("pt-BR")}</span>
-              <span>de</span>
-              <span>{overview.totalCalls.toLocaleString("pt-BR")} chamadas</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Supporting metrics row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
-        {[
-          { label: "Total", value: overview.totalCalls.toLocaleString("pt-BR"), icon: PhoneCall, color: "var(--purple)", bg: "rgba(168,85,247,0.10)" },
-          { label: "Duração média", value: fmtDuration(durationAvg), icon: Clock, color: "var(--yellow)", bg: "rgba(255,184,0,0.10)" },
-          { label: "Custo total", value: fmtCurrency(overview.totalCost), icon: DollarSign, color: "var(--purple)", bg: "rgba(168,85,247,0.10)" },
-          { label: "Custo / call", value: fmtCurrency(overview.avgCostPerCall), icon: DollarSign, color: "var(--cyan)", bg: "rgba(0,194,255,0.10)" },
-          { label: "AI Structured", value: `${overview.structuredOutputsRate}%`, icon: Sparkles, color: "var(--green)", bg: "rgba(0,214,143,0.10)" },
-        ].map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="gc" style={{ padding: 14, display: "flex", alignItems: "center", gap: 12 }}>
-            <div className="cx-kpi-icon" style={{ width: 32, height: 32, background: bg, borderRadius: 10 }}>
-              <Icon style={{ width: 16, height: 16, color }} />
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <p className="cx-kpi-label" style={{ fontSize: 10, lineHeight: 1.2 }}>{label}</p>
-              <p className="mono" style={{ fontSize: 13, fontWeight: 900, color: "var(--text-1)", lineHeight: 1.2 }}>{value}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
+      ))}
+    </div>
   );
 }
 
-// ─── 2. Gráfico de Abandono com pico anotado ──────────────────────────────────
+// ─── 2. Alert Inline (dossie-alert-inline) ───────────────────────────────────
 
-function AbandonmentChart({ durationAnalysis }: { durationAnalysis: DossieData["durationAnalysis"] }) {
+function AlertInline({
+  card,
+  tenantId,
+}: {
+  card: OpportunitiesCard;
+  tenantId: string;
+}) {
+  if (card.techIssueCount === 0) return null;
+
+  return (
+    <div className="dossie-alert-inline">
+      <Zap style={{ width: 15, height: 15, color: "var(--yellow)", flexShrink: 0 }} />
+      <span className="mono" style={{ fontSize: 20, fontWeight: 900, color: "var(--yellow)", flexShrink: 0 }}>{card.techIssueCount}</span>
+      <span style={{ fontSize: 11, color: "var(--text-2)", flex: 1 }}>
+        falhas técnicas · <strong style={{ color: "var(--yellow)" }}>{card.techIssuePct}%</strong> do total — elegíveis para nova tentativa
+      </span>
+      {card.hasConfig && card.avgDealValue != null && (
+        <span className="cx-filter-btn" style={{ flexShrink: 0, fontSize: 10, display: "flex", alignItems: "center", gap: 4 }}>
+          <Settings2 style={{ width: 10, height: 10 }} /> Ticket médio: {fmtBRL(card.avgDealValue)}
+        </span>
+      )}
+      <a
+        href={`/app/tenants/${tenantId}/queues`}
+        style={{ fontSize: 10, fontWeight: 600, color: "var(--red)", cursor: "pointer", display: "flex", alignItems: "center", gap: 3, flexShrink: 0, textDecoration: "none" }}
+      >
+        Campanhas <ArrowRight style={{ width: 10, height: 10 }} />
+      </a>
+    </div>
+  );
+}
+
+// ─── 3. Mapa de Abandono (left card in data grid) ────────────────────────────
+
+function AbandonmentCard({ durationAnalysis }: { durationAnalysis: DossieData["durationAnalysis"] }) {
   const BUCKET_ORDER  = ["0–10s", "10–30s", "30–60s", "1–3min", "3–5min", "5min+"];
-  // CallX Palette
   const BUCKET_COLORS = ["#E8002D", "#F97316", "#FACC15", "#A3E635", "#00D68F", "#22D3EE"];
 
   const buckets = BUCKET_ORDER.map((k, i) => ({
@@ -220,119 +230,296 @@ function AbandonmentChart({ durationAnalysis }: { durationAnalysis: DossieData["
   const earlyPct   = total > 0 ? Math.round((earlyCount / total) * 100) : 0;
 
   return (
-    <section>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        <div style={{ width: 6, height: 16, borderRadius: 999, background: "var(--red)" }} />
-        <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Mapa de Engajamento Temporário</h2>
+    <div className="dossie-card">
+      <div className="dossie-card-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--yellow)" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></svg>
+        Mapa de Abandono
       </div>
+      <div className="dossie-card-sub">Distribuição de {total} chamadas atendidas por duração</div>
 
-      <div className="gc" style={{ padding: 24 }}>
-        {total === 0 ? (
-          <p style={{ fontSize: 12, color: "var(--text-3)", textAlign: "center", padding: "32px 0", fontWeight: 700, fontStyle: "italic", textTransform: "uppercase", letterSpacing: "0.1em" }}>Nenhuma chamada processada</p>
-        ) : (
-          <>
-            {durationAnalysis.voicemailCount > 0 && (
-              <div className="alert-warning" style={{ marginBottom: 24, borderRadius: 12 }}>
-                <div style={{ width: 24, height: 24, borderRadius: 10, background: "rgba(255,184,0,0.20)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <Info style={{ width: 14, height: 14, color: "var(--yellow)" }} />
-                </div>
-                <p style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.6 }}>
-                  <strong style={{ color: "var(--yellow)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "-0.02em" }}>{durationAnalysis.voicemailCount} chamadas</strong> foram identificadas como caixa postal e removidas desta análise de retenção humana.
-                </p>
-              </div>
-            )}
+      {durationAnalysis.voicemailCount > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 6, background: "rgba(255,184,0,0.05)", border: "1px solid rgba(255,184,0,0.1)", marginBottom: 14, fontSize: 10, color: "var(--text-3)" }}>
+          <Info style={{ width: 11, height: 11, color: "var(--yellow)" }} />
+          <strong style={{ color: "var(--text-2)" }}>{durationAnalysis.voicemailCount}</strong> chamadas excluídas (caixa postal)
+        </div>
+      )}
 
-            {/* Barras verticais */}
-            <div className="cx-bar-chart" style={{ height: 200, alignItems: "flex-end", gap: 12 }}>
-              {buckets.map((b, i) => {
-                const barH    = maxValue > 0 ? Math.max(Math.round((b.value / maxValue) * 160), b.value > 0 ? 4 : 0) : 0;
-                const callPct = total > 0 ? Math.round((b.value / total) * 100) : 0;
-                const isPeak  = i === peakIdx && b.value > 0;
+      {total === 0 ? (
+        <p style={{ fontSize: 12, color: "var(--text-3)", textAlign: "center", padding: "32px 0", fontWeight: 700, fontStyle: "italic" }}>Nenhuma chamada processada</p>
+      ) : (
+        <>
+          <div className="dossie-bars">
+            {buckets.map((b, i) => {
+              const barH    = maxValue > 0 ? Math.max(Math.round((b.value / maxValue) * 100), b.value > 0 ? 10 : 4) : 4;
+              const callPct = total > 0 ? Math.round((b.value / total) * 100) : 0;
+              const isPeak  = i === peakIdx && b.value > 0;
+              const isHot   = b.value > 0;
 
-                return (
-                  <div key={b.label} className="cx-bar-col" style={{ flex: 1, height: 200, justifyContent: "flex-end" }}>
-                    <div style={{
-                      marginBottom: 8,
-                      transition: "all 0.3s",
-                      opacity: isPeak ? 1 : 0,
-                      transform: isPeak ? "scale(1)" : "scale(0.9)",
-                    }}>
-                       <span className="badge-gray" style={{ fontSize: 10, fontWeight: 900, whiteSpace: "nowrap" }}>
-                         {callPct}% {isPeak ? "▲ PICO" : ""}
-                       </span>
-                    </div>
-
+              return (
+                <div key={b.label} className="dossie-bar-col">
+                  <div className="dossie-bar-count">{callPct > 0 ? `${callPct}%` : ""}</div>
+                  <div className="dossie-bar-area">
                     <div
+                      className="dossie-bar"
                       style={{
-                        width: "100%",
-                        borderRadius: "12px 12px 0 0",
                         height: `${barH}px`,
-                        background: `linear-gradient(to top, ${b.color}40, ${b.color})`,
-                        boxShadow: isPeak ? `0 0 20px -5px ${b.color}` : "none",
-                        transition: "all 0.5s",
+                        background: isHot ? `linear-gradient(180deg, var(--yellow), rgba(255,184,0,0.4))` : "var(--glass-border)",
+                        boxShadow: isHot ? "0 0 10px rgba(255,184,0,0.2)" : "none",
                       }}
-                    />
-
-                    <div style={{ marginTop: 12, textAlign: "center" }}>
-                      <p className="cx-bar-lbl" style={{ fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>{b.label}</p>
-                      <p className="mono" style={{ fontSize: 12, color: "var(--text-1)" }}>{b.value}</p>
+                    >
+                      {isPeak && <div className="dossie-peak">{callPct}% pico</div>}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                  <div className="dossie-bar-label">{b.label}</div>
+                  <div className="dossie-bar-count">{b.value}</div>
+                </div>
+              );
+            })}
+          </div>
 
-            {/* Diagnóstico automático */}
-            <div className="cx-ai-card gc" style={{
-              marginTop: 32,
-              padding: 16,
-              borderColor: earlyPct > 40 ? "rgba(232,0,45,0.20)" : earlyPct > 20 ? "rgba(255,184,0,0.20)" : "rgba(0,214,143,0.20)",
-              background: earlyPct > 40 ? "rgba(232,0,45,0.05)" : earlyPct > 20 ? "rgba(255,184,0,0.05)" : "rgba(0,214,143,0.05)",
-            }}>
-              <div className="cx-ai-icon" style={{
-                width: 32,
-                height: 32,
-                background: earlyPct > 40 ? "rgba(232,0,45,0.20)" : earlyPct > 20 ? "rgba(255,184,0,0.20)" : "rgba(0,214,143,0.20)",
-                borderColor: "rgba(255,255,255,0.05)",
-                animation: earlyPct > 40 ? "pulse 2s ease-in-out infinite" : undefined,
-              }}>
-                <AlertCircle style={{
-                  width: 16,
-                  height: 16,
-                  color: earlyPct > 40 ? "var(--red)" : earlyPct > 20 ? "var(--yellow)" : "var(--green)",
-                }} />
-              </div>
-              <div>
-                <p className="cx-ai-title" style={{
-                  fontSize: 10,
-                  fontWeight: 900,
-                  textTransform: "uppercase",
-                  letterSpacing: "2px",
-                  marginBottom: 4,
-                  background: "none",
-                  WebkitBackgroundClip: "unset",
-                  WebkitTextFillColor: earlyPct > 40 ? "var(--red)" : earlyPct > 20 ? "var(--yellow)" : "var(--green)",
-                }}>
-                  Insight do Especialista AI
-                </p>
-                <p className="cx-ai-body" style={{ fontSize: 12, lineHeight: 1.6, fontWeight: 500 }}>
-                  {earlyPct > 40
-                    ? <>Crítico: <strong style={{ color: "var(--text-1)" }}>{earlyPct}% das conversas</strong> morrem em menos de 30s. A abertura do assistente está gerando bloqueio imediato ou falha de identificação.</>
-                    : earlyPct > 20
-                      ? <>Alerta: <strong style={{ color: "var(--text-1)" }}>{earlyPct}% de abandono precoce</strong>. Melhore o gatilho de interesse nos primeiros 15 segundos da conversa.</>
-                      : <>Saudável: Baixo índice de abandono inicial. A introdução e o tom de voz do assistente estão engajando os clientes com sucesso.</>
-                  }
-                </p>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    </section>
+          <div className="dossie-insight">
+            <Info style={{ width: 12, height: 12, color: "var(--yellow)" }} />
+            <span>
+              <strong>{earlyPct}% duram &lt;30s</strong> — {earlyPct > 40
+                ? "crítico: a abertura do assistente está gerando bloqueio imediato."
+                : earlyPct > 20
+                  ? "avalie o script de abertura e gatilho de interesse."
+                  : "saudável — baixo índice de abandono inicial."}
+            </span>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
-// ─── 3. Funil com forma visual real ───────────────────────────────────────────
+// ─── 4. Inteligência dos Dados (right card in data grid) ─────────────────────
+
+type FieldTab = "enum" | "boolean" | "number" | "text";
+
+function IntelligenceCard({ fieldAnalysis, structuredCount }: {
+  fieldAnalysis: FieldAnalysis[];
+  structuredCount: number;
+}) {
+  const enums    = fieldAnalysis.filter((f) => f.type === "enum");
+  const booleans = fieldAnalysis.filter((f) => f.type === "boolean");
+  const numbers  = fieldAnalysis.filter((f) => f.type === "number");
+  const texts    = fieldAnalysis.filter((f) => f.type === "text");
+
+  const tabs = (
+    [
+      { id: "enum"    as FieldTab, label: "Distribuições", count: enums.length },
+      { id: "boolean" as FieldTab, label: "Scorecard",     count: booleans.length },
+      { id: "number"  as FieldTab, label: "Números",       count: numbers.length },
+      { id: "text"    as FieldTab, label: "Análises",      count: texts.length },
+    ] as { id: FieldTab; label: string; count: number }[]
+  ).filter((t) => t.count > 0);
+
+  const [activeTab, setActiveTab] = useState<FieldTab>(tabs[0]?.id ?? "enum");
+
+  if (tabs.length === 0) {
+    return (
+      <div className="dossie-card" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 32 }}>
+        <Info style={{ width: 32, height: 32, color: "var(--text-3)", marginBottom: 8 }} />
+        <p style={{ fontSize: 14, fontWeight: 500, color: "var(--text-2)", marginBottom: 4 }}>Nenhum dado estruturado</p>
+        <p style={{ fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>
+          Configure um Structured Output no assistente Vapi desta campanha.
+        </p>
+      </div>
+    );
+  }
+
+  const COLORS = [
+    "#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6",
+    "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#84cc16",
+  ];
+
+  return (
+    <div className="dossie-card">
+      <div className="dossie-card-title">
+        <BarChart3 style={{ width: 14, height: 14, color: "var(--cyan)" }} />
+        Inteligência dos Dados
+      </div>
+      <div className="dossie-card-sub">{structuredCount} chamadas com dados estruturados</div>
+
+      {/* Tabs */}
+      <div className="dossie-tab-bar">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`dossie-tab ${activeTab === tab.id ? "active" : ""}`}
+          >
+            {tab.label} <span className="tab-count">{tab.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content: Enums (Distribuições) */}
+      {activeTab === "enum" && enums.map((field) => {
+        if (!field.distribution) return null;
+        const total = Object.values(field.distribution).reduce((s, n) => s + n, 0);
+        const sorted = Object.entries(field.distribution).sort((a, b) => b[1] - a[1]);
+        return (
+          <div key={field.key} style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.6px", textTransform: "uppercase", color: "var(--text-2)" }}>{field.key}</span>
+              <span style={{ fontSize: 9, color: "var(--text-3)" }}>{total} registros</span>
+            </div>
+            {sorted.map(([label, count], i) => {
+              const pctValue = total > 0 ? Math.round((count / total) * 100) : 0;
+              return (
+                <div key={label}>
+                  <div className="dossie-dist-row">
+                    <span style={{ fontSize: 11, color: "var(--text-2)" }}>{label}</span>
+                    <span className="mono" style={{ fontSize: 11, fontWeight: 700, color: "var(--text-1)" }}>{count} ({pctValue}%)</span>
+                  </div>
+                  <div className="dossie-dist-bar">
+                    <div className="dossie-dist-fill" style={{ width: `${pctValue}%`, background: `linear-gradient(90deg, ${COLORS[i % COLORS.length]}, ${COLORS[(i + 1) % COLORS.length]})` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
+
+      {/* Tab content: Booleans (Scorecard) */}
+      {activeTab === "boolean" && booleans.map((field) => {
+        const yes = field.trueCount ?? 0;
+        const no  = field.falseCount ?? 0;
+        const total = yes + no;
+        const yesPct = total > 0 ? Math.round((yes / total) * 100) : 0;
+        const isGood = yesPct >= 50;
+        return (
+          <div key={field.key} style={{ marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 6, height: 6, borderRadius: 999, background: isGood ? "var(--green)" : "var(--red)", boxShadow: `0 0 8px ${isGood ? "var(--green)" : "var(--red)"}` }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)" }}>{field.key}</span>
+              </div>
+              <span className="mono" style={{ fontSize: 11, fontWeight: 900, color: isGood ? "var(--green)" : "var(--red)" }}>{yesPct}% SIM</span>
+            </div>
+            <div className="dossie-dist-bar">
+              <div className="dossie-dist-fill" style={{ width: `${yesPct}%`, background: isGood ? "var(--green)" : "var(--red)" }} />
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Tab content: Numbers */}
+      {activeTab === "number" && numbers.map((field) => (
+        <div key={field.key} style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.6px", textTransform: "uppercase", color: "var(--text-2)", marginBottom: 8 }}>{field.key}</div>
+          <div style={{ display: "flex", gap: 12 }}>
+            {[
+              { label: "Média", val: field.avg },
+              { label: "Mín", val: field.min },
+              { label: "Máx", val: field.max },
+            ].map((m) => (
+              <div key={m.label} style={{ textAlign: "center", flex: 1, padding: 8, background: "rgba(255,255,255,0.03)", borderRadius: 8, border: "1px solid var(--glass-border)" }}>
+                <p className="mono" style={{ fontSize: 14, fontWeight: 900, color: "var(--text-1)", lineHeight: 1 }}>{m.val}</p>
+                <p style={{ fontSize: 9, color: "var(--text-3)", textTransform: "uppercase", marginTop: 4 }}>{m.label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* Tab content: Text */}
+      {activeTab === "text" && texts.map((field) => (
+        <TextAccordion key={field.key} field={field} />
+      ))}
+    </div>
+  );
+}
+
+function TextAccordion({ field }: { field: FieldAnalysis }) {
+  const [open, setOpen] = useState(false);
+  const samples = field.samples ?? [];
+
+  return (
+    <div style={{ marginBottom: 8, borderRadius: 8, border: "1px solid var(--glass-border)", overflow: "hidden" }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px", background: "rgba(255,255,255,0.03)", textAlign: "left", cursor: "pointer" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Info style={{ width: 12, height: 12, color: "var(--text-3)" }} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-2)" }}>{field.key}</span>
+          <span style={{ fontSize: 10, color: "var(--text-3)" }}>{field.count} registros</span>
+        </div>
+        <ChevronDown style={{ width: 14, height: 14, color: "var(--text-3)", transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }} />
+      </button>
+      {open && (
+        <div style={{ padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+          {samples.length === 0 ? (
+            <p style={{ fontSize: 11, color: "var(--text-3)" }}>Nenhuma amostra disponível.</p>
+          ) : (
+            samples.map((s, i) => (
+              <p key={i} style={{ fontSize: 11, color: "var(--text-2)", background: "var(--glass-bg)", borderRadius: 8, padding: "6px 10px", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                &ldquo;{s}&rdquo;
+              </p>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 5. ICP Section (dossie-icp-grid) ────────────────────────────────────────
+
+function ICPSection({ correlations }: { correlations: DossieData["correlations"] }) {
+  if (Object.keys(correlations).length === 0) return null;
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+        <Users style={{ width: 14, height: 14, color: "var(--red)" }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-1)" }}>Detector de ICP — Engajamento por Segmento</span>
+      </div>
+      <div className="dossie-icp-grid">
+        {Object.entries(correlations).map(([field, groups]) => {
+          const sorted = Object.entries(groups).sort((a, b) => b[1].avgDuration - a[1].avgDuration);
+          const maxDur = Math.max(...sorted.map((g) => g[1].avgDuration), 1);
+          return (
+            <div key={field} className="dossie-icp-card">
+              <div className="icp-title">{field} × DURAÇÃO MÉDIA</div>
+              {sorted.length === 0 ? (
+                <div className="dossie-empty">
+                  <AlertCircle style={{ width: 22, height: 22, color: "var(--text-3)", strokeWidth: 1.2 }} />
+                  <span style={{ fontSize: 10 }}>Sem dados</span>
+                </div>
+              ) : (
+                sorted.map(([label, stats]) => {
+                  const pct = Math.round((stats.avgDuration / maxDur) * 100);
+                  const engLabel = getEngagementLabel(stats.avgDuration);
+                  return (
+                    <div key={label} style={{ marginBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+                        <span style={{ fontSize: 11, color: "var(--text-2)" }}>{label}</span>
+                        <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>{fmtDuration(stats.avgDuration)} · {stats.count} calls</span>
+                      </div>
+                      <div className="dossie-icp-bar">
+                        <div className="dossie-icp-fill" style={{ width: `${pct}%`, background: "linear-gradient(90deg, var(--yellow), rgba(255,184,0,0.4))" }} />
+                      </div>
+                      <div style={{ marginTop: 4 }}>
+                        <span className="dossie-badge" style={{ color: "var(--yellow)", background: "rgba(255,184,0,0.12)", border: "1px solid rgba(255,184,0,0.25)" }}>{engLabel}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── 6. Funil (kept as standalone section) ───────────────────────────────────
 
 function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
   if (!funnel.hasData || funnel.stages.length === 0) return null;
@@ -360,7 +547,6 @@ function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
 
             return (
               <div key={stage.label} style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                {/* Barra do funil */}
                 <div style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div
                     style={{
@@ -388,7 +574,6 @@ function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
                   </div>
                 </div>
 
-                {/* Seta de perda */}
                 {!isLast && stage.dropoff !== null && stage.dropoff > 0 && (
                   <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0" }}>
                     <div style={{ height: 1, width: 48, background: "var(--glass-border)" }} />
@@ -428,382 +613,12 @@ function FunnelSection({ funnel }: { funnel: DossieData["funnelAnalysis"] }) {
             <div>
               <p style={{ fontSize: 10, fontWeight: 900, color: "var(--purple)", textTransform: "uppercase", letterSpacing: "2px", marginBottom: 4 }}>Gargalo Estrutural Detectado</p>
               <p className="cx-ai-body" style={{ fontSize: 12, lineHeight: 1.6, fontWeight: 500 }}>
-                A etapa <strong style={{ color: "var(--text-1)" }}>"{worstDropoff.label}"</strong> apresenta a maior taxa de evasão do fluxo, perdendo
+                A etapa <strong style={{ color: "var(--text-1)" }}>&ldquo;{worstDropoff.label}&rdquo;</strong> apresenta a maior taxa de evasão do fluxo, perdendo
                 <strong style={{ color: "var(--red)", marginLeft: 4 }}>{worstDropoff.dropoff}%</strong> das oportunidades. Revise a pergunta ou o trigger de resposta de IA nesta fase específica.
               </p>
             </div>
           </div>
         )}
-      </div>
-    </section>
-  );
-}
-
-// ─── 4. Painel de Saúde — booleans como scorecard ─────────────────────────────
-
-function QualityScorecard({ fields }: { fields: FieldAnalysis[] }) {
-  if (fields.length === 0) return null;
-
-  return (
-    <div className="gc" style={{ padding: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24, borderBottom: "1px solid var(--glass-border)", paddingBottom: 16 }}>
-        <div className="cx-kpi-icon" style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(0,214,143,0.20)" }}>
-          <ShieldCheck style={{ width: 16, height: 16, color: "var(--green)" }} />
-        </div>
-        <div>
-          <h4 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "1.5px" }}>Checklist de Qualidade</h4>
-          <p className="cx-card-sub" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{fields[0]?.count ?? 0} chamadas auditadas</p>
-        </div>
-      </div>
-
-      <div className="cx-mot-rows" style={{ gap: 20 }}>
-        {fields.map((field) => {
-          const yes  = field.trueCount  ?? 0;
-          const no   = field.falseCount ?? 0;
-          const total = yes + no;
-          const yesPct = total > 0 ? Math.round((yes / total) * 100) : 0;
-          const isGood = yesPct >= 50;
-
-          return (
-            <div key={field.key}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: 999, background: isGood ? "var(--green)" : "var(--red)", boxShadow: `0 0 8px ${isGood ? "var(--green)" : "var(--red)"}` }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-2)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{field.key}</span>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                   <span className="mono" style={{ fontSize: 11, fontWeight: 900, color: isGood ? "var(--green)" : "var(--red)" }}>{yesPct}%</span>
-                   <span className="cx-kpi-label" style={{ marginLeft: 4, fontSize: 10 }}>SIM</span>
-                </div>
-              </div>
-              <div className="cx-mot-bar" style={{ height: 6, borderRadius: 999, border: "1px solid rgba(255,255,255,0.05)" }}>
-                <div
-                  className="cx-mot-fill"
-                  style={{ width: `${yesPct}%`, background: isGood ? "var(--green)" : "var(--red)", borderRadius: 999, height: "100%" }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── 5. Análise de campos com abas ────────────────────────────────────────────
-
-type FieldTab = "enum" | "boolean" | "number" | "text";
-
-function EnumCard({ field }: { field: FieldAnalysis }) {
-  if (!field.distribution) return null;
-  const total  = Object.values(field.distribution).reduce((s, n) => s + n, 0);
-  const sorted = Object.entries(field.distribution).sort((a, b) => b[1] - a[1]);
-
-  const COLORS = [
-    "#6366f1", "#f59e0b", "#10b981", "#ef4444", "#3b82f6",
-    "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#84cc16",
-  ];
-
-  return (
-    <div className="gc cx-mot-card" style={{ padding: 20 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <h4 className="cx-kpi-label" style={{ maxWidth: "70%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {field.key}
-        </h4>
-        <span className="mono" style={{ fontSize: 10, color: "var(--text-3)" }}>{field.count} DATA</span>
-      </div>
-      <div className="cx-mot-rows">
-        {sorted.map(([label, count], i) => {
-          const pctValue = total > 0 ? Math.round((count / total) * 100) : 0;
-          return (
-            <div key={label}>
-              <div className="cx-mot-row" style={{ marginBottom: 6 }}>
-                <span className="cx-mot-name" style={{ width: "auto", flex: 1, fontSize: 11, fontWeight: 700, maxWidth: "65%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-                <span className="cx-mot-val" style={{ fontSize: 11, minWidth: "auto", color: "var(--text-3)" }}>{count} <span style={{ opacity: 0.4 }}>({pctValue}%)</span></span>
-              </div>
-              <div className="cx-mot-bar" style={{ height: 4 }}>
-                <div
-                  className="cx-mot-fill"
-                  style={{ width: `${pctValue}%`, background: COLORS[i % COLORS.length] }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function NumberCard({ field }: { field: FieldAnalysis }) {
-  return (
-    <div className="gc" style={{ padding: 20 }}>
-       <h4 className="cx-kpi-label" style={{ marginBottom: 16 }}>
-          {field.key}
-        </h4>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
-        <div style={{ textAlign: "center", padding: 12, background: "rgba(255,255,255,0.05)", borderRadius: 12, border: "1px solid rgba(255,255,255,0.05)" }}>
-          <p className="mono" style={{ fontSize: 20, fontWeight: 900, color: "var(--text-1)", lineHeight: 1 }}>{field.avg}</p>
-          <p className="cx-kpi-label" style={{ marginTop: 6, fontSize: 9 }}>Média</p>
-        </div>
-        <div style={{ textAlign: "center", padding: 12 }}>
-          <p className="mono" style={{ fontSize: 14, fontWeight: 900, color: "var(--text-2)", lineHeight: 1 }}>{field.min}</p>
-          <p className="cx-kpi-label" style={{ marginTop: 6, fontSize: 9 }}>Mín</p>
-        </div>
-        <div style={{ textAlign: "center", padding: 12 }}>
-          <p className="mono" style={{ fontSize: 14, fontWeight: 900, color: "var(--text-2)", lineHeight: 1 }}>{field.max}</p>
-          <p className="cx-kpi-label" style={{ marginTop: 6, fontSize: 9 }}>Máx</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TextAccordion({ field }: { field: FieldAnalysis }) {
-  const [open, setOpen] = useState(false);
-  const samples = field.samples ?? [];
-
-  return (
-    <div className="gc" style={{ overflow: "hidden" }}>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "var(--glass-bg-2)", textAlign: "left", cursor: "pointer", transition: "background 0.15s" }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Info style={{ width: 14, height: 14, color: "var(--text-3)" }} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-2)" }}>{field.key}</span>
-          <span style={{ fontSize: 12, color: "var(--text-3)" }}>{field.count} registros</span>
-        </div>
-        <ChevronDown style={{ width: 16, height: 16, color: "var(--text-3)", transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "none" }} />
-      </button>
-
-      {open && (
-        <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-          {samples.length === 0 ? (
-            <p style={{ fontSize: 12, color: "var(--text-3)" }}>Nenhuma amostra disponível.</p>
-          ) : (
-            samples.map((s, i) => (
-              <p key={i} style={{ fontSize: 12, color: "var(--text-2)", background: "var(--glass-bg)", borderRadius: 10, padding: "8px 12px", lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                "{s}"
-              </p>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TabbedFieldAnalysis({ fieldAnalysis, structuredCount }: {
-  fieldAnalysis: FieldAnalysis[];
-  structuredCount: number;
-}) {
-  const enums    = fieldAnalysis.filter((f) => f.type === "enum");
-  const booleans = fieldAnalysis.filter((f) => f.type === "boolean");
-  const numbers  = fieldAnalysis.filter((f) => f.type === "number");
-  const texts    = fieldAnalysis.filter((f) => f.type === "text");
-
-  const tabs = (
-    [
-      { id: "enum"    as FieldTab, label: "Distribuições", count: enums.length },
-      { id: "boolean" as FieldTab, label: "Scorecard",     count: booleans.length },
-      { id: "number"  as FieldTab, label: "Métricas",      count: numbers.length },
-      { id: "text"    as FieldTab, label: "Qualitativo",   count: texts.length },
-    ] as { id: FieldTab; label: string; count: number }[]
-  ).filter((t) => t.count > 0);
-
-  const [activeTab, setActiveTab] = useState<FieldTab>(tabs[0]?.id ?? "enum");
-
-  if (tabs.length === 0) return null;
-
-  return (
-    <section>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ width: 6, height: 16, borderRadius: 999, background: "#6366f1" }} />
-          <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Inteligência Estruturada</h2>
-        </div>
-         <span className="cx-kpi-label">Auditoria de {structuredCount} chamadas</span>
-      </div>
-
-      {/* Tabs */}
-      <div className="cx-period-tabs" style={{ marginBottom: 24, padding: 4, background: "rgba(255,255,255,0.05)", borderRadius: 16, border: "1px solid rgba(255,255,255,0.05)", width: "fit-content" }}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`cx-period-tab ${activeTab === tab.id ? "active" : ""}`}
-            style={{
-              fontSize: 10,
-              fontWeight: 900,
-              textTransform: "uppercase",
-              letterSpacing: "1.5px",
-              borderRadius: 12,
-              padding: "8px 20px",
-              ...(activeTab === tab.id
-                ? { background: "rgba(255,255,255,0.10)", color: "var(--text-1)", boxShadow: "0 0 15px rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }
-                : {}),
-            }}
-          >
-            {tab.label}
-            <span className="mono" style={{ marginLeft: 8, opacity: 0.5 }}>{tab.count}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      {activeTab === "boolean" && <QualityScorecard fields={booleans} />}
-
-      {activeTab === "enum" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
-          {enums.map((f) => <EnumCard key={f.key} field={f} />)}
-        </div>
-      )}
-
-      {activeTab === "number" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 16 }}>
-          {numbers.map((f) => <NumberCard key={f.key} field={f} />)}
-        </div>
-      )}
-
-      {activeTab === "text" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {texts.map((f) => <TextAccordion key={f.key} field={f} />)}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ─── Card de Oportunidades Não Trabalhadas ────────────────────────────────────
-
-function OpportunitiesSection({
-  card,
-  tenantId,
-  campaignId,
-}: {
-  card: OpportunitiesCard;
-  tenantId: string;
-  campaignId: string | undefined;
-}) {
-  if (card.techIssueCount === 0) return null;
-
-  return (
-    <section>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        <div style={{ width: 6, height: 16, borderRadius: 999, background: "var(--yellow)" }} />
-        <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Oportunidades de Recuperação</h2>
-      </div>
-
-      <div className="gc" style={{ padding: 4, overflow: "hidden" }}>
-        <div style={{ display: "flex", flexDirection: "row" }}>
-          {/* Main Info */}
-          <div style={{ flex: 1, padding: 24 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-               <div className="cx-kpi-icon" style={{ width: 32, height: 32, borderRadius: 10, background: "rgba(255,184,0,0.20)" }}>
-                 <Zap style={{ width: 16, height: 16, color: "var(--yellow)" }} />
-               </div>
-               <p className="cx-kpi-label" style={{ letterSpacing: "2px" }}>Potencial de Rechamada</p>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
-               <p className="cx-kpi-value grad-white" style={{ fontSize: 48 }}>{card.techIssueCount}</p>
-               <p style={{ fontSize: 14, fontWeight: 700, color: "rgba(255,184,0,0.60)", textTransform: "uppercase", letterSpacing: "0.1em" }}>Falhas Técnicas</p>
-            </div>
-
-            <p style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 500, lineHeight: 1.6, maxWidth: 560 }}>
-              Identificamos <strong style={{ color: "var(--text-1)" }}>{card.techIssuePct}% das chamadas</strong> com interrupções por transporte (SIP), latência crítica ou erro de pipeline.
-              Estes leads demonstraram interesse mas a conexão foi perdida.
-            </p>
-          </div>
-
-          {/* Financial Impact */}
-          <div style={{ width: 288, flexShrink: 0, background: "rgba(255,255,255,0.02)", borderLeft: "1px solid rgba(255,255,255,0.05)", padding: 24, display: "flex", flexDirection: "column", justifyContent: "center", position: "relative", overflow: "hidden" }}>
-             <div style={{ position: "absolute", top: 0, right: 0, width: 128, height: 128, background: "rgba(255,184,0,0.05)", borderRadius: "0 0 0 100%" }} />
-
-            {card.hasConfig && card.potentialValue != null ? (
-              <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
-                <p style={{ fontSize: 10, fontWeight: 900, color: "var(--yellow)", textTransform: "uppercase", letterSpacing: "2px", marginBottom: 8 }}>Impacto em Vendas</p>
-                 <div className="mono" style={{ fontSize: 30, fontWeight: 900, color: "var(--text-1)", lineHeight: 1, marginBottom: 8, letterSpacing: "-0.02em" }}>
-                   {fmtBRL(card.potentialValue)}
-                 </div>
-                <p className="cx-kpi-label" style={{ fontSize: 10 }}>
-                  Ticket Médio: {fmtBRL(card.avgDealValue!)}
-                </p>
-                <div style={{ marginTop: 24, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                   <div style={{ padding: "6px 12px", borderRadius: 10, background: "var(--yellow)", color: "var(--bg)", fontSize: 10, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em", cursor: "default" }}>
-                     Recuperar Agora
-                   </div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ position: "relative", zIndex: 1, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <Settings2 style={{ width: 24, height: 24, color: "var(--text-3)", marginBottom: 12, opacity: 0.4 }} />
-                <p style={{ fontSize: 10, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 8, lineHeight: 1.4 }}>Projeção Financeira Desabilitada</p>
-                <p style={{ fontSize: 10, color: "var(--text-3)", fontWeight: 500, lineHeight: 1.4, marginBottom: 16 }}>Configure o ticket médio nas configurações da campanha para ver o impacto.</p>
-                {campaignId && (
-                  <a
-                    href={`/app/tenants/${tenantId}/queues`}
-                    style={{ fontSize: 10, fontWeight: 900, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.1em", display: "flex", alignItems: "center", gap: 4, textDecoration: "none" }}
-                  >
-                    CONFIGURAR <ArrowRight style={{ width: 12, height: 12 }} />
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Correlações: Detector de ICP ─────────────────────────────────────────────
-
-function ICPSection({ correlations }: { correlations: DossieData["correlations"] }) {
-  if (Object.keys(correlations).length === 0) return null;
-
-  return (
-    <section>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        <div style={{ width: 6, height: 16, borderRadius: 999, background: "var(--cyan)" }} />
-        <h2 className="cx-card-title" style={{ fontSize: 12, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.1em" }}>Detector de ICP (Persona Ideal)</h2>
-      </div>
-
-      <div className="cx-bot-grid">
-        {Object.entries(correlations).map(([field, groups]) => {
-          const sorted = Object.entries(groups).sort((a, b) => b[1].avgDuration - a[1].avgDuration);
-          const maxDur = Math.max(...sorted.map((g) => g[1].avgDuration), 1);
-          return (
-            <div key={field} className="gc" style={{ padding: 24 }}>
-              <h4 className="cx-kpi-label" style={{ marginBottom: 20, paddingBottom: 12, borderBottom: "1px solid var(--glass-border)", letterSpacing: "2px" }}>
-                {field} <span style={{ color: "rgba(0,194,255,0.40)", marginLeft: 4 }}>× ENGAGEMENT</span>
-              </h4>
-              <div className="cx-mot-rows" style={{ gap: 16 }}>
-                {sorted.map(([label, stats]) => {
-                  const pct = Math.round((stats.avgDuration / maxDur) * 100);
-                  return (
-                    <div key={label}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-1)", maxWidth: "50%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
-                        <div style={{ textAlign: "right" }}>
-                           <span className="mono" style={{ fontSize: 11, fontWeight: 900, color: "var(--text-1)" }}>{fmtDuration(stats.avgDuration)}</span>
-                           <span className="cx-kpi-label" style={{ marginLeft: 8, fontSize: 10, letterSpacing: "-0.02em" }}>{stats.count} CALLS</span>
-                        </div>
-                      </div>
-                      <div className="cx-mot-bar" style={{ height: 4 }}>
-                        <div
-                          className="cx-mot-fill"
-                          style={{ width: `${pct}%`, background: "rgba(0,194,255,0.60)", boxShadow: "0 0 8px rgba(34,211,238,0.2)" }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
       </div>
     </section>
   );
@@ -893,6 +708,7 @@ export default function DossiePage() {
         : Object.keys(json.data.endedReasonBreakdown ?? {});
       setAvailableReasons(reasons);
     }
+
     setLoading(false);
   }, [tenantId]);
 
@@ -917,41 +733,10 @@ export default function DossiePage() {
         @media print {
           nav, header, aside, .no-print { display: none !important; }
           .print-root { padding: 0 !important; }
-          .gc { break-inside: avoid; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+          .gc, .dossie-card, .dossie-kpi, .dossie-score { break-inside: avoid; box-shadow: none !important; border: 1px solid #e5e7eb !important; }
           body { background: white !important; }
         }
       `}</style>
-
-      {/* Header */}
-      <div className="no-print" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32 }}>
-        <div>
-           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-             <div style={{ width: 8, height: 8, borderRadius: 999, background: "var(--green)", boxShadow: "0 0 8px var(--green)", animation: "pulse 2s ease-in-out infinite" }} />
-             <span className="cx-kpi-label" style={{ letterSpacing: "2px" }}>Advanced Reporting</span>
-           </div>
-          <h1 style={{ fontSize: 30, fontWeight: 900, color: "var(--text-1)", letterSpacing: "-0.02em" }}>Dossiê Comercial</h1>
-        </div>
-
-        {data && (
-          <div className="no-print" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <button
-              onClick={handleRunAiAnalysis}
-              disabled={loadingAi}
-              className="cx-refresh-btn"
-              style={{ padding: "10px 20px" }}
-            >
-              {loadingAi ? <Loader2 style={{ width: 16, height: 16, animation: "cx-spin 0.8s linear infinite" }} /> : <Sparkles style={{ width: 16, height: 16 }} />}
-              <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 11 }}>
-                {loadingAi ? "Gerando Análise..." : "Analisar Gargalos"}
-              </span>
-            </button>
-            <button onClick={handlePrint} className="cx-filter-btn" style={{ padding: "10px 20px" }}>
-              <Printer style={{ width: 16, height: 16 }} />
-              <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 11 }}>Exportar</span>
-            </button>
-          </div>
-        )}
-      </div>
 
       {/* Filtros */}
       <div className="gc no-print" style={{ padding: 20, marginBottom: 32 }}>
@@ -1009,139 +794,162 @@ export default function DossiePage() {
             ))}
           </div>
 
-          {/* Toggle filtros avançados */}
-          <div style={{ borderTop: "1px solid var(--glass-border)", marginTop: 16, paddingTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <button
-              onClick={() => setShowAdvanced((v) => !v)}
-              style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: showAdvanced ? "var(--text-1)" : "var(--text-3)", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", padding: 0 }}
-            >
-              <ChevronDown style={{ width: 14, height: 14, transition: "transform 0.2s", transform: showAdvanced ? "rotate(180deg)" : "rotate(0deg)" }} />
-              Filtros Avançados
-              {(minDuration || maxDuration || startDate || endDate || selectedReasons.length > 0) && (
-                <span style={{ background: "var(--green)", color: "var(--bg)", borderRadius: 999, padding: "1px 6px", fontSize: 9, fontWeight: 900 }}>
-                  ATIVO
-                </span>
-              )}
-            </button>
-            {(minDuration || maxDuration || startDate || endDate || selectedReasons.length > 0) && (
-              <button
-                onClick={() => {
-                  setMinDuration(""); setMaxDuration("");
-                  setStartDate(""); setEndDate("");
-                  setSelectedReasons([]);
-                  load(selectedQueue, days, {});
-                }}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", padding: 0 }}
-              >
-                Limpar Filtros
-              </button>
+          <div style={{ height: 16, width: 1, background: "var(--glass-border)", margin: "0 8px" }} />
+
+          {/* Ações Rápidas */}
+          <div style={{ display: "flex", gap: 8 }}>
+            {data && (
+              <>
+                <button
+                  onClick={handleRunAiAnalysis}
+                  disabled={loadingAi}
+                  className="cx-filter-btn"
+                  style={{ display: "flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg,rgba(168,85,247,0.12),rgba(168,85,247,0.06))", borderColor: "rgba(168,85,247,0.3)", color: "var(--purple)" }}
+                >
+                  {loadingAi ? <Loader2 style={{ width: 13, height: 13, animation: "cx-spin 0.8s linear infinite" }} /> : <Sparkles style={{ width: 13, height: 13 }} />}
+                  {loadingAi ? "Gerando..." : "Analisar Gargalos"}
+                </button>
+                <button onClick={handlePrint} className="cx-filter-btn" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Printer style={{ width: 13, height: 13 }} />
+                  Exportar
+                </button>
+              </>
             )}
           </div>
+        </div>
 
-          {/* Painel de filtros avançados */}
-          {showAdvanced && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 8 }}>
-              {/* Linha 1: Datas */}
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Data início</label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="cx-select"
-                    style={{ padding: "6px 10px", fontSize: 11, minWidth: 140 }}
-                  />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Data fim</label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="cx-select"
-                    style={{ padding: "6px 10px", fontSize: 11, minWidth: 140 }}
-                  />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Duração mín. (s)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={minDuration}
-                    onChange={(e) => setMinDuration(e.target.value)}
-                    placeholder="ex: 10"
-                    className="cx-select"
-                    style={{ padding: "6px 10px", fontSize: 11, width: 110 }}
-                  />
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Duração máx. (s)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={maxDuration}
-                    onChange={(e) => setMaxDuration(e.target.value)}
-                    placeholder="ex: 300"
-                    className="cx-select"
-                    style={{ padding: "6px 10px", fontSize: 11, width: 110 }}
-                  />
-                </div>
-              </div>
-
-              {/* Linha 2: Motivos de término */}
-              {availableReasons.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>
-                    Motivos de término {selectedReasons.length > 0 && <span style={{ color: "var(--green)" }}>({selectedReasons.length} selecionados)</span>}
-                  </label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {availableReasons.map((reason) => {
-                      const active = selectedReasons.includes(reason);
-                      return (
-                        <button
-                          key={reason}
-                          onClick={() => setSelectedReasons((prev) =>
-                            active ? prev.filter((r) => r !== reason) : [...prev, reason]
-                          )}
-                          style={{
-                            padding: "4px 10px",
-                            borderRadius: 6,
-                            fontSize: 10,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            border: "1px solid",
-                            transition: "all 0.15s",
-                            ...(active
-                              ? { background: "rgba(0,214,143,0.15)", borderColor: "var(--green)", color: "var(--green)" }
-                              : { background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)", color: "var(--text-3)" }),
-                          }}
-                        >
-                          {reason}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Botão aplicar */}
-              <div>
-                <button
-                  onClick={() => load(selectedQueue, days, { minDuration, maxDuration, startDate, endDate, endedReasons: selectedReasons })}
-                  disabled={loading}
-                  className="cx-refresh-btn"
-                  style={{ padding: "8px 20px" }}
-                >
-                  {loading ? <Loader2 style={{ width: 14, height: 14, animation: "cx-spin 0.8s linear infinite" }} /> : <BarChart3 style={{ width: 14, height: 14 }} />}
-                  <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 10 }}>
-                    Aplicar Filtros
-                  </span>
-                </button>
-              </div>
-            </div>
+        {/* Toggle filtros avançados */}
+        <div style={{ borderTop: "1px solid var(--glass-border)", marginTop: 16, paddingTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <button
+            onClick={() => setShowAdvanced((v) => !v)}
+            style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: showAdvanced ? "var(--text-1)" : "var(--text-3)", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", padding: 0 }}
+          >
+            <ChevronDown style={{ width: 14, height: 14, transition: "transform 0.2s", transform: showAdvanced ? "rotate(180deg)" : "rotate(0deg)" }} />
+            Filtros Avançados
+            {(minDuration || maxDuration || startDate || endDate || selectedReasons.length > 0) && (
+              <span style={{ background: "var(--green)", color: "var(--bg)", borderRadius: 999, padding: "1px 6px", fontSize: 9, fontWeight: 900 }}>
+                ATIVO
+              </span>
+            )}
+          </button>
+          {(minDuration || maxDuration || startDate || endDate || selectedReasons.length > 0) && (
+            <button
+              onClick={() => {
+                setMinDuration(""); setMaxDuration("");
+                setStartDate(""); setEndDate("");
+                setSelectedReasons([]);
+                load(selectedQueue, days, {});
+              }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", padding: 0 }}
+            >
+              Limpar Filtros
+            </button>
           )}
         </div>
+
+        {/* Painel de filtros avançados */}
+        {showAdvanced && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 8 }}>
+            {/* Linha 1: Datas */}
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Data início</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="cx-select"
+                  style={{ padding: "6px 10px", fontSize: 11, minWidth: 140 }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Data fim</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="cx-select"
+                  style={{ padding: "6px 10px", fontSize: 11, minWidth: 140 }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Duração mín. (s)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={minDuration}
+                  onChange={(e) => setMinDuration(e.target.value)}
+                  placeholder="ex: 10"
+                  className="cx-select"
+                  style={{ padding: "6px 10px", fontSize: 11, width: 110 }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Duração máx. (s)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={maxDuration}
+                  onChange={(e) => setMaxDuration(e.target.value)}
+                  placeholder="ex: 300"
+                  className="cx-select"
+                  style={{ padding: "6px 10px", fontSize: 11, width: 110 }}
+                />
+              </div>
+            </div>
+
+            {/* Linha 2: Motivos de término */}
+            {availableReasons.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>
+                  Motivos de término {selectedReasons.length > 0 && <span style={{ color: "var(--green)" }}>({selectedReasons.length} selecionados)</span>}
+                </label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {availableReasons.map((reason) => {
+                    const active = selectedReasons.includes(reason);
+                    return (
+                      <button
+                        key={reason}
+                        onClick={() => setSelectedReasons((prev) =>
+                          active ? prev.filter((r) => r !== reason) : [...prev, reason]
+                        )}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          border: "1px solid",
+                          transition: "all 0.15s",
+                          ...(active
+                            ? { background: "rgba(0,214,143,0.15)", borderColor: "var(--green)", color: "var(--green)" }
+                            : { background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)", color: "var(--text-3)" }),
+                        }}
+                      >
+                        {reason}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Botão aplicar */}
+            <div>
+              <button
+                onClick={() => load(selectedQueue, days, { minDuration, maxDuration, startDate, endDate, endedReasons: selectedReasons })}
+                disabled={loading}
+                className="cx-refresh-btn"
+                style={{ padding: "8px 20px" }}
+              >
+                {loading ? <Loader2 style={{ width: 14, height: 14, animation: "cx-spin 0.8s linear infinite" }} /> : <BarChart3 style={{ width: 14, height: 14 }} />}
+                <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 10 }}>
+                  Aplicar Filtros
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Loading */}
@@ -1166,11 +974,11 @@ export default function DossiePage() {
         </div>
       )}
 
-      {/* Conteúdo do dossiê */}
+      {/* ═══ CONTEÚDO DO DOSSIÊ ═══ */}
       {data && !loading && (
-        <div ref={printRef} className="print-root" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div ref={printRef} className="print-root" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
-          {/* Cabeçalho para impressão */}
+          {/* Print header */}
           <div className="hidden print:block" style={{ marginBottom: 24 }}>
             <h1 style={{ fontSize: 24, fontWeight: 700, color: "#111" }}>Dossiê Comercial</h1>
             <p style={{ fontSize: 14, color: "#666" }}>
@@ -1178,10 +986,13 @@ export default function DossiePage() {
             </p>
           </div>
 
-          {/* 1. Visão Geral */}
-          <HeroMetrics overview={data.overview} durationAvg={data.durationAnalysis.avg} />
+          {/* ── TOP ROW: Score + 5 KPIs ── */}
+          <ScoreKpiRow overview={data.overview} durationAvg={data.durationAnalysis.avg} />
 
-          {/* AI Analysis Card */}
+          {/* ── ALERT INLINE ── */}
+          <AlertInline card={data.opportunitiesCard} tenantId={tenantId} />
+
+          {/* ── AI Analysis Card (shown when analysis is available) ── */}
           {aiAnalysis && (
             <div className="gc" style={{ padding: 32, position: "relative", overflow: "hidden" }}>
               <div style={{ position: "absolute", top: 0, right: 0, width: 256, height: 256, background: "rgba(99,102,241,0.05)", borderRadius: "0 0 0 100%", transition: "transform 2s" }} />
@@ -1200,39 +1011,22 @@ export default function DossiePage() {
             </div>
           )}
 
-          {/* 2. Oportunidades Não Trabalhadas */}
-          <OpportunitiesSection
-            card={data.opportunitiesCard}
-            tenantId={tenantId}
-            campaignId={data.campaign?.id}
-          />
-
-          {/* 3. Mapa de Abandono */}
-          <AbandonmentChart durationAnalysis={data.durationAnalysis} />
-
-          {/* 4. Funil de Abandono */}
-          <FunnelSection funnel={data.funnelAnalysis} />
-
-          {/* 5. Inteligência dos Dados */}
-          {data.fieldAnalysis.length > 0 ? (
-            <TabbedFieldAnalysis
+          {/* ── DATA GRID: Mapa de Abandono + Inteligência dos Dados ── */}
+          <div className="dossie-data-grid">
+            <AbandonmentCard durationAnalysis={data.durationAnalysis} />
+            <IntelligenceCard
               fieldAnalysis={data.fieldAnalysis}
               structuredCount={data.overview.structuredOutputsCount}
             />
-          ) : (
-            <div className="gc" style={{ padding: 24, textAlign: "center" }}>
-              <Info style={{ width: 32, height: 32, color: "var(--text-3)", margin: "0 auto 8px" }} />
-              <p style={{ fontSize: 14, fontWeight: 500, color: "var(--text-2)", marginBottom: 4 }}>Nenhum dado estruturado encontrado</p>
-              <p style={{ fontSize: 12, color: "var(--text-3)", maxWidth: 448, margin: "0 auto" }}>
-                Configure um Structured Output no assistente Vapi desta campanha para visualizar a análise de campos, mapa de objeções e detector de ICP.
-              </p>
-            </div>
-          )}
+          </div>
 
-          {/* 6. Detector de ICP */}
+          {/* ── Funil de Gargalos ── */}
+          <FunnelSection funnel={data.funnelAnalysis} />
+
+          {/* ── ICP Grid ── */}
           <ICPSection correlations={data.correlations} />
 
-          {/* Rodapé de impressão */}
+          {/* Print footer */}
           <div className="hidden print:block" style={{ marginTop: 32, paddingTop: 16, borderTop: "1px solid #e5e7eb", fontSize: 12, color: "#999", textAlign: "center" }}>
             Gerado em {new Date().toLocaleString("pt-BR")} · CallX by MX3
           </div>
