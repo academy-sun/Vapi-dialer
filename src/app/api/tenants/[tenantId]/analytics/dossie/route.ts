@@ -10,11 +10,24 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (response) return response;
 
   const { searchParams } = new URL(req.url);
-  const queueId = searchParams.get("queueId") ?? null;
+  const queueId     = searchParams.get("queueId") ?? null;
   const assistantId = searchParams.get("assistantId") ?? null;
-  // Filtro de período: 7, 30, 90 ou 365 dias (padrão 90)
-  const days = Math.min(365, Math.max(7, Number(searchParams.get("days") ?? "90")));
-  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+
+  // Período: startDate/endDate (datas customizadas) têm prioridade sobre days
+  const days      = Math.min(365, Math.max(7, Number(searchParams.get("days") ?? "90")));
+  const startDate = searchParams.get("startDate") ?? null;
+  const endDate   = searchParams.get("endDate") ?? null;
+  const since     = startDate ?? new Date(Date.now() - days * 86_400_000).toISOString();
+  const until     = endDate ?? null;
+
+  // Filtros de duração e motivos de término
+  const minDurationRaw  = searchParams.get("minDuration");
+  const maxDurationRaw  = searchParams.get("maxDuration");
+  const endedReasonsRaw = searchParams.get("endedReasons");
+
+  const minDuration  = minDurationRaw  ? parseInt(minDurationRaw,  10) : null;
+  const maxDuration  = maxDurationRaw  ? parseInt(maxDurationRaw,  10) : null;
+  const endedReasons = endedReasonsRaw ? endedReasonsRaw.split(",").filter(Boolean) : null;
 
   const service = createServiceClient();
 
@@ -38,7 +51,6 @@ export async function GET(req: NextRequest, { params }: Params) {
 
     filteredQueueIds = queues ? queues.map((q) => q.id) : [];
 
-    // Se assistente não tem fila, retornar payload "vazio" (todas as métricas zeradas)
     if (filteredQueueIds.length === 0) {
       return NextResponse.json({
         data: {
@@ -46,34 +58,42 @@ export async function GET(req: NextRequest, { params }: Params) {
           durationAnalysis: { total: 0, avg: 0, voicemailCount: 0, buckets: { "0–10s": 0, "10–30s": 0, "30–60s": 0, "1–3min": 0, "3–5min": 0, "5min+": 0 } },
           funnelAnalysis: { hasData: false, totalWithData: 0, stages: [] },
           opportunitiesCard: { techIssueCount: 0, techIssuePct: 0, avgDealValue: null, potentialValue: null, hasConfig: false },
-          fieldAnalysis: { interesse: {}, nivel_engajamento: {}, resultado: {}, cargo_presumido: {} },
-          correlations: { interesse: {}, nivel_engajamento: {}, resultado: {} },
-          performanceScore: { avg: 0, min: 0, max: 0, count: 0, distribution: {} },
+          fieldAnalysis: [],
+          correlations: {},
           endedReasonBreakdown: {},
+          availableReasons: [],
         },
         campaigns,
       });
     }
   }
 
-  // Chamar RPC no PostgreSQL (call_records_flat)
-  const { data: dossie, error: rpcError } = await service.rpc("rpc_dossie_summary", {
+  // Chamar RPC no PostgreSQL
+  const rpcParams: Record<string, unknown> = {
     p_tenant_id: tenantId,
-    p_queue_id: queueId,
-    p_since: since,
-  });
+    p_queue_id:  queueId,
+    p_since:     since,
+  };
+  if (until)        rpcParams.p_until         = until;
+  if (minDuration !== null) rpcParams.p_min_duration = minDuration;
+  if (maxDuration !== null) rpcParams.p_max_duration = maxDuration;
+  if (endedReasons) rpcParams.p_ended_reasons  = endedReasons;
+
+  const { data: dossie, error: rpcError } = await service.rpc("rpc_dossie_summary", rpcParams);
 
   if (rpcError) {
     console.error("RPC rpc_dossie_summary error:", rpcError);
     return NextResponse.json({ error: "Erro ao gerar dossiê analítico" }, { status: 500 });
   }
 
-  // Enriquecer com campaign e period (campos que a página espera mas não vêm do RPC)
   const enrichedData = dossie ? {
     ...(dossie as Record<string, unknown>),
     campaign: queueId ? campaigns.find((c) => c.id === queueId) : undefined,
-    period: { days, since },
+    period: { days, since, until },
   } : null;
+
+  // Suprimir aviso de variável não usada
+  void filteredQueueIds;
 
   return NextResponse.json({ data: enrichedData, campaigns });
 }

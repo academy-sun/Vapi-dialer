@@ -376,12 +376,8 @@ export default function AppShell({
       {/* ══ MAIN ══════════════════════════════════════════════════════ */}
       <div className="cx-main">
 
-        {/* Topbar */}
-        <header className="cx-topbar">
-          <div>
-            <div className="cx-topbar-title">{topbarTitle}</div>
-            <div className="cx-topbar-sub">{topbarSub}</div>
-          </div>
+        {/* Topbar — only action buttons, no title */}
+        <header className="cx-topbar" style={{ justifyContent: "flex-end" }}>
           <div className="cx-topbar-right">
             {/* Theme toggle */}
             <button

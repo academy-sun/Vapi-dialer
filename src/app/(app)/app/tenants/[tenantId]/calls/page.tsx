@@ -224,8 +224,16 @@ function InteresseBadge({ call }: { call: Call }) {
     );
   }
   if (call.interesse) {
+    const v = call.interesse.toLowerCase().trim();
+    const badgeColor = v === "sucesso" || v === "sim" || v === "true" || v === "yes" || v === "1"
+      ? "badge-green"
+      : v === "sem interesse" || v === "não" || v === "no" || v === "false" || v === "0"
+      ? "badge-red"
+      : v === "callback" || v === "retornar" || v === "agendar"
+      ? "badge-yellow"
+      : "badge-purple";
     return (
-      <span className="badge badge-blue">
+      <span className={`badge ${badgeColor}`}>
         {valueToLabel(call.interesse)}
       </span>
     );
