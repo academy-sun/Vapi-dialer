@@ -61,9 +61,18 @@ interface OpportunitiesCard {
   hasConfig: boolean;
 }
 
+interface AdvancedFilters {
+  minDuration?: string;
+  maxDuration?: string;
+  startDate?: string;
+  endDate?: string;
+  endedReasons?: string[];
+}
+
 interface DossieData {
   campaign: { id: string; name: string } | undefined;
-  period: { days: number; since: string };
+  period: { days: number; since: string; until?: string | null };
+  availableReasons?: string[];
   avgDealValue: number | null;
   overview: {
     totalCalls: number;
@@ -811,6 +820,15 @@ export default function DossiePage() {
   const [data, setData]                   = useState<DossieData | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
+  // Filtros avançados
+  const [showAdvanced, setShowAdvanced]       = useState(false);
+  const [minDuration, setMinDuration]         = useState("");
+  const [maxDuration, setMaxDuration]         = useState("");
+  const [startDate, setStartDate]             = useState("");
+  const [endDate, setEndDate]                 = useState("");
+  const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
+  const [availableReasons, setAvailableReasons] = useState<string[]>([]);
+
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
   const supabase = createClient();
@@ -833,27 +851,48 @@ export default function DossiePage() {
     if (!selectedQueue) return;
     setLoadingAi(true);
     try {
+      const aiFilters: Record<string, unknown> = {};
+      if (minDuration)              aiFilters.durationMin  = Number(minDuration);
+      if (maxDuration)              aiFilters.durationMax  = Number(maxDuration);
+      if (selectedReasons.length)   aiFilters.endedReasons = selectedReasons;
+      if (startDate)                aiFilters.startDate    = startDate;
+      if (endDate)                  aiFilters.endDate      = endDate;
+
       const { data, error } = await supabase.functions.invoke("generate-tenant-analysis", {
-        body: { tenantId, queueId: selectedQueue }
+        body: { tenantId, queueId: selectedQueue, filters: aiFilters }
       });
       if (error) throw error;
       setAiAnalysis(data.content);
-    } catch (err: any) {
-      alert("Erro ao analisar: " + err.message);
+    } catch (err: unknown) {
+      alert("Erro ao analisar: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setLoadingAi(false);
     }
   };
 
-  const load = useCallback(async (queueId: string, d: number) => {
+  const load = useCallback(async (queueId: string, d: number, advanced: AdvancedFilters = {}) => {
     if (!queueId) return;
     setLoading(true);
     setData(null);
     loadAi(queueId);
-    const res  = await fetch(`/api/tenants/${tenantId}/analytics/dossie?queueId=${queueId}&days=${d}`);
+
+    const params = new URLSearchParams({ queueId, days: String(d) });
+    if (advanced.startDate)               params.set("startDate",    advanced.startDate);
+    if (advanced.endDate)                 params.set("endDate",      advanced.endDate);
+    if (advanced.minDuration)             params.set("minDuration",  advanced.minDuration);
+    if (advanced.maxDuration)             params.set("maxDuration",  advanced.maxDuration);
+    if (advanced.endedReasons?.length)    params.set("endedReasons", advanced.endedReasons.join(","));
+
+    const res  = await fetch(`/api/tenants/${tenantId}/analytics/dossie?${params.toString()}`);
     const json = await res.json();
-    // Só aceitar se o RPC retornou a estrutura mínima esperada (evita crash com objeto vazio)
-    if (json.data && json.data.overview && json.data.period) setData(json.data);
+    if (json.data && json.data.overview && json.data.period) {
+      setData(json.data);
+      // Atualiza os motivos disponíveis para o dropdown
+      const reasons: string[] = json.data.availableReasons?.length
+        ? json.data.availableReasons
+        : Object.keys(json.data.endedReasonBreakdown ?? {});
+      setAvailableReasons(reasons);
+    }
     setLoading(false);
   }, [tenantId]);
 
@@ -934,7 +973,7 @@ export default function DossiePage() {
                 className="cx-select"
                 style={{ background: "transparent", border: "none", flex: 1, fontWeight: 700, fontSize: 12 }}
                 value={selectedQueue}
-                onChange={(e) => { setSelectedQueue(e.target.value); load(e.target.value, days); }}
+                onChange={(e) => { setSelectedQueue(e.target.value); load(e.target.value, days, { minDuration, maxDuration, startDate, endDate, endedReasons: selectedReasons }); }}
               >
                 {campaigns.length === 0 && <option value="">Nenhuma campanha</option>}
                 {campaigns.map((c) => (
@@ -951,7 +990,7 @@ export default function DossiePage() {
             {[7, 30, 90, 365].map((d) => (
               <button
                 key={d}
-                onClick={() => { setDays(d); load(selectedQueue, d); }}
+                onClick={() => { setDays(d); load(selectedQueue, d, { minDuration, maxDuration, startDate, endDate, endedReasons: selectedReasons }); }}
                 className={`cx-period-tab ${days === d ? "active" : ""}`}
                 style={{
                   padding: "6px 16px",
@@ -969,6 +1008,139 @@ export default function DossiePage() {
               </button>
             ))}
           </div>
+
+          {/* Toggle filtros avançados */}
+          <div style={{ borderTop: "1px solid var(--glass-border)", marginTop: 16, paddingTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <button
+              onClick={() => setShowAdvanced((v) => !v)}
+              style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: showAdvanced ? "var(--text-1)" : "var(--text-3)", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em", padding: 0 }}
+            >
+              <ChevronDown style={{ width: 14, height: 14, transition: "transform 0.2s", transform: showAdvanced ? "rotate(180deg)" : "rotate(0deg)" }} />
+              Filtros Avançados
+              {(minDuration || maxDuration || startDate || endDate || selectedReasons.length > 0) && (
+                <span style={{ background: "var(--green)", color: "var(--bg)", borderRadius: 999, padding: "1px 6px", fontSize: 9, fontWeight: 900 }}>
+                  ATIVO
+                </span>
+              )}
+            </button>
+            {(minDuration || maxDuration || startDate || endDate || selectedReasons.length > 0) && (
+              <button
+                onClick={() => {
+                  setMinDuration(""); setMaxDuration("");
+                  setStartDate(""); setEndDate("");
+                  setSelectedReasons([]);
+                  load(selectedQueue, days, {});
+                }}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", padding: 0 }}
+              >
+                Limpar Filtros
+              </button>
+            )}
+          </div>
+
+          {/* Painel de filtros avançados */}
+          {showAdvanced && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 8 }}>
+              {/* Linha 1: Datas */}
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Data início</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="cx-select"
+                    style={{ padding: "6px 10px", fontSize: 11, minWidth: 140 }}
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Data fim</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="cx-select"
+                    style={{ padding: "6px 10px", fontSize: 11, minWidth: 140 }}
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Duração mín. (s)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={minDuration}
+                    onChange={(e) => setMinDuration(e.target.value)}
+                    placeholder="ex: 10"
+                    className="cx-select"
+                    style={{ padding: "6px 10px", fontSize: 11, width: 110 }}
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>Duração máx. (s)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={maxDuration}
+                    onChange={(e) => setMaxDuration(e.target.value)}
+                    placeholder="ex: 300"
+                    className="cx-select"
+                    style={{ padding: "6px 10px", fontSize: 11, width: 110 }}
+                  />
+                </div>
+              </div>
+
+              {/* Linha 2: Motivos de término */}
+              {availableReasons.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  <label style={{ fontSize: 9, fontWeight: 900, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "1px" }}>
+                    Motivos de término {selectedReasons.length > 0 && <span style={{ color: "var(--green)" }}>({selectedReasons.length} selecionados)</span>}
+                  </label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {availableReasons.map((reason) => {
+                      const active = selectedReasons.includes(reason);
+                      return (
+                        <button
+                          key={reason}
+                          onClick={() => setSelectedReasons((prev) =>
+                            active ? prev.filter((r) => r !== reason) : [...prev, reason]
+                          )}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: 6,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            border: "1px solid",
+                            transition: "all 0.15s",
+                            ...(active
+                              ? { background: "rgba(0,214,143,0.15)", borderColor: "var(--green)", color: "var(--green)" }
+                              : { background: "rgba(255,255,255,0.04)", borderColor: "rgba(255,255,255,0.10)", color: "var(--text-3)" }),
+                          }}
+                        >
+                          {reason}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Botão aplicar */}
+              <div>
+                <button
+                  onClick={() => load(selectedQueue, days, { minDuration, maxDuration, startDate, endDate, endedReasons: selectedReasons })}
+                  disabled={loading}
+                  className="cx-refresh-btn"
+                  style={{ padding: "8px 20px" }}
+                >
+                  {loading ? <Loader2 style={{ width: 14, height: 14, animation: "cx-spin 0.8s linear infinite" }} /> : <BarChart3 style={{ width: 14, height: 14 }} />}
+                  <span style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", fontSize: 10 }}>
+                    Aplicar Filtros
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

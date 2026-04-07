@@ -16,10 +16,14 @@ const corsHeaders = {
 interface Filters {
   durationMin?:  number | null;
   durationMax?:  number | null;
+  // aceita array ou string única para retrocompatibilidade
+  endedReasons?: string[] | null;
   endedReason?:  string | null;
   engagement?:   string | null;
   scoreMin?:     number | null;
   scoreMax?:     number | null;
+  startDate?:    string | null;
+  endDate?:      string | null;
 }
 
 interface FlatRow {
@@ -56,13 +60,23 @@ function avgField(rows: FlatRow[], field: keyof FlatRow): number | null {
 
 function buildFilterDescription(filters: Filters): string {
   const parts: string[] = [];
+  if (filters.startDate || filters.endDate) {
+    const from = filters.startDate ? new Date(filters.startDate).toLocaleDateString("pt-BR") : "início";
+    const to   = filters.endDate   ? new Date(filters.endDate).toLocaleDateString("pt-BR")   : "hoje";
+    parts.push(`período: ${from} até ${to}`);
+  }
   if (filters.durationMin != null || filters.durationMax != null) {
     const min = filters.durationMin != null ? `${filters.durationMin}s` : "0";
     const max = filters.durationMax != null ? `${filters.durationMax}s` : "sem limite";
     parts.push(`duração entre ${min} e ${max}`);
   }
-  if (filters.endedReason) parts.push(`motivo de encerramento: "${filters.endedReason}"`);
-  if (filters.engagement)  parts.push(`engajamento: "${filters.engagement}"`);
+  const reasons = filters.endedReasons?.length
+    ? filters.endedReasons
+    : filters.endedReason
+    ? [filters.endedReason]
+    : null;
+  if (reasons?.length) parts.push(`motivos de encerramento: ${reasons.map((r) => `"${r}"`).join(", ")}`);
+  if (filters.engagement) parts.push(`engajamento: "${filters.engagement}"`);
   if (filters.scoreMin != null) parts.push(`score mínimo: ${filters.scoreMin}`);
   if (filters.scoreMax != null) parts.push(`score máximo: ${filters.scoreMax}`);
   return parts.length > 0 ? parts.join(", ") : "nenhum filtro adicional (análise geral)";
@@ -95,8 +109,23 @@ Deno.serve(async (req) => {
 
     const campaignName = queueData?.name ?? "Campanha desconhecida";
 
+    // ── Intervalo de datas ────────────────────────────────────────────────────
+    // Usa startDate/endDate dos filtros se fornecidos, senão últimos 90 dias
+    const since = filters.startDate ?? new Date(Date.now() - 90 * 86_400_000).toISOString();
+    const until = filters.endDate   ?? null;
+
+    // Período em dias para contextualizar a IA
+    const sinceMs  = new Date(since).getTime();
+    const untilMs  = until ? new Date(until).getTime() : Date.now();
+    const periodDays = Math.round((untilMs - sinceMs) / 86_400_000);
+
     // ── Query na tabela flat com filtros aplicados no SQL ─────────────────────
-    const since = new Date(Date.now() - 90 * 86_400_000).toISOString();
+    // Consolida endedReasons: aceita array (novo) ou string única (legado)
+    const endedReasonsList: string[] = filters.endedReasons?.length
+      ? filters.endedReasons
+      : filters.endedReason
+      ? [filters.endedReason]
+      : [];
 
     let query = supabase
       .from("call_records_flat")
@@ -111,12 +140,14 @@ Deno.serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(1000);
 
-    if (filters.durationMin != null) query = query.gte("duration_seconds", filters.durationMin);
-    if (filters.durationMax != null) query = query.lte("duration_seconds", filters.durationMax);
-    if (filters.endedReason)         query = query.eq("ended_reason", filters.endedReason);
-    if (filters.engagement)          query = query.eq("nivel_engajamento", filters.engagement);
-    if (filters.scoreMin != null)    query = query.gte("score", filters.scoreMin);
-    if (filters.scoreMax != null)    query = query.lte("score", filters.scoreMax);
+    if (until)                        query = query.lte("created_at", until);
+    if (filters.durationMin != null)  query = query.gte("duration_seconds", filters.durationMin);
+    if (filters.durationMax != null)  query = query.lte("duration_seconds", filters.durationMax);
+    if (endedReasonsList.length === 1) query = query.eq("ended_reason", endedReasonsList[0]);
+    if (endedReasonsList.length > 1)  query = query.in("ended_reason", endedReasonsList);
+    if (filters.engagement)           query = query.eq("nivel_engajamento", filters.engagement);
+    if (filters.scoreMin != null)     query = query.gte("score", filters.scoreMin);
+    if (filters.scoreMax != null)     query = query.lte("score", filters.scoreMax);
 
     const { data: rawRows, error: queryError } = await query;
 
@@ -126,7 +157,7 @@ Deno.serve(async (req) => {
 
     if (rows.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Nenhuma chamada encontrada com os filtros aplicados no período de 90 dias." }),
+        JSON.stringify({ error: "Nenhuma chamada encontrada com os filtros aplicados no período selecionado." }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -137,7 +168,6 @@ Deno.serve(async (req) => {
     const avgDuration = avgField(rows, "duration_seconds");
     const avgScore    = avgField(rows, "score");
 
-    // Distribuição duração em buckets
     const durationBuckets: Record<string, number> = {
       "0-10s": 0, "10-30s": 0, "30-60s": 0, "1-3min": 0, "3-5min": 0, "5min+": 0,
     };
@@ -151,15 +181,14 @@ Deno.serve(async (req) => {
       else              durationBuckets["5min+"]++;
     }
 
-    const endedReasonDist  = countDist(rows, "ended_reason");
-    const engagementDist   = countDist(rows, "nivel_engajamento");
-    const resultadoDist    = countDist(rows, "resultado");
-    const estagioDist      = countDist(rows, "estagio_atingido");
-    const qualidadeDist    = countDist(rows, "qualidade_tecnica");
-    const dorDist          = countDist(rows, "dor_identificada");
-    const objecaoDist      = countDist(rows, "objecao_principal");
+    const endedReasonDist = countDist(rows, "ended_reason");
+    const engagementDist  = countDist(rows, "nivel_engajamento");
+    const resultadoDist   = countDist(rows, "resultado");
+    const estagioDist     = countDist(rows, "estagio_atingido");
+    const qualidadeDist   = countDist(rows, "qualidade_tecnica");
+    const dorDist         = countDist(rows, "dor_identificada");
+    const objecaoDist     = countDist(rows, "objecao_principal");
 
-    // Score distribution
     const scores = rows.map((r) => r.score).filter((s): s is number => s != null);
     const scoreDist = { "0-30": 0, "31-60": 0, "61-80": 0, "81-100": 0 };
     for (const s of scores) {
@@ -169,19 +198,18 @@ Deno.serve(async (req) => {
       else scoreDist["81-100"]++;
     }
 
-    // Amostra de até 50 linhas para análise qualitativa
     const sampleSize = Math.min(50, rows.length);
     const step       = Math.max(1, Math.floor(rows.length / sampleSize));
     const samples    = rows
       .filter((_, i) => i % step === 0)
       .slice(0, sampleSize)
       .map((r) => ({
-        duracao_segundos: r.duration_seconds,
-        motivo_termino:   r.ended_reason,
-        score:            r.score,
-        interesse:        r.interesse,
-        resultado:        r.resultado,
-        estagio_atingido: r.estagio_atingido,
+        duracao_segundos:  r.duration_seconds,
+        motivo_termino:    r.ended_reason,
+        score:             r.score,
+        interesse:         r.interesse,
+        resultado:         r.resultado,
+        estagio_atingido:  r.estagio_atingido,
         nivel_engajamento: r.nivel_engajamento,
         qualidade_tecnica: r.qualidade_tecnica,
         dor_identificada:  r.dor_identificada,
@@ -189,28 +217,29 @@ Deno.serve(async (req) => {
       }));
 
     // ── Contexto para a IA ────────────────────────────────────────────────────
+    const filterDesc = buildFilterDescription(filters);
     const contextData = {
-      campanha: campaignName,
-      periodo_dias: 90,
-      filtros_ativos: buildFilterDescription(filters),
-      total_chamadas_no_filtro: totalRows,
-      custo_total_usd: Math.round(totalCost * 1000) / 1000,
-      duracao_media_segundos: avgDuration,
-      score_medio: avgScore,
-      distribuicao_duracao: durationBuckets,
-      distribuicao_score: scores.length > 0 ? scoreDist : null,
-      motivos_encerramento: endedReasonDist,
-      nivel_engajamento: engagementDist,
-      resultado_chamadas: resultadoDist,
-      estagio_atingido: estagioDist,
-      qualidade_tecnica: qualidadeDist,
-      principais_dores: dorDist,
-      principais_objecoes: objecaoDist,
-      amostra_chamadas: samples,
+      campanha:                   campaignName,
+      periodo_dias:               periodDays,
+      filtros_ativos:             filterDesc,
+      total_chamadas_no_filtro:   totalRows,
+      custo_total_usd:            Math.round(totalCost * 1000) / 1000,
+      duracao_media_segundos:     avgDuration,
+      score_medio:                avgScore,
+      distribuicao_duracao:       durationBuckets,
+      distribuicao_score:         scores.length > 0 ? scoreDist : null,
+      motivos_encerramento:       endedReasonDist,
+      nivel_engajamento:          engagementDist,
+      resultado_chamadas:         resultadoDist,
+      estagio_atingido:           estagioDist,
+      qualidade_tecnica:          qualidadeDist,
+      principais_dores:           dorDist,
+      principais_objecoes:        objecaoDist,
+      amostra_chamadas:           samples,
     };
 
-    const filterNote = buildFilterDescription(filters) !== "nenhum filtro adicional (análise geral)"
-      ? `\n\n**ATENÇÃO:** Esta análise considera apenas chamadas com os seguintes filtros: ${buildFilterDescription(filters)}. Mencione isso no diagnóstico.`
+    const filterNote = filterDesc !== "nenhum filtro adicional (análise geral)"
+      ? `\n\n**ATENÇÃO:** Esta análise considera apenas chamadas com os seguintes filtros: ${filterDesc}. Mencione isso no diagnóstico e interprete os dados dentro desse contexto específico.`
       : "";
 
     const prompt = `Você é um especialista em análise de campanhas de discagem automática com IA de voz.
@@ -228,13 +257,13 @@ ${JSON.stringify(contextData, null, 2)}
 Qual é o principal problema identificado nos dados? Seja específico com números.
 
 ### 2. Padrões Críticos
-Liste 3-5 padrões relevantes encontrados (use os dados de distribuição, score, engajamento, estágio).
+Liste 3-5 padrões relevantes. Para cada padrão, cite correlações concretas (ex: "leads com nivel_engajamento=alto têm duração média 40% maior que os demais").
 
 ### 3. Causas Raiz
 Para cada padrão, explique a causa provável (script, timing, objeção não tratada, qualidade técnica, etc.).
 
 ### 4. Recomendações (ordenadas por impacto)
-Ações concretas e mensuráveis para melhorar os resultados.
+Ações concretas e mensuráveis. Inclua sugestões de ajuste de script quando relevante.
 
 ### 5. KPIs para Acompanhar
 Métricas específicas para medir o progresso após as melhorias.
@@ -278,10 +307,12 @@ Use dados concretos. Responda em **português brasileiro**.`;
         report_type: "campaign",
         content,
         metadata: {
-          period_days:   90,
+          period_days:   periodDays,
+          since,
+          until,
           total_calls:   totalRows,
-          filters:       filters,
-          filter_desc:   buildFilterDescription(filters),
+          filters,
+          filter_desc:   filterDesc,
           avg_score:     avgScore,
           avg_duration:  avgDuration,
           sample_size:   sampleSize,
