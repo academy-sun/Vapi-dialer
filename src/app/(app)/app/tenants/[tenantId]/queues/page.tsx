@@ -1,13 +1,14 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import {
   Plus, Play, Pause, Square, RotateCcw, Copy, Check, AlertTriangle,
   Loader2, X, Pencil, Trash2, Users, ChevronLeft, ChevronRight,
   ChevronsLeft, ChevronsRight, Link2, Zap, CheckCircle2, XCircle,
   Stethoscope, Clock, Ban, Braces, Upload, ChevronDown, ChevronUp,
   ArrowRight, FileText, Settings2, Megaphone, Phone, Search, Webhook,
-  UserPlus, AlertCircle,
+  UserPlus, AlertCircle, LayoutGrid,
 } from "lucide-react";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -1259,7 +1260,30 @@ export default function CampaignsPage() {
                         <Megaphone style={{ width: "20px", height: "20px", color: "var(--red)" }} />
                       </div>
                       <div>
-                        <h3 style={{ fontWeight: 700, color: "var(--text-1)", fontSize: "15px" }}>{q.name}</h3>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <h3 style={{ fontWeight: 700, color: "var(--text-1)", fontSize: "15px" }}>{q.name}</h3>
+                          <Link
+                            href={`/app/tenants/${tenantId}/queues/${q.id}/kanban`}
+                            title="Ver Kanban de Cadência"
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              fontSize: "10px",
+                              fontWeight: 600,
+                              color: "var(--cyan)",
+                              background: "rgba(0,194,255,0.10)",
+                              border: "1px solid rgba(0,194,255,0.25)",
+                              padding: "3px 8px",
+                              borderRadius: "999px",
+                              textDecoration: "none",
+                              transition: "background .15s",
+                            }}
+                          >
+                            <LayoutGrid style={{ width: "11px", height: "11px" }} />
+                            Kanban
+                          </Link>
+                        </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px", flexWrap: "wrap", fontSize: "11px", color: "var(--text-2)" }}>
                           <span>Lista: <span style={{ fontWeight: 600, color: "var(--text-1)" }}>{leadListName(q.lead_list_id)}</span></span>
                           <span style={{ color: "var(--text-3)" }}>·</span>

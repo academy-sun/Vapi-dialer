@@ -1,10 +1,9 @@
 "use client";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import {
   RefreshCw,
-  PhoneCall,
   X,
   Check,
   AlertTriangle,
@@ -13,19 +12,21 @@ import {
   Calendar,
   Filter,
   Timer,
-  CheckCircle2,
-  XCircle,
   ListOrdered,
   Star,
   ChevronDown,
   ChevronUp,
-  Mic,
-  ExternalLink,
   Hash,
   AlertCircle,
   Plus,
   Loader2,
 } from "lucide-react";
+import CallDetailDrawer, { InteresseBadge } from "@/components/CallDetailDrawer";
+import {
+  type Call, type CallDetail,
+  formatPhone, formatDuration, formatRelativeTime,
+} from "@/lib/calls-shared";
+import { getReasonInfo, getReasonLabel } from "@/lib/call-reasons";
 
 interface Queue { id: string; name: string; assistant_id: string | null }
 
@@ -33,296 +34,6 @@ interface AssistantConfig {
   assistant_id: string;
   success_field: string | null;
   success_value: string | null;
-}
-
-interface Call {
-  id: string;
-  vapi_call_id: string;
-  status: string | null;
-  ended_reason: string | null;
-  cost: number | null;
-  summary: string | null;
-  duration_seconds: number | null;
-  created_at: string;
-  lead_phone: string | null;
-  lead_name: string | null;
-  interesse: string | null;
-  performance_score: number | null;
-  success_evaluation: boolean | null;
-  resumo: string | null;
-  pontos_melhoria: string | null;
-  objecoes: string | null;
-  motivos_falha: string | null;
-  proximo_passo: string | null;
-  score: number | null;
-  outputs_flat: Record<string, unknown> | null;
-  leads: { next_attempt_at: string | null } | null;
-}
-
-interface CallDetail extends Call {
-  transcript: string | null;
-  recording_url: string | null;
-  stereo_recording_url: string | null;
-}
-
-const REASON_CONFIG: Record<string, { label: string; badge: string }> = {
-  "customer-ended-call": { label: "Cliente encerrou", badge: "badge-green" },
-  "assistant-ended-call": { label: "Assistente encerrou", badge: "badge-blue" },
-  "no-answer":            { label: "Sem resposta",      badge: "badge-gray" },
-  "busy":                 { label: "Ocupado",           badge: "badge-yellow" },
-  "voicemail":            { label: "Caixa postal",      badge: "badge-purple" },
-  "failed":               { label: "Falha",             badge: "badge-red" },
-};
-
-// Campos do result que devem aparecer no topo do drawer (labels amigáveis)
-const RESULT_PRIORITY_FIELDS: Record<string, string> = {
-  interesse:                    "Interesse",
-  success:                      "Sucesso",
-  sucesso:                      "Sucesso",
-  successEvaluation:            "Avaliação",
-  success_evaluation:           "Avaliação",
-  momentoDeCompra:              "Momento de Compra",
-  ComparImovelPlanta:           "Comparou Planta",
-  QuerReuniaoComVendedor:       "Quer Reunião",
-  "Performance Global Score":   "Score Global",
-};
-
-// Campos conhecidos como texto longo
-const KNOWN_LONG_TEXT_FIELDS = new Set([
-  "resumo", "Pontos Melhoria", "Lista Objeções",
-  "Possíveis Motivos de Falha", "Justificative Performance Global",
-  "compliancePlan", "summary", "notes", "observacoes", "justificativa",
-]);
-
-// Heurística: valor longo (>60 chars) ou campo com palavras-chave → texto longo
-function isLongTextField(key: string, value: unknown): boolean {
-  if (KNOWN_LONG_TEXT_FIELDS.has(key)) return true;
-  if (typeof value === "string" && value.length > 60) return true;
-  const lk = key.toLowerCase();
-  return lk.includes("motiv") || lk.includes("justif") || lk.includes("resum") ||
-         lk.includes("descri") || lk.includes("observ") || lk.includes("nota") ||
-         lk.includes("comment") || lk.includes("reason") || lk.includes("detail");
-}
-
-/** Extrai o nome de exibição do lead a partir de data_json.
- *  Prioridade: nome_identificacao > name > first_name > nome > primeiro_nome */
-function getNomeDisplay(dataJson: Record<string, string> | null | undefined): string {
-  if (!dataJson) return "";
-  return (
-    dataJson.nome_identificacao ??
-    dataJson.name ??
-    dataJson.first_name ??
-    dataJson.nome ??
-    dataJson.primeiro_nome ??
-    ""
-  );
-}
-
-function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length === 12) return `+${digits.slice(0, 2)} (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`;
-  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
-  return phone;
-}
-
-function formatDuration(seconds: number | null): string {
-  if (seconds == null) return "—";
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-function formatRelativeTime(dateStr: string): { relative: string; full: string } {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
-  let relative: string;
-  if (diff < 60) relative = "agora mesmo";
-  else if (diff < 3600) relative = `há ${Math.floor(diff / 60)} min`;
-  else if (diff < 86400) relative = `há ${Math.floor(diff / 3600)} h`;
-  else relative = `há ${Math.floor(diff / 86400)} dias`;
-  return { relative, full: date.toLocaleString("pt-BR") };
-}
-
-/**
- * Extrai o objeto `result` do structured_outputs do Vapi.
- * Suporta dois formatos:
- *   1. { result: {...} }  — top-level direto
- *   2. { "<uuid>": { name, result: {...} } } — wrapped por tool call ID
- */
-function extractResult(outputs: Record<string, unknown>): Record<string, unknown> | null {
-  if (!outputs) return null;
-  // Formato 1: tem 'result' direto
-  if (outputs.result && typeof outputs.result === "object" && !Array.isArray(outputs.result)) {
-    return outputs.result as Record<string, unknown>;
-  }
-  // Formato 2: valores são objetos com { name, result }
-  for (const val of Object.values(outputs)) {
-    if (val && typeof val === "object" && !Array.isArray(val)) {
-      const obj = val as Record<string, unknown>;
-      if (obj.result && typeof obj.result === "object" && !Array.isArray(obj.result)) {
-        return obj.result as Record<string, unknown>;
-      }
-    }
-  }
-  // Fallback: retorna o próprio objeto
-  return outputs;
-}
-
-// Chaves buscadas em ordem de prioridade para o campo "INTERESSE".
-// Cobre diferentes nomenclaturas usadas em campanhas distintas.
-const INTERESSE_KEYS = [
-  "interesse", "Interesse", "INTERESSE",
-  "interest", "Interest", "INTEREST",
-  "nivel_interesse", "nivelInteresse", "nivel_de_interesse",
-  "lead_interest", "leadInterest",
-  "success", "sucesso", "Sucesso",
-  "interested", "successEvaluation", "success_evaluation",
-];
-
-function getInteresseValue(result: Record<string, unknown>): unknown {
-  for (const key of INTERESSE_KEYS) {
-    if (key in result && result[key] != null && result[key] !== "") {
-      return result[key];
-    }
-  }
-  return undefined;
-}
-
-function isSuccessValue(v: unknown): boolean {
-  if (v === null || v === undefined) return false;
-  const s = String(v).toLowerCase();
-  return v === true || s === "true" || s === "sucesso" || s === "sim" || s === "yes" || s === "1";
-}
-
-function isFailureValue(v: unknown): boolean {
-  if (v === null || v === undefined) return false;
-  const s = String(v).toLowerCase();
-  return v === false || s === "false" || s === "fracasso" || s === "não" || s === "nao" || s === "no" || s === "0";
-}
-
-function valueToLabel(v: unknown): string {
-  if (v === null || v === undefined) return "—";
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
-}
-
-/** Badge compacto para a tabela: só Sucesso / Fracasso */
-function InteresseBadge({ call }: { call: Call }) {
-  if (call.success_evaluation === true) {
-    return (
-      <span className="badge badge-green" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <CheckCircle2 style={{ width: 12, height: 12 }} /> Sucesso
-      </span>
-    );
-  }
-  if (call.success_evaluation === false) {
-    return (
-      <span className="badge badge-red" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <XCircle style={{ width: 12, height: 12 }} /> Fracasso
-      </span>
-    );
-  }
-  if (call.interesse) {
-    const v = call.interesse.toLowerCase().trim();
-    const badgeColor = v === "sucesso" || v === "sim" || v === "true" || v === "yes" || v === "1"
-      ? "badge-green"
-      : v === "sem interesse" || v === "não" || v === "no" || v === "false" || v === "0"
-      ? "badge-red"
-      : v === "callback" || v === "retornar" || v === "agendar"
-      ? "badge-yellow"
-      : "badge-purple";
-    return (
-      <span className={`badge ${badgeColor}`}>
-        {valueToLabel(call.interesse)}
-      </span>
-    );
-  }
-  return <span style={{ color: 'var(--text-3)', fontSize: 12 }}>—</span>;
-}
-
-/** Painel de avaliação detalhada no drawer */
-function EvaluationPanel({ call }: { call: CallDetail }) {
-  const result: Record<string, unknown> = {};
-  if (call.outputs_flat) Object.assign(result, call.outputs_flat);
-
-  if (call.interesse) result["Interesse"] = call.interesse;
-  if (call.success_evaluation != null) result["Avaliação"] = call.success_evaluation ? "Sim" : "Não";
-  if (call.resumo) result["resumo"] = call.resumo;
-  if (call.pontos_melhoria) result["Pontos Melhoria"] = call.pontos_melhoria;
-  if (call.objecoes) result["Lista Objeções"] = call.objecoes;
-  if (call.motivos_falha) result["Possíveis Motivos de Falha"] = call.motivos_falha;
-  if (call.proximo_passo) result["Próximo Passo"] = call.proximo_passo;
-
-  if (Object.keys(result).length === 0) return null;
-
-  // Separar campos curtos (badges/valores) dos longos (textos)
-  const shortEntries: [string, unknown][] = [];
-  const longEntries: [string, unknown][] = [];
-
-  for (const [k, v] of Object.entries(result)) {
-    if (v === null || v === undefined || v === "") continue;
-    if (k === "Performance Global Score" || k === "score") continue;
-    if (isLongTextField(k, v)) longEntries.push([k, v]);
-    else shortEntries.push([k, v]);
-  }
-
-  const score = call.score ?? call.performance_score ?? result["Performance Global Score"];
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Score global destacado */}
-      {score != null && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,194,255,0.08)', borderRadius: 12, padding: '10px 12px', border: '1px solid rgba(0,194,255,0.15)' }}>
-          <Star style={{ width: 16, height: 16, color: 'var(--cyan)', flexShrink: 0 }} />
-          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--cyan)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Score Global</span>
-          <span style={{ marginLeft: 'auto', fontSize: 18, fontWeight: 800, color: 'var(--cyan)', fontFamily: "'JetBrains Mono', monospace" }}>{String(score)}</span>
-        </div>
-      )}
-
-      {/* Campos curtos em grid */}
-      {shortEntries.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {shortEntries.map(([k, v]) => {
-            const label = RESULT_PRIORITY_FIELDS[k] ?? k;
-            const isScore = k === "Performance Global Score";
-            if (isScore) return null; // já exibido acima
-            const isSuccess = isSuccessValue(v);
-            const isFailure = isFailureValue(v);
-            return (
-              <div key={k} style={{ background: 'var(--glass-bg)', borderRadius: 10, padding: '8px 10px', border: '1px solid var(--glass-border)' }}>
-                <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</p>
-                {isSuccess ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--green)' }}>
-                    <CheckCircle2 style={{ width: 12, height: 12 }} /> Sim
-                  </span>
-                ) : isFailure ? (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600, color: 'var(--red)' }}>
-                    <XCircle style={{ width: 12, height: 12 }} /> Não
-                  </span>
-                ) : (
-                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{valueToLabel(v)}</p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Campos longos como blocos de texto */}
-      {longEntries.map(([k, v]) => {
-        const label = RESULT_PRIORITY_FIELDS[k] ?? k;
-        return (
-          <div key={k}>
-            <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</p>
-            <p style={{ fontSize: 12, color: 'var(--text-2)', background: 'var(--glass-bg)', borderRadius: 10, padding: '10px 12px', lineHeight: 1.6, border: '1px solid var(--glass-border)' }}>
-              {valueToLabel(v)}
-            </p>
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 interface ToastMsg { id: string; message: string; type: "success" | "error" }
@@ -336,6 +47,139 @@ function useToast() {
   return { toasts, show };
 }
 
+/** Dropdown multi-seleção de motivos de encerramento — persiste aberto até clique externo. */
+function ReasonMultiSelect({
+  allReasons, counts, totalCount, selected, onToggle, onClear,
+}: {
+  allReasons: string[];
+  counts: Record<string, number>;
+  totalCount: number;
+  selected: string[];
+  onToggle: (reason: string) => void;
+  onClear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const buttonLabel =
+    selected.length === 0 ? `Todos os resultados (${totalCount})`
+    : selected.length === 1 ? getReasonLabel(selected[0])
+    : `${selected.length} motivos selecionados`;
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        className="cx-select"
+        onClick={() => setOpen((v) => !v)}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 220, justifyContent: 'space-between' }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{buttonLabel}</span>
+        <ChevronDown style={{ width: 14, height: 14, flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+      </button>
+      {open && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            zIndex: 40,
+            minWidth: 280,
+            maxHeight: 360,
+            overflowY: 'auto',
+            background: 'var(--glass-bg-2)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid var(--glass-border)',
+            borderRadius: 12,
+            boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+            padding: 6,
+          }}
+        >
+          {allReasons.length === 0 ? (
+            <p style={{ padding: '12px 10px', fontSize: 12, color: 'var(--text-3)', textAlign: 'center' }}>
+              Nenhum motivo disponível
+            </p>
+          ) : (
+            <>
+              {allReasons.map((reason) => {
+                const checked = selected.includes(reason);
+                const label = getReasonLabel(reason);
+                const count = counts[reason] ?? 0;
+                return (
+                  <label
+                    key={reason}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      color: 'var(--text-1)',
+                      transition: 'background .12s',
+                      background: checked ? 'var(--red-lo)' : 'transparent',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!checked) (e.currentTarget as HTMLElement).style.background = 'var(--glass-bg)';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!checked) (e.currentTarget as HTMLElement).style.background = 'transparent';
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => onToggle(reason)}
+                      style={{ accentColor: 'var(--red)', flexShrink: 0 }}
+                    />
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{count}</span>
+                  </label>
+                );
+              })}
+              {selected.length > 0 && (
+                <>
+                  <div style={{ height: 1, background: 'var(--glass-border)', margin: '6px 0' }} />
+                  <button
+                    type="button"
+                    onClick={onClear}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      fontSize: 12,
+                      color: 'var(--text-3)',
+                      background: 'transparent',
+                    }}
+                  >
+                    <X style={{ width: 12, height: 12 }} /> Limpar seleção
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CallsPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const [calls, setCalls] = useState<Call[]>([]);
@@ -345,7 +189,7 @@ export default function CallsPage() {
   const [selected, setSelected] = useState<CallDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filterReason, setFilterReason] = useState("all");
+  const [filterReasons, setFilterReasons] = useState<string[]>([]);
   const [filterQueue, setFilterQueue] = useState("all");
   const [searchPhone, setSearchPhone] = useState("");
   const [searchCallId, setSearchCallId] = useState("");
@@ -355,7 +199,6 @@ export default function CallsPage() {
   const [showRetrabalhoModal, setShowRetrabalhoModal] = useState(false);
   const [retrabalhoName, setRetrabalhoName] = useState("");
   const [retrabalhoLoading, setRetrabalhoLoading] = useState(false);
-  const [showTranscript, setShowTranscript] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"created_at" | "cost" | "duration" | "score">("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -452,14 +295,13 @@ export default function CallsPage() {
   }
 
   async function openDetail(callId: string) {
-    setShowTranscript(false);
     const res = await fetch(`/api/tenants/${tenantId}/calls/${callId}`);
     const data = await res.json();
     setSelected(data.call);
   }
 
   const filteredCalls = calls.filter((c) => {
-    const matchReason = filterReason === "all" || c.ended_reason === filterReason;
+    const matchReason = filterReasons.length === 0 || (c.ended_reason !== null && filterReasons.includes(c.ended_reason));
     const matchPhone  = !searchPhone
       || (c.lead_phone ?? "").includes(searchPhone.replace(/\D/g, ""))
       || (c.lead_name ?? "").toLowerCase().includes(searchPhone.trim().toLowerCase());
@@ -495,12 +337,22 @@ export default function CallsPage() {
 
   const totalCost   = calls.reduce((sum, c) => sum + (c.cost ?? 0), 0);
   const totalDurSec = calls.reduce((sum, c) => sum + (c.duration_seconds ?? 0), 0);
-  const hasActiveFilters = filterReason !== "all" || searchPhone || filterQueue !== "all" || searchCallId;
+  const hasActiveFilters = filterReasons.length > 0 || searchPhone || filterQueue !== "all" || searchCallId;
 
   // Valores únicos de ended_reason presentes nos dados (inclui erros dinâmicos do Vapi)
-  const dynamicReasons: string[] = Array.from(
-    new Set(calls.map((c) => c.ended_reason).filter(Boolean) as string[])
-  ).sort();
+  const dynamicReasons: string[] = useMemo(
+    () => Array.from(new Set(calls.map((c) => c.ended_reason).filter(Boolean) as string[]))
+      .sort((a, b) => getReasonLabel(a).localeCompare(getReasonLabel(b), "pt-BR")),
+    [calls]
+  );
+
+  const reasonCounts: Record<string, number> = useMemo(() => {
+    const acc: Record<string, number> = {};
+    for (const c of calls) {
+      if (c.ended_reason) acc[c.ended_reason] = (acc[c.ended_reason] ?? 0) + 1;
+    }
+    return acc;
+  }, [calls]);
 
   // Valores únicos do campo de interesse/critério de sucesso presentes nos dados
   const uniqueInteresseValues = useMemo(() => {
@@ -589,21 +441,16 @@ export default function CallsPage() {
               onChange={(e) => setSearchCallId(e.target.value)}
             />
           </div>
-          <select
-            className="cx-select"
-            value={filterReason}
-            onChange={(e) => setFilterReason(e.target.value)}
-          >
-            <option value="all">Todos os resultados ({calls.length})</option>
-            {dynamicReasons.map((reason) => {
-              const cfg = REASON_CONFIG[reason];
-              const count = calls.filter((c) => c.ended_reason === reason).length;
-              const label = cfg ? cfg.label : reason;
-              return (
-                <option key={reason} value={reason}>{label} ({count})</option>
-              );
-            })}
-          </select>
+          <ReasonMultiSelect
+            allReasons={dynamicReasons}
+            counts={reasonCounts}
+            totalCount={calls.length}
+            selected={filterReasons}
+            onToggle={(r) => setFilterReasons((prev) =>
+              prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]
+            )}
+            onClear={() => setFilterReasons([])}
+          />
           {/* Filtro por Critério de Sucesso */}
           <select
             className="cx-select"
@@ -619,7 +466,7 @@ export default function CallsPage() {
 
           {(hasActiveFilters || filterInteresse !== "all") && (
             <button
-              onClick={() => { setFilterReason("all"); setSearchPhone(""); setSearchCallId(""); setFilterQueue("all"); setFilterInteresse("all"); }}
+              onClick={() => { setFilterReasons([]); setSearchPhone(""); setSearchCallId(""); setFilterQueue("all"); setFilterInteresse("all"); }}
               style={{ fontSize: 12, color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: 4, transition: 'color .15s' }}
             >
               <X style={{ width: 14, height: 14 }} /> Limpar filtros
@@ -788,7 +635,7 @@ export default function CallsPage() {
                 const isUraSuspect = call.ended_reason === "customer-did-not-answer" && call.duration_seconds != null && call.duration_seconds >= 1 && call.duration_seconds <= 30;
                 const reason = isUraSuspect
                   ? { label: "Poss. URA/Caixa postal", badge: "badge-purple" }
-                  : (REASON_CONFIG[call.ended_reason ?? ""] ?? { label: call.ended_reason ?? "Em andamento", badge: "badge-gray" });
+                  : getReasonInfo(call.ended_reason);
                 const { relative, full } = formatRelativeTime(call.created_at);
                 const isSelected = selected?.id === call.id;
                 const score = call.score ?? call.performance_score;
@@ -895,191 +742,11 @@ export default function CallsPage() {
       )}
 
       {/* Drawer lateral */}
-      {selected && (
-        <>
-          {/* Backdrop */}
-          <div
-            className="modal-overlay"
-            style={{ background: 'rgba(0,0,0,0.40)', backdropFilter: 'blur(2px)', alignItems: 'stretch', justifyContent: 'flex-end' }}
-            onClick={() => setSelected(null)}
-          />
-
-          {/* Painel fixo da direita */}
-          <div
-            style={{
-              position: 'fixed',
-              right: 0,
-              top: 0,
-              height: '100%',
-              zIndex: 51,
-              display: 'flex',
-              flexDirection: 'column',
-              background: 'var(--glass-bg)',
-              backdropFilter: 'blur(24px) saturate(160%)',
-              WebkitBackdropFilter: 'blur(24px) saturate(160%)',
-              borderLeft: '1px solid var(--glass-border)',
-              boxShadow: '0 0 64px rgba(0,0,0,0.5)',
-              width: 440,
-            }}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--glass-border)', flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 28, height: 28, borderRadius: 10, background: 'var(--red-lo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <PhoneCall style={{ width: 14, height: 14, color: 'var(--red)' }} />
-                </div>
-                <div>
-                  <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>Detalhe da Chamada</h2>
-                  <p style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: "'JetBrains Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 240 }}>
-                    {isAdminOrOwner ? selected.vapi_call_id : `${selected.vapi_call_id.slice(0, 8)}…`}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelected(null)}
-                className="btn-icon"
-              >
-                <X style={{ width: 16, height: 16 }} />
-              </button>
-            </div>
-
-            {/* Conteúdo com scroll */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-              {/* Info básica — telefone + resultado */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                <div>
-                  <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>Telefone</p>
-                  <p className="mono" style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-1)' }}>
-                    {selected.lead_phone ? formatPhone(selected.lead_phone) : "—"}
-                  </p>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  {(() => {
-                    const r = REASON_CONFIG[selected.ended_reason ?? ""] ?? { label: selected.ended_reason ?? "—", badge: "badge-gray" };
-                    return <span className={`badge ${r.badge}`}>{r.label}</span>;
-                  })()}
-                </div>
-              </div>
-
-              {/* Métricas rápidas */}
-              <div style={{ display: 'grid', gap: 8, gridTemplateColumns: isAdminOrOwner ? '1fr 1fr 1fr' : '1fr 1fr' }}>
-                <div style={{ background: 'var(--glass-bg)', borderRadius: 12, padding: '10px 12px', textAlign: 'center', border: '1px solid var(--glass-border)' }}>
-                  <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Duração</p>
-                  <p className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)', marginTop: 2 }}>
-                    {formatDuration(selected.duration_seconds)}
-                  </p>
-                </div>
-                {isAdminOrOwner && (
-                  <div style={{ background: 'var(--glass-bg)', borderRadius: 12, padding: '10px 12px', textAlign: 'center', border: '1px solid var(--glass-border)' }}>
-                    <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Custo</p>
-                    <p className="mono" style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-1)', marginTop: 2 }}>
-                      {selected.cost != null ? `$${selected.cost.toFixed(4)}` : "—"}
-                    </p>
-                  </div>
-                )}
-                <div style={{ background: 'var(--glass-bg)', borderRadius: 12, padding: '10px 12px', textAlign: 'center', border: '1px solid var(--glass-border)' }}>
-                  <p style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 500 }}>Data</p>
-                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginTop: 2 }}>
-                    {new Date(selected.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-              </div>
-
-              {/* Avaliação estruturada */}
-              {(selected.outputs_flat || selected.interesse || selected.success_evaluation || selected.resumo) && (
-                <div>
-                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Avaliação</p>
-                  <EvaluationPanel call={selected} />
-                </div>
-              )}
-
-              {/* Resumo do assistente */}
-              {selected.summary && (
-                <div>
-                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Resumo</p>
-                  <p style={{ fontSize: 13, color: 'var(--text-2)', background: 'var(--glass-bg)', borderRadius: 10, padding: '12px 14px', lineHeight: 1.6, border: '1px solid var(--glass-border)' }}>
-                    {selected.summary}
-                  </p>
-                </div>
-              )}
-
-              {/* Gravação */}
-              {selected.recording_url && (
-                <div>
-                  <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Mic style={{ width: 14, height: 14 }} /> Gravação
-                  </p>
-                  <div style={{ background: 'var(--glass-bg)', borderRadius: 12, padding: 12, border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <audio
-                      controls
-                      src={selected.recording_url}
-                      style={{ width: '100%', height: 36 }}
-                    />
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <a
-                        href={selected.recording_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
-                      >
-                        <ExternalLink style={{ width: 12, height: 12 }} /> Mono
-                      </a>
-                      {selected.stereo_recording_url && (
-                        <a
-                          href={selected.stereo_recording_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
-                        >
-                          <ExternalLink style={{ width: 12, height: 12 }} /> Estéreo
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Transcrição colapsável */}
-              {selected.transcript && (
-                <div>
-                  <button
-                    onClick={() => setShowTranscript((v) => !v)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '100%', padding: '4px 0', transition: 'color .15s' }}
-                  >
-                    Transcrição
-                    {showTranscript ? <ChevronUp style={{ width: 14, height: 14, marginLeft: 'auto' }} /> : <ChevronDown style={{ width: 14, height: 14, marginLeft: 'auto' }} />}
-                  </button>
-                  {showTranscript && (
-                    <pre style={{ marginTop: 8, fontSize: 12, color: 'var(--text-2)', background: 'var(--glass-bg)', borderRadius: 10, padding: 12, whiteSpace: 'pre-wrap', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1.6, border: '1px solid var(--glass-border)' }}>
-                      {selected.transcript}
-                    </pre>
-                  )}
-                </div>
-              )}
-
-              {/* Vapi ID */}
-              <div style={{ paddingTop: 8, borderTop: '1px solid var(--glass-border)' }}>
-                {isAdminOrOwner ? (
-                  <>
-                    <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Vapi Call ID</p>
-                    <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', wordBreak: 'break-all', background: 'var(--glass-bg)', borderRadius: 8, padding: '6px 8px', userSelect: 'all', border: '1px solid var(--glass-border)' }}>
-                      {selected.vapi_call_id}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Call ID</p>
-                    <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', background: 'var(--glass-bg)', borderRadius: 8, padding: '6px 8px', border: '1px solid var(--glass-border)' }}>
-                      {selected.vapi_call_id.slice(0, 8)}…
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      <CallDetailDrawer
+        call={selected}
+        onClose={() => setSelected(null)}
+        isAdminOrOwner={isAdminOrOwner}
+      />
 
       {/* Toasts */}
       <div className="toast-container">
