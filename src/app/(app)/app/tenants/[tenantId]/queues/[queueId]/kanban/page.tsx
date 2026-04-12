@@ -1,15 +1,20 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft, RefreshCw, Loader2, AlertCircle, CheckCircle2, XCircle,
-  Clock, Phone, ChevronDown, Timer,
+  Clock, Phone, ChevronDown, Timer, Filter, AlertOctagon, Target, X,
 } from "lucide-react";
 import CallDetailDrawer from "@/components/CallDetailDrawer";
 import { type CallDetail, formatPhone, formatDuration } from "@/lib/calls-shared";
-import { getReasonInfo, getReasonTone } from "@/lib/call-reasons";
+import { getReasonInfo, getReasonTone, getReasonLabel } from "@/lib/call-reasons";
 import { createClient } from "@/lib/supabase/browser";
+import {
+  FilterDropdownShell,
+  FilterCheckItem,
+  FilterClearFooter,
+} from "@/components/FilterDropdown";
 
 interface KanbanCard {
   lead_id: string;
@@ -23,6 +28,7 @@ interface KanbanCard {
     duration_seconds: number | null;
     success_evaluation: boolean | null;
     interesse: string | null;
+    score: number | null;
   } | null;
 }
 
@@ -138,6 +144,12 @@ export default function KanbanPage() {
   const [drawerCall, setDrawerCall] = useState<CallDetail | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
 
+  // Filters (client-side)
+  const [minDuration, setMinDuration] = useState<string>("");
+  const [maxDuration, setMaxDuration] = useState<string>("");
+  const [filterReasons, setFilterReasons] = useState<string[]>([]);
+  const [filterInteresses, setFilterInteresses] = useState<string[]>([]);
+
   const isAdminOrOwner = userRole === "owner" || userRole === "admin";
 
   useEffect(() => {
@@ -212,6 +224,69 @@ export default function KanbanPage() {
     }
   }
 
+  // Unique reasons + interesse values across all loaded cards (for filter options)
+  const allCards: KanbanCard[] = useMemo(
+    () => columns.flatMap((c) => c.leads),
+    [columns]
+  );
+
+  const dynamicReasons = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of allCards) {
+      const r = c.last_call?.ended_reason;
+      if (r) counts.set(r, (counts.get(r) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => getReasonLabel(a[0]).localeCompare(getReasonLabel(b[0]), "pt-BR"));
+  }, [allCards]);
+
+  const dynamicInteresses = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of allCards) {
+      const v = c.last_call?.interesse;
+      if (v && typeof v === "string" && v.trim() !== "") {
+        counts.set(v.trim(), (counts.get(v.trim()) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => a[0].localeCompare(b[0], "pt-BR"));
+  }, [allCards]);
+
+  const minDur = minDuration === "" ? null : Number(minDuration);
+  const maxDur = maxDuration === "" ? null : Number(maxDuration);
+
+  const passesFilters = useCallback((card: KanbanCard) => {
+    // Duration range
+    if (minDur !== null || maxDur !== null) {
+      const d = card.last_call?.duration_seconds;
+      if (d == null) return false;
+      if (minDur !== null && d < minDur) return false;
+      if (maxDur !== null && d > maxDur) return false;
+    }
+    // Motivos
+    if (filterReasons.length > 0) {
+      const r = card.last_call?.ended_reason;
+      if (!r || !filterReasons.includes(r)) return false;
+    }
+    // Critérios de sucesso
+    if (filterInteresses.length > 0) {
+      const v = card.last_call?.interesse;
+      if (!v || !filterInteresses.includes(v)) return false;
+    }
+    return true;
+  }, [minDur, maxDur, filterReasons, filterInteresses]);
+
+  const hasActiveFilters =
+    minDuration !== "" || maxDuration !== "" || filterReasons.length > 0 || filterInteresses.length > 0;
+
+  const filteredColumns = useMemo(
+    () => columns.map((col) => ({
+      ...col,
+      leads: hasActiveFilters ? col.leads.filter(passesFilters) : col.leads,
+    })),
+    [columns, hasActiveFilters, passesFilters]
+  );
+
   return (
     <div>
       {/* Header */}
@@ -247,6 +322,162 @@ export default function KanbanPage() {
         </div>
       )}
 
+      {/* Filters */}
+      {!loading && allCards.length > 0 && (
+        <div className="gc" style={{ padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Filter style={{ width: 16, height: 16, color: 'var(--text-3)', flexShrink: 0 }} />
+
+            {/* Duration range */}
+            <FilterDropdownShell
+              icon={<Timer style={{ width: 14, height: 14, color: 'var(--text-3)' }} />}
+              active={minDuration !== "" || maxDuration !== ""}
+              minWidth={200}
+              panelMinWidth={240}
+              buttonLabel={
+                minDuration === "" && maxDuration === "" ? "Duração"
+                : `${minDuration || "0"}s – ${maxDuration || "∞"}`
+              }
+            >
+              {(close) => (
+                <div style={{ padding: '8px 6px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <p style={{ fontSize: 11, color: 'var(--text-3)', margin: 0 }}>Intervalo de duração (segundos)</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="mín"
+                      className="form-input"
+                      style={{ width: 90, fontSize: 12 }}
+                      value={minDuration}
+                      onChange={(e) => setMinDuration(e.target.value)}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--text-3)' }}>—</span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="máx"
+                      className="form-input"
+                      style={{ width: 90, fontSize: 12 }}
+                      value={maxDuration}
+                      onChange={(e) => setMaxDuration(e.target.value)}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => { setMinDuration(""); setMaxDuration(""); }}
+                      className="cx-filter-btn"
+                      style={{ fontSize: 11, flex: 1, justifyContent: 'center' }}
+                    >
+                      Limpar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={close}
+                      className="btn btn-primary"
+                      style={{ fontSize: 11, flex: 1, padding: '6px 10px' }}
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </FilterDropdownShell>
+
+            {/* Motivos de encerramento */}
+            <FilterDropdownShell
+              icon={<AlertOctagon style={{ width: 14, height: 14, color: 'var(--text-3)' }} />}
+              active={filterReasons.length > 0}
+              minWidth={220}
+              buttonLabel={
+                filterReasons.length === 0 ? "Motivos de encerramento"
+                : filterReasons.length === 1 ? getReasonLabel(filterReasons[0])
+                : `${filterReasons.length} motivos`
+              }
+            >
+              {() => (
+                <>
+                  {dynamicReasons.length === 0 ? (
+                    <p style={{ padding: '12px 10px', fontSize: 12, color: 'var(--text-3)', textAlign: 'center' }}>
+                      Nenhum motivo disponível
+                    </p>
+                  ) : (
+                    <>
+                      {dynamicReasons.map(([reason, count]) => (
+                        <FilterCheckItem
+                          key={reason}
+                          checked={filterReasons.includes(reason)}
+                          onToggle={() => setFilterReasons((prev) =>
+                            prev.includes(reason) ? prev.filter((x) => x !== reason) : [...prev, reason]
+                          )}
+                          label={getReasonLabel(reason)}
+                          count={count}
+                        />
+                      ))}
+                      {filterReasons.length > 0 && (
+                        <FilterClearFooter onClear={() => setFilterReasons([])} />
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </FilterDropdownShell>
+
+            {/* Critérios de sucesso */}
+            <FilterDropdownShell
+              icon={<Target style={{ width: 14, height: 14, color: 'var(--text-3)' }} />}
+              active={filterInteresses.length > 0}
+              minWidth={200}
+              buttonLabel={
+                filterInteresses.length === 0 ? "Critérios de sucesso"
+                : filterInteresses.length === 1 ? filterInteresses[0]
+                : `${filterInteresses.length} critérios`
+              }
+            >
+              {() => (
+                <>
+                  {dynamicInteresses.length === 0 ? (
+                    <p style={{ padding: '12px 10px', fontSize: 12, color: 'var(--text-3)', textAlign: 'center' }}>
+                      Nenhum critério disponível
+                    </p>
+                  ) : (
+                    <>
+                      {dynamicInteresses.map(([v, count]) => (
+                        <FilterCheckItem
+                          key={v}
+                          checked={filterInteresses.includes(v)}
+                          onToggle={() => setFilterInteresses((prev) =>
+                            prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]
+                          )}
+                          label={v}
+                          count={count}
+                        />
+                      ))}
+                      {filterInteresses.length > 0 && (
+                        <FilterClearFooter onClear={() => setFilterInteresses([])} />
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </FilterDropdownShell>
+
+            {hasActiveFilters && (
+              <button
+                onClick={() => {
+                  setMinDuration(""); setMaxDuration("");
+                  setFilterReasons([]); setFilterInteresses([]);
+                }}
+                style={{ fontSize: 12, color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: 4 }}
+              >
+                <X style={{ width: 14, height: 14 }} /> Limpar filtros
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Kanban board */}
       {loading ? (
         <div className="gc" style={{ padding: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
@@ -266,9 +497,9 @@ export default function KanbanPage() {
             paddingBottom: 14,
           }}
         >
-          {columns.map((col) => {
+          {filteredColumns.map((col) => {
             const isLoadingMore = expanding[col.index] ?? false;
-            const canLoadMore = col.leads.length < col.total;
+            const canLoadMore = col.leads.length < col.total && !hasActiveFilters;
             return (
               <div
                 key={col.index}
@@ -369,9 +600,30 @@ export default function KanbanPage() {
                             (e.currentTarget as HTMLElement).style.boxShadow = 'none';
                           }}
                         >
-                          {/* Title: phone */}
-                          <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)' }}>
-                            {formatPhone(card.phone)}
+                          {/* Header row: phone + score */}
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
+                            <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {formatPhone(card.phone)}
+                            </div>
+                            {card.last_call?.score != null && (
+                              <span
+                                className="mono"
+                                title="Score da ligação"
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: 'var(--text-1)',
+                                  background: 'var(--glass-bg-2)',
+                                  border: '1px solid var(--glass-border)',
+                                  padding: '2px 6px',
+                                  borderRadius: 999,
+                                  flexShrink: 0,
+                                  lineHeight: 1.2,
+                                }}
+                              >
+                                ★ {card.last_call.score}
+                              </span>
+                            )}
                           </div>
                           {/* Name */}
                           {card.name && (

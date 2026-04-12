@@ -23,6 +23,8 @@ interface CallRow {
   duration_seconds: number | null;
   success_evaluation: boolean | null;
   interesse: string | null;
+  performance_score: number | null;
+  score: number | null;
   created_at: string;
 }
 
@@ -38,6 +40,7 @@ interface KanbanCard {
     duration_seconds: number | null;
     success_evaluation: boolean | null;
     interesse: string | null;
+    score: number | null;
   } | null;
 }
 
@@ -124,7 +127,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     if (leadIds.length === 0) return new Map();
     const { data, error } = await service
       .from("call_records_flat")
-      .select("id, lead_id, ended_reason, duration_seconds, success_evaluation, interesse, created_at")
+      .select("id, lead_id, ended_reason, duration_seconds, success_evaluation, interesse, performance_score, score, created_at")
       .eq("tenant_id", tenantId)
       .eq("dial_queue_id", queueId)
       .in("lead_id", leadIds)
@@ -153,6 +156,7 @@ export async function GET(req: NextRequest, { params }: Params) {
           duration_seconds: c.duration_seconds,
           success_evaluation: c.success_evaluation,
           interesse: c.interesse,
+          score: c.score ?? c.performance_score ?? null,
         } : null,
       };
     });

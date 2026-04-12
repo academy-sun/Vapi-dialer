@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import {
@@ -20,6 +20,8 @@ import {
   AlertCircle,
   Plus,
   Loader2,
+  Target,
+  AlertOctagon,
 } from "lucide-react";
 import CallDetailDrawer, { InteresseBadge } from "@/components/CallDetailDrawer";
 import {
@@ -27,6 +29,12 @@ import {
   formatPhone, formatDuration, formatRelativeTime,
 } from "@/lib/calls-shared";
 import { getReasonInfo, getReasonLabel } from "@/lib/call-reasons";
+import {
+  FilterDropdownShell,
+  FilterCheckItem,
+  FilterRadioItem,
+  FilterClearFooter,
+} from "@/components/FilterDropdown";
 
 interface Queue { id: string; name: string; assistant_id: string | null }
 
@@ -45,139 +53,6 @@ function useToast() {
     setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3500);
   }, []);
   return { toasts, show };
-}
-
-/** Dropdown multi-seleção de motivos de encerramento — persiste aberto até clique externo. */
-function ReasonMultiSelect({
-  allReasons, counts, totalCount, selected, onToggle, onClear,
-}: {
-  allReasons: string[];
-  counts: Record<string, number>;
-  totalCount: number;
-  selected: string[];
-  onToggle: (reason: string) => void;
-  onClear: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
-
-  const buttonLabel =
-    selected.length === 0 ? `Todos os resultados (${totalCount})`
-    : selected.length === 1 ? getReasonLabel(selected[0])
-    : `${selected.length} motivos selecionados`;
-
-  return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        type="button"
-        className="cx-select"
-        onClick={() => setOpen((v) => !v)}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 220, justifyContent: 'space-between' }}
-      >
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{buttonLabel}</span>
-        <ChevronDown style={{ width: 14, height: 14, flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
-      </button>
-      {open && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            left: 0,
-            zIndex: 40,
-            minWidth: 280,
-            maxHeight: 360,
-            overflowY: 'auto',
-            background: 'var(--glass-bg-2)',
-            backdropFilter: 'blur(20px)',
-            border: '1px solid var(--glass-border)',
-            borderRadius: 12,
-            boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
-            padding: 6,
-          }}
-        >
-          {allReasons.length === 0 ? (
-            <p style={{ padding: '12px 10px', fontSize: 12, color: 'var(--text-3)', textAlign: 'center' }}>
-              Nenhum motivo disponível
-            </p>
-          ) : (
-            <>
-              {allReasons.map((reason) => {
-                const checked = selected.includes(reason);
-                const label = getReasonLabel(reason);
-                const count = counts[reason] ?? 0;
-                return (
-                  <label
-                    key={reason}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 10px',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      color: 'var(--text-1)',
-                      transition: 'background .12s',
-                      background: checked ? 'var(--red-lo)' : 'transparent',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!checked) (e.currentTarget as HTMLElement).style.background = 'var(--glass-bg)';
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!checked) (e.currentTarget as HTMLElement).style.background = 'transparent';
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => onToggle(reason)}
-                      style={{ accentColor: 'var(--red)', flexShrink: 0 }}
-                    />
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>{count}</span>
-                  </label>
-                );
-              })}
-              {selected.length > 0 && (
-                <>
-                  <div style={{ height: 1, background: 'var(--glass-border)', margin: '6px 0' }} />
-                  <button
-                    type="button"
-                    onClick={onClear}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      width: '100%',
-                      padding: '8px 10px',
-                      borderRadius: 8,
-                      fontSize: 12,
-                      color: 'var(--text-3)',
-                      background: 'transparent',
-                    }}
-                  >
-                    <X style={{ width: 12, height: 12 }} /> Limpar seleção
-                  </button>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export default function CallsPage() {
@@ -404,19 +279,37 @@ export default function CallsPage() {
           <Filter style={{ width: 16, height: 16, color: 'var(--text-3)', flexShrink: 0 }} />
 
           {queues.length > 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <ListOrdered style={{ width: 16, height: 16, color: 'var(--text-3)', flexShrink: 0 }} />
-              <select
-                className="cx-select"
-                value={filterQueue}
-                onChange={(e) => setFilterQueue(e.target.value)}
-              >
-                <option value="all">Todas as campanhas</option>
-                {queues.map((q) => (
-                  <option key={q.id} value={q.id}>{q.name}</option>
-                ))}
-              </select>
-            </div>
+            <FilterDropdownShell
+              icon={<ListOrdered style={{ width: 14, height: 14, color: 'var(--text-3)' }} />}
+              active={filterQueue !== "all"}
+              minWidth={220}
+              buttonLabel={
+                filterQueue === "all"
+                  ? "Todas as campanhas"
+                  : (queues.find((q) => q.id === filterQueue)?.name ?? "Campanha")
+              }
+            >
+              {(close) => (
+                <>
+                  <FilterRadioItem
+                    checked={filterQueue === "all"}
+                    onSelect={() => { setFilterQueue("all"); close(); }}
+                    label="Todas as campanhas"
+                  />
+                  {queues.map((q) => (
+                    <FilterRadioItem
+                      key={q.id}
+                      checked={filterQueue === q.id}
+                      onSelect={() => { setFilterQueue(q.id); close(); }}
+                      label={q.name}
+                    />
+                  ))}
+                  {filterQueue !== "all" && (
+                    <FilterClearFooter onClear={() => { setFilterQueue("all"); close(); }} />
+                  )}
+                </>
+              )}
+            </FilterDropdownShell>
           )}
 
           <div style={{ position: 'relative' }}>
@@ -441,28 +334,81 @@ export default function CallsPage() {
               onChange={(e) => setSearchCallId(e.target.value)}
             />
           </div>
-          <ReasonMultiSelect
-            allReasons={dynamicReasons}
-            counts={reasonCounts}
-            totalCount={calls.length}
-            selected={filterReasons}
-            onToggle={(r) => setFilterReasons((prev) =>
-              prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]
-            )}
-            onClear={() => setFilterReasons([])}
-          />
-          {/* Filtro por Critério de Sucesso */}
-          <select
-            className="cx-select"
-            value={filterInteresse}
-            onChange={(e) => setFilterInteresse(e.target.value)}
+          <FilterDropdownShell
+            icon={<AlertOctagon style={{ width: 14, height: 14, color: 'var(--text-3)' }} />}
+            active={filterReasons.length > 0}
+            minWidth={220}
+            buttonLabel={
+              filterReasons.length === 0 ? `Todos os resultados (${calls.length})`
+              : filterReasons.length === 1 ? getReasonLabel(filterReasons[0])
+              : `${filterReasons.length} motivos selecionados`
+            }
           >
-            <option value="all">Qualquer critério de sucesso</option>
-            <option value="none">— Sem avaliação</option>
-            {uniqueInteresseValues.map((v) => (
-              <option key={v} value={v}>{v}</option>
-            ))}
-          </select>
+            {() => (
+              <>
+                {dynamicReasons.length === 0 ? (
+                  <p style={{ padding: '12px 10px', fontSize: 12, color: 'var(--text-3)', textAlign: 'center' }}>
+                    Nenhum motivo disponível
+                  </p>
+                ) : (
+                  <>
+                    {dynamicReasons.map((reason) => (
+                      <FilterCheckItem
+                        key={reason}
+                        checked={filterReasons.includes(reason)}
+                        onToggle={() => setFilterReasons((prev) =>
+                          prev.includes(reason) ? prev.filter((x) => x !== reason) : [...prev, reason]
+                        )}
+                        label={getReasonLabel(reason)}
+                        count={reasonCounts[reason] ?? 0}
+                      />
+                    ))}
+                    {filterReasons.length > 0 && (
+                      <FilterClearFooter onClear={() => setFilterReasons([])} />
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </FilterDropdownShell>
+
+          {/* Filtro por Critério de Sucesso */}
+          <FilterDropdownShell
+            icon={<Target style={{ width: 14, height: 14, color: 'var(--text-3)' }} />}
+            active={filterInteresse !== "all"}
+            minWidth={200}
+            buttonLabel={
+              filterInteresse === "all" ? "Qualquer critério"
+              : filterInteresse === "none" ? "Sem avaliação"
+              : filterInteresse
+            }
+          >
+            {(close) => (
+              <>
+                <FilterRadioItem
+                  checked={filterInteresse === "all"}
+                  onSelect={() => { setFilterInteresse("all"); close(); }}
+                  label="Qualquer critério"
+                />
+                <FilterRadioItem
+                  checked={filterInteresse === "none"}
+                  onSelect={() => { setFilterInteresse("none"); close(); }}
+                  label="— Sem avaliação"
+                />
+                {uniqueInteresseValues.map((v) => (
+                  <FilterRadioItem
+                    key={v}
+                    checked={filterInteresse === v}
+                    onSelect={() => { setFilterInteresse(v); close(); }}
+                    label={v}
+                  />
+                ))}
+                {filterInteresse !== "all" && (
+                  <FilterClearFooter onClear={() => { setFilterInteresse("all"); close(); }} />
+                )}
+              </>
+            )}
+          </FilterDropdownShell>
 
           {(hasActiveFilters || filterInteresse !== "all") && (
             <button
