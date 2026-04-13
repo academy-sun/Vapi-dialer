@@ -12,13 +12,13 @@
     }
   ],
   "functions": {
-    "api/tenants/*/lead-lists/*/import/route.ts": {
+    "src/app/api/tenants/[tenantId]/lead-lists/[leadListId]/import/route.ts": {
       "maxDuration": 300
     },
-    "api/tenants/*/analytics/route.ts": {
+    "src/app/api/tenants/[tenantId]/analytics/route.ts": {
       "maxDuration": 120
     },
-    "api/webhooks/vapi/*/route.ts": {
+    "src/app/api/webhooks/vapi/[tenantId]/route.ts": {
       "maxDuration": 60
     }
   }
