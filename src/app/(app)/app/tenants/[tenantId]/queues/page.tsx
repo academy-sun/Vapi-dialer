@@ -964,13 +964,13 @@ function LeadsTab({
                           const calls = lead.call_records ?? [];
                           const maxDuration = calls.length > 0 ? Math.max(...calls.map(c => c.duration_seconds)) : 0;
                           return (
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                              <CheckCircle2 style={{ width: "16px", height: "16px", color: "var(--green)" }} title="Atendido" />
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }} title="Atendido">
+                              <CheckCircle2 style={{ width: "16px", height: "16px", color: "var(--green)" }} />
                               {maxDuration > 0 && <span style={{ fontSize: "10px", color: "var(--text-3)", marginTop: "2px" }}>{(maxDuration / 60 >= 1) ? Math.floor(maxDuration / 60) + 'm ' + (maxDuration % 60) + 's' : maxDuration + 's'}</span>}
                             </div>
                           );
                         }
-                        if (NO_ANSWER.has(outcome) || outcome.startsWith("sip-") || outcome.startsWith("pipeline-error")) return <XCircle style={{ width: "16px", height: "16px", color: "var(--text-3)", display: "inline-block" }} title="Não atendido" />;
+                        if (NO_ANSWER.has(outcome) || outcome.startsWith("sip-") || outcome.startsWith("pipeline-error")) return <span title="Não atendido"><XCircle style={{ width: "16px", height: "16px", color: "var(--text-3)", display: "inline-block" }} /></span>;
                         return <span style={{ color: "var(--text-3)" }}>—</span>;
                       })()}
                     </td>
