@@ -43,6 +43,7 @@ interface Lead {
   attempt_count: number; data_json: Record<string, string>;
   last_outcome?: string; created_at: string;
   next_attempt_at?: string;
+  call_records?: { id: string; duration_seconds: number; ended_reason: string }[];
 }
 interface ToastMsg { id: string; message: string; type: "success" | "error" }
 
@@ -723,6 +724,10 @@ function LeadsTab({
   const [search, setSearch]           = useState("");
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [filters, setFilters] = useState({
+    status: "", attempts: "", answered: "", scheduled: "", duration: ""
+  });
+
   const limit = 20;
 
   const loadLeads = useCallback(async (p: number, q?: string) => {
@@ -730,12 +735,18 @@ function LeadsTab({
     const s = q !== undefined ? q : search;
     const qs = new URLSearchParams({ page: String(p), limit: String(limit) });
     if (s) qs.set("search", s);
+    if (filters.status) qs.set("status", filters.status);
+    if (filters.attempts) qs.set("attempt_count", filters.attempts);
+    if (filters.answered) qs.set("answered", filters.answered);
+    if (filters.scheduled) qs.set("scheduled", filters.scheduled);
+    if (filters.duration) qs.set("min_duration", filters.duration);
+    
     const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${queue.lead_list_id}/leads?${qs}`);
     const data = await res.json();
     setLeads(data.leads ?? []);
     setTotal(data.total ?? 0);
     setLoading(false);
-  }, [tenantId, queue.lead_list_id, search]);
+  }, [tenantId, queue.lead_list_id, search, filters]);
 
   useEffect(() => {
     loadLeads(page);
@@ -840,6 +851,48 @@ function LeadsTab({
         </div>
       )}
 
+      {/* Filters bar */}
+      <div style={{ padding: "12px 20px", display: "flex", gap: "8px", flexWrap: "wrap", borderBottom: "1px solid var(--glass-border)", background: "var(--app-bg)" }}>
+        <select className="cx-select" style={{ fontSize: "12px", padding: "4px 8px", height: "auto" }} value={filters.status} onChange={e => { setFilters(f => ({ ...f, status: e.target.value })); setPage(1); }}>
+          <option value="">Status (Todos)</option>
+          <option value="new">Novo</option>
+          <option value="queued">Aguardando</option>
+          <option value="calling">Em ligação</option>
+          <option value="completed">Concluído</option>
+          <option value="failed">Falhou</option>
+        </select>
+        <select className="cx-select" style={{ fontSize: "12px", padding: "4px 8px", height: "auto" }} value={filters.attempts} onChange={e => { setFilters(f => ({ ...f, attempts: e.target.value })); setPage(1); }}>
+          <option value="">Nº Tentativas (Últ/Qte)</option>
+          <option value="0">0 tentativa</option>
+          <option value="1">1 tentativa</option>
+          <option value="2">2 tentativas</option>
+          <option value="3">3 tentativas</option>
+          <option value="4">4 tentativas</option>
+        </select>
+        <select className="cx-select" style={{ fontSize: "12px", padding: "4px 8px", height: "auto" }} value={filters.answered} onChange={e => { setFilters(f => ({ ...f, answered: e.target.value })); setPage(1); }}>
+          <option value="">Atendido? (Ambos)</option>
+          <option value="yes">Sim</option>
+          <option value="no">Não</option>
+        </select>
+        <select className="cx-select" style={{ fontSize: "12px", padding: "4px 8px", height: "auto" }} value={filters.scheduled} onChange={e => { setFilters(f => ({ ...f, scheduled: e.target.value })); setPage(1); }}>
+          <option value="">Próx. Tentativa agendada? (Ambos)</option>
+          <option value="yes">Sim</option>
+          <option value="no">Não (em branco)</option>
+        </select>
+        <select className="cx-select" style={{ fontSize: "12px", padding: "4px 8px", height: "auto" }} value={filters.duration} onChange={e => { setFilters(f => ({ ...f, duration: e.target.value })); setPage(1); }}>
+          <option value="">Duração (Qualquer)</option>
+          <option value="15">&gt; 15 segs</option>
+          <option value="30">&gt; 30 segs</option>
+          <option value="60">&gt; 1 min</option>
+          <option value="120">&gt; 2 min</option>
+        </select>
+        {(filters.status || filters.attempts || filters.answered || filters.scheduled || filters.duration) && (
+          <button onClick={() => { setFilters({ status: "", attempts: "", answered: "", scheduled: "", duration: "" }); setPage(1); }} className="btn-icon" style={{ fontSize: "11px", padding: "2px 6px" }}>
+            Limpar filtros
+          </button>
+        )}
+      </div>
+
       {/* Leads table */}
       {loading ? (
         <div className="cx-loading" style={{ height: "128px" }}>
@@ -877,7 +930,11 @@ function LeadsTab({
                 const name = dj.first_name ?? dj.nome ?? dj.name ?? dj.Name ?? dj.Nome ?? dj.full_name ?? dj.fullName ?? dj.cliente ?? dj.contact ?? "";
                 return (
                   <tr key={lead.id}>
-                    <td className="mono" style={{ fontSize: "12px" }}>{lead.phone_e164}</td>
+                    <td className="mono" style={{ fontSize: "12px" }}>
+                      <Link href={`/app/tenants/${tenantId}/calls?phone=${encodeURIComponent(lead.phone_e164)}`} title="Ver chamadas do número" style={{ color: "var(--cyan)", textDecoration: "none" }} className="hover:underline">
+                        {lead.phone_e164}
+                      </Link>
+                    </td>
                     <td style={{ maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name || <span style={{ color: "var(--text-3)" }}>—</span>}</td>
                     <td>
                       <span className={sc.badge}>
@@ -903,8 +960,17 @@ function LeadsTab({
                           "pipeline-error", "transport-error",
                         ]);
                         const outcome = lead.last_outcome ?? "";
-                        if (ANSWERED.has(outcome)) return <CheckCircle2 style={{ width: "16px", height: "16px", color: "var(--green)", display: "inline-block" }} />;
-                        if (NO_ANSWER.has(outcome) || outcome.startsWith("sip-") || outcome.startsWith("pipeline-error")) return <XCircle style={{ width: "16px", height: "16px", color: "var(--text-3)", display: "inline-block" }} />;
+                        if (ANSWERED.has(outcome)) {
+                          const calls = lead.call_records ?? [];
+                          const maxDuration = calls.length > 0 ? Math.max(...calls.map(c => c.duration_seconds)) : 0;
+                          return (
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                              <CheckCircle2 style={{ width: "16px", height: "16px", color: "var(--green)" }} title="Atendido" />
+                              {maxDuration > 0 && <span style={{ fontSize: "10px", color: "var(--text-3)", marginTop: "2px" }}>{(maxDuration / 60 >= 1) ? Math.floor(maxDuration / 60) + 'm ' + (maxDuration % 60) + 's' : maxDuration + 's'}</span>}
+                            </div>
+                          );
+                        }
+                        if (NO_ANSWER.has(outcome) || outcome.startsWith("sip-") || outcome.startsWith("pipeline-error")) return <XCircle style={{ width: "16px", height: "16px", color: "var(--text-3)", display: "inline-block" }} title="Não atendido" />;
                         return <span style={{ color: "var(--text-3)" }}>—</span>;
                       })()}
                     </td>
@@ -915,7 +981,14 @@ function LeadsTab({
                           {new Date(lead.next_attempt_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                         </span>
                       ) : (
-                        <span style={{ color: "var(--text-3)" }}>—</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ color: "var(--text-3)" }}>—</span>
+                          {lead.status === "failed" && lead.last_outcome && (
+                            <span title={`Não tentará novamente.\nÚltimo erro: ${lead.last_outcome}`} style={{ cursor: "help", display: "inline-flex", background: "var(--glass-bg-2)", padding: "2px", borderRadius: "50%" }}>
+                              <AlertCircle style={{ width: "12px", height: "12px", color: "var(--red)" }} />
+                            </span>
+                          )}
+                        </div>
                       )}
                     </td>
                     <td style={{ textAlign: "right", padding: "8px" }}>

@@ -269,10 +269,14 @@ async function handleEndOfCallReport(
   const endedReason         = (message.endedReason as string) ?? null;
   const cost                = (message.cost        as number) ?? null;
   const transcript          = (message.transcript  as string) ?? null;
-  const summary             = (message.analysis    as Record<string, unknown>)?.summary as string ?? null;
+  const analysis            = (message.analysis as Record<string, unknown>) ?? {};
+  const summary             = (analysis.summary as string) ?? null;
   const durationSeconds     = (message.durationSeconds as number) ?? null;
   const artifact            = (message.artifact as Record<string, unknown>) ?? {};
-  const structuredOutputs   = (artifact.structuredOutputs ?? null) as Record<string, unknown> | null;
+  // structuredOutputs can come from either artifact.structuredOutputs OR analysis.structuredData
+  const artifactSO          = (artifact.structuredOutputs ?? null) as Record<string, unknown> | null;
+  const analysisSO          = (analysis.structuredData ?? null) as Record<string, unknown> | null;
+  const structuredOutputs   = analysisSO || artifactSO;
   const recordingUrl        = (artifact.recordingUrl       ?? message.recordingUrl       ?? null) as string | null;
   const stereoRecordingUrl  = (artifact.stereoRecordingUrl ?? message.stereoRecordingUrl ?? null) as string | null;
   const startedAt           = (message.startedAt    as string) ?? null;

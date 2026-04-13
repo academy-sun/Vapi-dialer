@@ -18,34 +18,72 @@ export async function GET(req: NextRequest, { params }: Params) {
   const offset = (page - 1) * limit;
 
   const service = createServiceClient();
+  let query = service.from("leads").select("*, call_records(id, duration_seconds, ended_reason)", { count: "exact" });
 
   if (search) {
-    // Usa RPC para busca em data_json (JSONB cast ::text não é confiável via PostgREST .or())
-    const { data, error } = await service.rpc("search_leads", {
+    query = service.rpc("search_leads", {
       p_tenant_id:    tenantId,
       p_lead_list_id: leadListId,
       p_search:       search,
       p_limit:        limit,
       p_offset:       offset,
-    });
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    return NextResponse.json({ leads: data ?? [], total: null, page, limit });
+    }).select("*, call_records(id, duration_seconds, ended_reason)", { count: "exact" });
+  } else {
+    query = query
+      .eq("tenant_id", tenantId)
+      .eq("lead_list_id", leadListId)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
   }
 
-  // Sem busca: query normal com count exato
-  const { data, error, count } = await service
-    .from("leads")
-    .select("*", { count: "exact" })
-    .eq("tenant_id", tenantId)
-    .eq("lead_list_id", leadListId)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+  // Filtros suportados
+  const statusFilter = url.searchParams.get("status");
+  if (statusFilter) query = query.eq("status", statusFilter);
+
+  const attemptsStr = url.searchParams.get("attempt_count");
+  if (attemptsStr) query = query.eq("attempt_count", parseInt(attemptsStr));
+
+  const answeredStr = url.searchParams.get("answered");
+  if (answeredStr === "yes") {
+    query = query.in("last_outcome", ["customer-ended-call", "assistant-ended-call", "exceeded-max-duration"]);
+  } else if (answeredStr === "no") {
+    query = query.not("last_outcome", "in", '("customer-ended-call", "assistant-ended-call", "exceeded-max-duration")');
+  }
+
+  const scheduledStr = url.searchParams.get("scheduled");
+  if (scheduledStr === "yes") {
+    query = query.not("next_attempt_at", "is", null);
+  } else if (scheduledStr === "no") {
+    query = query.is("next_attempt_at", null);
+  }
+
+  const minDuration = url.searchParams.get("min_duration");
+  if (minDuration) {
+    // Para filtrar por duration de call_records no Supabase via joins 1-to-many,
+    // devemos forçar um recarregamento via RPC se complexo, ou aplicar !inner() nas FKs,
+    // Mas postgrest não suporta filtrar pai por campo de filho num 1-to-N nativamente.
+    // Assim, se min_duration vier, usaremos fetch e filtraremos no back-end (pois não temos limites tão extremos no staging), ou deixaremos para o frontend se preferir.
+    // Para contornar rápido em Supabase, passamos a inner join no call_records:
+    // query.not('call_records', 'is', null).gte('call_records.duration_seconds', minDuration)
+    // Infelizmente o supabase JS client p/ 1toN é chato com inner. 
+    // Faremos apenas o fetch e retornamos no corpo.
+  }
+
+  const { data, error, count } = await query;
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  
+  // Filtrar pós query caso venha minDuration (limitação do postgrest rpc/join)
+  let resultData = data || [];
+  if (minDuration) {
+    const md = parseInt(minDuration);
+    resultData = resultData.filter(l => {
+      const crs = l.call_records || [];
+      return crs.some((cr: any) => cr.duration_seconds >= md);
+    });
+  }
 
-  return NextResponse.json({ leads: data, total: count, page, limit });
+  return NextResponse.json({ leads: resultData, total: count, page, limit });
 }
 
 // POST /api/tenants/:tenantId/lead-lists/:leadListId/leads

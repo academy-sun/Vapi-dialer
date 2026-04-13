@@ -61,10 +61,18 @@ export async function GET(req: NextRequest, { params }: Params) {
         schema,
         fields: Object.keys(properties),
       });
-    } catch {
       // skip failed structured output fetches
     }
   }
+
+  // Parse customFields from analysisPlan.structuredDataSchema
+  const analysisPlan = (assistant.analysisPlan ?? {}) as Record<string, unknown>;
+  const extractedSchema = (analysisPlan.structuredDataSchema ?? {}) as Record<string, unknown>;
+  const props = (extractedSchema.properties ?? {}) as Record<string, unknown>;
+  const customFields = Object.keys(props).map(k => {
+    const p = props[k] as Record<string, string>;
+    return { name: k, type: p.type ?? "string", description: p.description ?? "" };
+  });
 
   // Extract voice info
   const voice = (assistant.voice ?? {}) as Record<string, unknown>;
@@ -88,7 +96,8 @@ export async function GET(req: NextRequest, { params }: Params) {
       },
     },
     structuredOutputs,
-    allFields: structuredOutputs.flatMap((so) => so.fields),
+    customFields,
+    allFields: [...structuredOutputs.flatMap((so) => so.fields), ...customFields.map(f => f.name)],
   });
 }
 
@@ -106,9 +115,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     firstMessage?: string;
     systemPrompt?: string;
     voice?: Record<string, unknown>;
+    customFields?: Array<{ name: string; type: string; description: string }>;
   };
 
-  const { action, assistantId, serverUrl, name, firstMessage, systemPrompt, voice } = body;
+  const { action, assistantId, serverUrl, name, firstMessage, systemPrompt, voice, customFields } = body;
   if (!assistantId) return NextResponse.json({ error: "assistantId obrigatório" }, { status: 400 });
 
   const apiKey = await getApiKey(tenantId);
@@ -179,6 +189,23 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (name !== undefined) patch.name = name;
   if (firstMessage !== undefined) patch.firstMessage = firstMessage;
   if (voice !== undefined) patch.voice = voice;
+  if (customFields !== undefined) {
+    const properties: Record<string, unknown> = {};
+    for (const f of customFields) {
+      if (f.name.trim() !== "") {
+        properties[f.name.trim()] = { type: f.type, description: f.description };
+      }
+    }
+    const currentAnalysisPlan = (currentData.analysisPlan ?? {}) as Record<string, unknown>;
+    patch.analysisPlan = {
+      ...currentAnalysisPlan,
+      structuredDataPrompt: Object.keys(properties).length > 0 ? "Extraia os dados solicitados a partir da conversa." : null,
+      structuredDataSchema: Object.keys(properties).length > 0 ? {
+        type: "object",
+        properties,
+      } : null,
+    };
+  }
 
   if (systemPrompt !== undefined) {
     const currentModel = (currentData.model ?? {}) as Record<string, unknown>;
