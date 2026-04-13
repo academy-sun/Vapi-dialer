@@ -132,6 +132,26 @@ export async function GET(_req: NextRequest, { params }: Params) {
     .order("created_at", { ascending: false })
     .limit(5);
 
+  // Leads presos em "calling" há mais de 15 minutos
+  const staleThreshold = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const { data: staleLeads, count: staleCount } = await service
+    .from("leads")
+    .select("id, phone_e164, attempt_count, last_attempt_at", { count: "exact" })
+    .eq("tenant_id", tenantId)
+    .eq("lead_list_id", queue.lead_list_id)
+    .eq("status", "calling")
+    .lt("last_attempt_at", staleThreshold)
+    .order("last_attempt_at", { ascending: true })
+    .limit(5);
+
+  // Contagem de falhas de dispatch (call_records fantasmas)
+  const { count: dispatchFailureCount } = await service
+    .from("call_records")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("dial_queue_id", queueId)
+    .eq("is_dispatch_failure", true);
+
   // Resumo de problemas detectados
   const issues: string[] = [];
 
@@ -149,6 +169,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
   }
   if ((byStatus["new"] ?? 0) > 0 && (byStatus["queued"] ?? 0) === 0) {
     issues.push(`${byStatus["new"]} leads ainda em status "new" — inicie ou reinicie a fila para colocá-los na fila`);
+  }
+  if ((staleCount ?? 0) > 0) {
+    issues.push(`${staleCount} lead(s) preso(s) em "calling" há mais de 15 minutos — o webhook pode não ter sido recebido`);
   }
   if ((readyCount ?? 0) === 0 && queue.status === "running") {
     if ((byStatus["queued"] ?? 0) > 0) {
@@ -175,11 +198,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
       ...currentTimeInfo,
     },
     leads: {
-      by_status:    byStatus,
-      total:        Object.values(byStatus).reduce((a, b) => a + b, 0),
-      ready_to_call: readyCount ?? 0,
-      next_waiting:  nextWaiting ?? [],
+      by_status:          byStatus,
+      total:              Object.values(byStatus).reduce((a, b) => a + b, 0),
+      ready_to_call:      readyCount ?? 0,
+      stale_calling:      staleCount ?? 0,
+      stale_calling_leads: staleLeads ?? [],
+      next_waiting:       nextWaiting ?? [],
     },
+    dispatch_failures: dispatchFailureCount ?? 0,
     recent_calls: recentCalls ?? [],
     issues,
     ok: issues.length === 0,

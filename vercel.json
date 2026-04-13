@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/api/cron/analytics-refresh",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/stale-leads-check",
+      "schedule": "*/10 * * * *"
+    }
+  ],
+  "functions": {
+    "api/tenants/*/lead-lists/*/import/route.ts": {
+      "maxDuration": 300
+    },
+    "api/tenants/*/analytics/route.ts": {
+      "maxDuration": 120
+    },
+    "api/webhooks/vapi/*/route.ts": {
+      "maxDuration": 60
+    }
+  }
+}
