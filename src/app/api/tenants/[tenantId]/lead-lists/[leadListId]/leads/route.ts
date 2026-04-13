@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const offset = (page - 1) * limit;
 
   const service = createServiceClient();
-  let query = service.from("leads").select("*, call_records(id, duration_seconds, ended_reason)", { count: "exact" });
+  let query: any = service.from("leads").select("*, call_records(id, duration_seconds, ended_reason)", { count: "exact" });
 
   if (search) {
     query = service.rpc("search_leads", {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       p_search:       search,
       p_limit:        limit,
       p_offset:       offset,
-    }).select("*, call_records(id, duration_seconds, ended_reason)", { count: "exact" });
+    }).select("*, call_records(id, duration_seconds, ended_reason)");
   } else {
     query = query
       .eq("tenant_id", tenantId)
