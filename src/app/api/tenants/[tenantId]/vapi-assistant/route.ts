@@ -61,6 +61,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         schema,
         fields: Object.keys(properties),
       });
+    } catch {
       // skip failed structured output fetches
     }
   }
