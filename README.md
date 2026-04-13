@@ -4,7 +4,7 @@ Plataforma SaaS de discagem outbound com Vapi, BYO API Key por tenant, importaç
 
 ---
 
-## Stack
+## Stack.
 
 - **Next.js 14** (App Router) + TypeScript
 - **Supabase** (Auth + Postgres + RLS)
