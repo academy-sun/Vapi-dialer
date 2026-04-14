@@ -21,9 +21,6 @@ interface CallRow {
   lead_id: string;
   ended_reason: string | null;
   duration_seconds: number | null;
-  interesse: string | null;
-  performance_score: number | null;
-  score: number | null;
   created_at: string;
 }
 
@@ -116,8 +113,8 @@ export async function GET(req: NextRequest, { params }: Params) {
   async function fetchLastCalls(leadIds: string[]): Promise<Map<string, CallRow>> {
     if (leadIds.length === 0) return new Map();
     const { data, error } = await service
-      .from("call_records_flat")
-      .select("id, lead_id, ended_reason, duration_seconds, interesse, performance_score, score, created_at")
+      .from("call_records")
+      .select("id, lead_id, ended_reason, duration_seconds, created_at")
       .eq("tenant_id", tenantId)
       .eq("dial_queue_id", queueId)
       .in("lead_id", leadIds)
@@ -145,8 +142,8 @@ export async function GET(req: NextRequest, { params }: Params) {
           ended_reason: c.ended_reason,
           duration_seconds: c.duration_seconds,
           success_evaluation: null,
-          interesse: c.interesse,
-          score: c.score ?? c.performance_score ?? null,
+          interesse: null,
+          score: null,
         } : null,
       };
     });
