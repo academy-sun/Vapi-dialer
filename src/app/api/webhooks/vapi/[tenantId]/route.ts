@@ -465,13 +465,91 @@ async function updateLeadAfterCall(
     return;
   }
 
+  // ── 403 Forbidden (número bloqueado, SPAM, ou não autorizado pelo provedor) ──
+  // Erro permanente: tentar novamente não resolve — o provedor recusa a chamada.
+  // → Marcar como doNotCall para não desperdiçar recursos.
+  const isForbidden = endedReason != null && (
+    endedReason.includes("sip-403") ||
+    /^403$/.test(endedReason)
+  );
+
+  if (isForbidden) {
+    console.warn(
+      `[webhook] ⛔ 403 Forbidden (${endedReason}) | lead=${leadId}` +
+      ` — número bloqueado/proibido pelo provedor → doNotCall permanente`
+    );
+    await service
+      .from("leads")
+      .update({ status: "doNotCall", last_outcome: endedReason, next_attempt_at: null })
+      .eq("id", leadId);
+    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "doNotCall", service, callData);
+    return;
+  }
+
+  // ── 480 Temporarily Unavailable (desligado, sem sinal, fora de área) ──
+  // Erro transitório de longa duração: o número ficará inacessível por horas.
+  // Retry de 3 min é ineficaz — usa retry_delay_minutes da fila (mínimo 30 min).
+  const isTemporarilyUnavailable = endedReason != null && (
+    endedReason.includes("sip-480") ||
+    /^480$/.test(endedReason)
+  );
+
+  if (isTemporarilyUnavailable) {
+    const { data: currentLead } = await service
+      .from("leads")
+      .select("attempt_count")
+      .eq("id", leadId)
+      .single();
+    const { data: queueFor480 } = await service
+      .from("dial_queues")
+      .select("max_attempts, retry_delay_minutes, allowed_days, allowed_time_window")
+      .eq("id", queueId)
+      .eq("tenant_id", tenantId)
+      .single();
+    const attempts    = currentLead?.attempt_count ?? 0;
+    const maxAttempts = (queueFor480?.max_attempts as number | null | undefined) ?? 3;
+
+    if (attempts >= maxAttempts) {
+      console.warn(
+        `[webhook] ⛔ 480 Unavailable (${endedReason}) | lead=${leadId}` +
+        ` — tentativas esgotadas (${attempts}/${maxAttempts}) → failed`
+      );
+      await service
+        .from("leads")
+        .update({ status: "failed", last_outcome: endedReason, next_attempt_at: null })
+        .eq("id", leadId);
+      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
+    } else {
+      // Usar retry_delay_minutes da fila, mas no mínimo 30 min (não 3 min)
+      const configDelay = (queueFor480?.retry_delay_minutes as number | null | undefined) ?? 30;
+      const delayMin    = Math.max(30, configDelay);
+      const allowedDays = Array.isArray(queueFor480?.allowed_days) ? (queueFor480.allowed_days as number[]) : [];
+      const tw          = queueFor480?.allowed_time_window as TW | null ?? null;
+      const retryAt     = scheduleNextAttempt(new Date(), delayMin, allowedDays, tw, 30);
+      console.warn(
+        `[webhook] ⚠ 480 Unavailable (${endedReason}) | lead=${leadId}` +
+        ` — tentativa ${attempts}/${maxAttempts} | retry em ${delayMin}min (número temporariamente fora do ar)`
+      );
+      await service
+        .from("leads")
+        .update({
+          status:          "queued",
+          last_outcome:    endedReason,
+          next_attempt_at: retryAt,
+        })
+        .eq("id", leadId);
+    }
+    return;
+  }
+
   // ── Erros SIP ambíguos (503/408/500 do provedor) ──
   // Podem ser: SIP provider sobrecarregado (transitório) OU número inválido/indisponível (permanente).
   // → Conta como tentativa para evitar loop infinito em números inválidos.
   // → Retry rápido (3 min) para cobrir indisponibilidade transitória.
   // → Após max_attempts: failed (igual a qualquer outro não-atendimento).
+  // Nota: 403 e 480 são tratados acima com lógica própria.
   const isAmbiguousSip = endedReason != null && (
-    endedReason.includes("error-providerfault") ||
+    (endedReason.includes("error-providerfault") && !endedReason.includes("sip-403") && !endedReason.includes("sip-480")) ||
     endedReason.includes("error-sip-outbound") ||   // failed-to-connect e variantes
     endedReason.includes("sip-503") ||
     endedReason.includes("sip-408") ||
@@ -669,6 +747,7 @@ async function maybeOpenCircuitBreaker(
     endedReason.includes("error-providerfault") ||
     endedReason.includes("failed-to-connect") ||
     endedReason.includes("sip-403") ||
+    endedReason.includes("sip-480") ||
     endedReason.includes("sip-503") ||
     endedReason.includes("sip-500") ||
     endedReason.includes("sip-408");
@@ -687,6 +766,7 @@ async function maybeOpenCircuitBreaker(
       "ended_reason.ilike.%error-providerfault%," +
       "ended_reason.ilike.%failed-to-connect%," +
       "ended_reason.ilike.%sip-403%," +
+      "ended_reason.ilike.%sip-480%," +
       "ended_reason.ilike.%sip-503%," +
       "ended_reason.ilike.%sip-500%"
     );
