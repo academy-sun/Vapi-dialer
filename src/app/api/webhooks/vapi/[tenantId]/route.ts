@@ -82,8 +82,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         : 0;
 
       if (elapsedSec <= 25) {
-        const VOICEMAIL_RE = /grave (sua )?mensagem|ap[oó]s o sinal|deixe (seu|sua) recado|caixa postal|n[aã]o est[aá] dispon[ií]vel/i;
-        const IVR_RE = /para falar com|disque|tecle|digite|op[cç][aã]o|ramal/i;
+        const VOICEMAIL_RE = /grave (sua )?mensagem|ap[oó]s o sinal|deixe (seu|sua) recado|caixa postal|n[aã]o est[aá] dispon[ií]vel|entreg[ao].*recado|recado.*entreg[ao]|assim que.*dispon[ií]vel|n[uú]mero.*n[aã]o.*dispon[ií]vel|fora de cobertura|fora da [aá]rea|no momento n[aã]o (posso|poss[ou]|est[aá])|tente.*mais tarde|est[aá] desligad|est[aá] fora do ar|n[aã]o foi poss[ií]vel completar|n[uú]mero n[aã]o pode ser completad|celular.*dispon[ií]vel|telefone.*dispon[ií]vel/i;
+        const IVR_RE = /para falar com|disque|tecle|digite|op[cç][aã]o|ramal|por favor aguarde|pressione|bem-?vindo a[oa]?|voc[eê] ligou para|atendimento autom[aá]tico|menu principal/i;
 
         if (VOICEMAIL_RE.test(transcriptText) || IVR_RE.test(transcriptText)) {
           const callId = call?.id as string | undefined;
@@ -284,7 +284,8 @@ async function handleEndOfCallReport(
   const costBreakdown       = (message.costBreakdown as Record<string, unknown>) ?? null;
 
   // Dados completos para repassar ao webhook de saída
-  const callData = {
+  // machineDetected é preenchido após o fetch de existing (abaixo)
+  const callData: CallData = {
     vapiCallId,
     transcript,
     summary,
@@ -297,11 +298,14 @@ async function handleEndOfCallReport(
   // ── Idempotência: verificar se call_record já existe ──
   const { data: existing } = await service
     .from("call_records")
-    .select("id, lead_id, dial_queue_id, ended_reason")
+    .select("id, lead_id, dial_queue_id, ended_reason, machine_detected")
     .eq("vapi_call_id", vapiCallId)
     .single();
 
   if (existing?.ended_reason) return; // Já processado com sucesso — ignorar
+
+  // Propagar machine_detected para o callData (usado em updateLeadAfterCall)
+  if (existing?.machine_detected) callData.machineDetected = true;
 
   if (existing) {
     // ── Caso normal: worker criou o call_record, webhook finaliza ──
@@ -403,6 +407,7 @@ interface CallData {
   durationSeconds?:   number | null;
   structuredOutputs?: Record<string, unknown> | null;
   vapiMessage?:       Record<string, unknown>; // payload completo do end-of-call-report
+  machineDetected?:   boolean;                 // true se transcript detectou caixa postal/URA
 }
 
 async function updateLeadAfterCall(
@@ -624,13 +629,29 @@ async function updateLeadAfterCall(
     durationSeconds != null &&
     durationSeconds >= 1;
 
-  // assistant-ended-call com duração curta = caixa postal/URA detectada por nós via transcript
-  // e encerrada via controlUrl. O Vapi retorna "assistant-ended-call" nesse caso, mas
-  // NÃO é uma conversa real — deve voltar para retry como qualquer não-atendimento.
-  const voicemailDetectedByUs =
-    endedReason === "assistant-ended-call" &&
+  // Caixa postal/URA detectada via transcript (machine_detected = true no call_record).
+  // Dois sub-casos:
+  // 1) Nosso end-call chegou primeiro → Vapi retorna "assistant-ended-call" (duração curta)
+  // 2) A caixa postal desligou antes → Vapi retorna "customer-ended-call" (duração curta)
+  // Em ambos os casos NÃO é conversa real — deve voltar para retry.
+  const machineDetectedFlag = callData?.machineDetected === true;
+
+  // Caixa postal silenciosa: customer-ended-call com < 8s e sem fala do usuário no transcript.
+  // A caixa postal atendeu, ficou em silêncio e desligou — não há texto "User:" para detectar.
+  // Threshold conservador de 8s para não confundir com pessoa que atende e desliga rápido.
+  const transcript = callData?.transcript ?? "";
+  const userSpoke = /^User:/m.test(transcript);
+  const silentVoicemail =
+    endedReason === "customer-ended-call" &&
     durationSeconds != null &&
-    durationSeconds < 25;
+    durationSeconds < 8 &&
+    !userSpoke;
+
+  const voicemailDetectedByUs =
+    (endedReason === "assistant-ended-call" && durationSeconds != null && durationSeconds < 25) ||
+    (machineDetectedFlag && durationSeconds != null && durationSeconds < 35 &&
+      (endedReason === "customer-ended-call" || endedReason === "silence-timed-out" || endedReason === "assistant-ended-call")) ||
+    silentVoicemail;
 
   const isAnswered = endedReason != null && (ANSWERED_REASONS.has(endedReason) || silenceButAnswered) && !voicemailDetectedByUs;
 

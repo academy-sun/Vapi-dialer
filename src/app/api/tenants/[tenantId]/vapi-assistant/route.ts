@@ -197,15 +197,62 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         properties[f.name.trim()] = { type: f.type, description: f.description };
       }
     }
+
+    if (Object.keys(properties).length > 0) {
+      // Usar Structured Output (novo formato) em vez de Structured Data (deprecated)
+      const schema = { type: "object", properties };
+      const currentArtifactPlan = (currentData.artifactPlan ?? {}) as Record<string, unknown>;
+      const existingIds: string[] = Array.isArray(currentArtifactPlan.structuredOutputIds)
+        ? (currentArtifactPlan.structuredOutputIds as string[])
+        : [];
+      const existingId = existingIds[0] ?? null;
+
+      let structuredOutputId: string;
+      if (existingId) {
+        // Atualizar o Structured Output existente
+        const soRes = await fetch(`https://api.vapi.ai/structured-output/${existingId}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ schema }),
+          signal,
+        });
+        if (!soRes.ok) {
+          const err = await soRes.text().catch(() => "");
+          return NextResponse.json({ error: `Vapi structured-output PATCH error: ${soRes.status} ${err.slice(0, 200)}` }, { status: 502 });
+        }
+        structuredOutputId = existingId;
+      } else {
+        // Criar novo Structured Output
+        const soRes = await fetch(`https://api.vapi.ai/structured-output`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ name: `${assistantId}-outputs`, schema }),
+          signal,
+        });
+        if (!soRes.ok) {
+          const err = await soRes.text().catch(() => "");
+          return NextResponse.json({ error: `Vapi structured-output POST error: ${soRes.status} ${err.slice(0, 200)}` }, { status: 502 });
+        }
+        const so = await soRes.json() as Record<string, unknown>;
+        structuredOutputId = so.id as string;
+      }
+
+      patch.artifactPlan = { ...currentArtifactPlan, structuredOutputIds: [structuredOutputId] };
+    } else {
+      // Sem campos — limpar Structured Output do assistente
+      const currentArtifactPlan = (currentData.artifactPlan ?? {}) as Record<string, unknown>;
+      patch.artifactPlan = { ...currentArtifactPlan, structuredOutputIds: [] };
+    }
+
+    // Limpar Structured Data deprecated (analysisPlan.structuredDataSchema)
     const currentAnalysisPlan = (currentData.analysisPlan ?? {}) as Record<string, unknown>;
-    patch.analysisPlan = {
-      ...currentAnalysisPlan,
-      structuredDataPrompt: Object.keys(properties).length > 0 ? "Extraia os dados solicitados a partir da conversa." : null,
-      structuredDataSchema: Object.keys(properties).length > 0 ? {
-        type: "object",
-        properties,
-      } : null,
-    };
+    if (currentAnalysisPlan.structuredDataSchema || currentAnalysisPlan.structuredDataPrompt) {
+      patch.analysisPlan = {
+        ...currentAnalysisPlan,
+        structuredDataPrompt: null,
+        structuredDataSchema: null,
+      };
+    }
   }
 
   if (systemPrompt !== undefined) {
