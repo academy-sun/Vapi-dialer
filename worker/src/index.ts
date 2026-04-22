@@ -429,6 +429,40 @@ async function initiateVapiCall(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Registro de falha de dispatch (call_record fantasma)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Cria um call_record "fantasma" para falhas de dispatch.
+ * Permite rastrear por que um lead falhou mesmo sem chamada real na Vapi.
+ * Resolve a discrepância entre leads concluídos e chamadas registradas.
+ */
+async function createDispatchFailureRecord(
+  supabase: SupabaseClient,
+  tenantId: string,
+  queueId: string,
+  leadId: string,
+  endedReason: string,
+  summary?: string,
+): Promise<void> {
+  const { error } = await supabase.from("call_records").insert({
+    tenant_id:           tenantId,
+    dial_queue_id:       queueId,
+    lead_id:             leadId,
+    vapi_call_id:        `dispatch-fail-${Date.now()}-${leadId.slice(0, 8)}`,
+    status:              "ended",
+    ended_reason:        endedReason,
+    duration_seconds:    0,
+    cost:                0,
+    summary:             summary ?? `Falha no dispatch: ${endedReason}`,
+    is_dispatch_failure: true,
+  });
+  if (error) {
+    console.error(`[worker] ⚠ Falha ao criar dispatch failure record para lead ${leadId}:`, error.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Processar lead individual
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -605,14 +639,21 @@ async function processLead(
         ` | outcome=${lastOutcome} | fila=${queue.name}` +
         ` | resposta Vapi: ${errorBody}`
       );
-      await supabase
-        .from("leads")
-        .update({
-          status:        "failed",
-          attempt_count: newAttemptCount,
-          last_outcome:  lastOutcome,
-        })
-        .eq("id", lead.id);
+      await Promise.all([
+        supabase
+          .from("leads")
+          .update({
+            status:        "failed",
+            attempt_count: newAttemptCount,
+            last_outcome:  lastOutcome,
+          })
+          .eq("id", lead.id),
+        createDispatchFailureRecord(
+          supabase, queue.tenant_id, queue.id, lead.id,
+          `dispatch-${lastOutcome}`,
+          `Dado inválido: ${lastOutcome} — ${errorBody?.slice(0, 200) ?? "sem detalhe"}`,
+        ),
+      ]);
       return { hitLimit: false };
     }
 
@@ -638,14 +679,21 @@ async function processLead(
           `[worker] ✗ Número inválido (E.164) para lead ${lead.id} (${lead.phone_e164}) — falha permanente` +
           ` | fila=${queue.name} | resposta Vapi: ${errorBody}`
         );
-        await supabase
-          .from("leads")
-          .update({
-            status:        "failed",
-            attempt_count: newAttemptCount,
-            last_outcome:  "invalid-phone",
-          })
-          .eq("id", lead.id);
+        await Promise.all([
+          supabase
+            .from("leads")
+            .update({
+              status:        "failed",
+              attempt_count: newAttemptCount,
+              last_outcome:  "invalid-phone",
+            })
+            .eq("id", lead.id),
+          createDispatchFailureRecord(
+            supabase, queue.tenant_id, queue.id, lead.id,
+            "dispatch-invalid-phone",
+            `Número ${lead.phone_e164} não é E.164 válido`,
+          ),
+        ]);
         return { hitLimit: false };
       }
 
@@ -698,14 +746,21 @@ async function processLead(
         .eq("id", lead.id);
     } else {
       // Esgotou tentativas
-      await supabase
-        .from("leads")
-        .update({
-          status:        "failed",
-          attempt_count: newAttemptCount,
-          last_outcome:  "api-error",
-        })
-        .eq("id", lead.id);
+      await Promise.all([
+        supabase
+          .from("leads")
+          .update({
+            status:        "failed",
+            attempt_count: newAttemptCount,
+            last_outcome:  "api-error",
+          })
+          .eq("id", lead.id),
+        createDispatchFailureRecord(
+          supabase, queue.tenant_id, queue.id, lead.id,
+          "dispatch-api-error",
+          `Tentativas esgotadas (${newAttemptCount}/${queue.max_attempts}) — último erro: ${errorLabel?.slice(0, 200) ?? "desconhecido"}`,
+        ),
+      ]);
     }
   }
   return { hitLimit: false };
@@ -990,7 +1045,7 @@ async function updateMinutesCache(supabase: SupabaseClient): Promise<void> {
 // Recovery: libera leads travados em "calling" há mais de STALE_CALLING_MINUTES
 // ─────────────────────────────────────────────────────────────────────────────
 
-const STALE_CALLING_MINUTES = Number(process.env.STALE_CALLING_MINUTES ?? 30);
+const STALE_CALLING_MINUTES = Number(process.env.STALE_CALLING_MINUTES ?? 15);
 
 async function recoverStaleCalls(supabase: SupabaseClient): Promise<void> {
   const staleThreshold = new Date(Date.now() - STALE_CALLING_MINUTES * 60 * 1000).toISOString();

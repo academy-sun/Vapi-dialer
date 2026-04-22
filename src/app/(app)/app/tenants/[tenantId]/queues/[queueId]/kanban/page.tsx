@@ -528,9 +528,11 @@ export default function KanbanPage() {
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    {col.index === 0
-                      ? <Clock style={{ width: 14, height: 14, color: 'var(--text-3)' }} />
-                      : <Phone style={{ width: 14, height: 14, color: 'var(--text-3)' }} />}
+                    {col.index === 0 ? <Clock style={{ width: 14, height: 14, color: 'var(--text-3)' }} /> :
+                     col.index === 1 ? <Phone style={{ width: 14, height: 14, color: 'var(--text-3)' }} /> :
+                     col.index === 2 ? <XCircle style={{ width: 14, height: 14, color: 'var(--text-3)' }} /> :
+                     col.index === 3 ? <CheckCircle2 style={{ width: 14, height: 14, color: 'var(--green)' }} /> :
+                     <AlertCircle style={{ width: 14, height: 14, color: 'var(--red)' }} />}
                     <h3 style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       {col.label}
                     </h3>
@@ -605,25 +607,18 @@ export default function KanbanPage() {
                             <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-1)', minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {formatPhone(card.phone)}
                             </div>
-                            {card.last_call?.score != null && (
-                              <span
-                                className="mono"
-                                title="Score da ligação"
-                                style={{
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  color: 'var(--text-1)',
-                                  background: 'var(--glass-bg-2)',
-                                  border: '1px solid var(--glass-border)',
-                                  padding: '2px 6px',
-                                  borderRadius: 999,
-                                  flexShrink: 0,
-                                  lineHeight: 1.2,
-                                }}
-                              >
-                                ★ {card.last_call.score}
-                              </span>
-                            )}
+                            <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                              {card.attempt_count > 0 && (
+                                <span className="mono" title="Número de tentativas realizadas" style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', padding: '2px 6px', borderRadius: 999, lineHeight: 1.2 }}>
+                                  {card.attempt_count} tent.
+                                </span>
+                              )}
+                              {card.last_call?.score != null && (
+                                <span className="mono" title="Score da ligação" style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-1)', background: 'var(--glass-bg-2)', border: '1px solid var(--glass-border)', padding: '2px 6px', borderRadius: 999, lineHeight: 1.2 }}>
+                                  ★ {card.last_call.score}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           {/* Name */}
                           {card.name && (

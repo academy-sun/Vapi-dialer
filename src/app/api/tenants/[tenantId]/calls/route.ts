@@ -43,25 +43,37 @@ export async function GET(req: NextRequest, { params }: Params) {
     leads: { next_attempt_at: string | null } | null;
   };
 
-  let q = service
-    .from("call_records_flat")
-    .select(
-      `id, vapi_call_id, status, ended_reason, cost, summary, duration_seconds, created_at,
+  const FULL_SELECT = `id, vapi_call_id, status, ended_reason, cost, summary, duration_seconds, created_at,
        lead_phone, lead_name, interesse, performance_score, success_evaluation,
        resumo, pontos_melhoria, objecoes, motivos_falha, proximo_passo, score, outputs_flat,
-       leads:lead_id (next_attempt_at)`,
-      { count: "exact" }
-    )
-    .eq("tenant_id", tenantId)
-    .order(sortBy, { ascending, nullsFirst: false })
-    .range(from, from + pageSize - 1);
+       leads:lead_id (next_attempt_at)`;
+  const SAFE_SELECT = `id, vapi_call_id, status, ended_reason, cost, summary, duration_seconds, created_at,
+       lead_phone, lead_name, interesse, performance_score,
+       resumo, pontos_melhoria, objecoes, motivos_falha, proximo_passo, score, outputs_flat,
+       leads:lead_id (next_attempt_at)`;
 
-  if (queueId)       q = q.eq("dial_queue_id", queueId);
-  if (leadId)        q = q.eq("lead_id", leadId);
-  if (answeredOnly)  q = q.in("ended_reason", ["customer-ended-call", "assistant-ended-call"]);
-  if (maxDuration != null) q = q.lte("duration_seconds", maxDuration);
+  function buildQuery(selectFields: string) {
+    let q = service
+      .from("call_records_flat")
+      .select(selectFields, { count: "exact" })
+      .eq("tenant_id", tenantId)
+      .order(sortBy, { ascending, nullsFirst: false })
+      .range(from, from + pageSize - 1);
 
-  const { data, error, count } = await q;
+    if (queueId)       q = q.eq("dial_queue_id", queueId);
+    if (leadId)        q = q.eq("lead_id", leadId);
+    if (answeredOnly)  q = q.in("ended_reason", ["customer-ended-call", "assistant-ended-call"]);
+    if (maxDuration != null) q = q.lte("duration_seconds", maxDuration);
+    return q;
+  }
+
+  let { data, error, count } = await buildQuery(FULL_SELECT);
+
+  // Fallback: if success_evaluation column doesn't exist yet (migration 026 pending)
+  if (error && error.message?.includes("success_evaluation")) {
+    ({ data, error, count } = await buildQuery(SAFE_SELECT));
+  }
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ calls: (data ?? []) as unknown as CallRow[], total: count ?? 0 });

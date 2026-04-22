@@ -3,6 +3,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
+import CallDetailDrawer from "@/components/CallDetailDrawer";
+import { type CallDetail } from "@/lib/calls-shared";
 import {
   Plus,
   Upload,
@@ -28,6 +30,8 @@ import {
   EyeOff,
   RotateCcw,
   ArrowRight,
+  Filter,
+  ChevronDown as ChevronDownIcon,
 } from "lucide-react";
 
 interface LeadList {
@@ -1044,6 +1048,14 @@ export default function LeadsPage() {
   const [searchLead, setSearchLead]         = useState("");
   const [leadsTotal, setLeadsTotal]         = useState<number | null>(null);
   const [pageError, setPageError]           = useState<string | null>(null);
+  // Filtros avançados
+  const [filterStatus, setFilterStatus]     = useState<string[]>([]);
+  const [filterMinAttempts, setFilterMinAttempts] = useState("");
+  const [filterMaxAttempts, setFilterMaxAttempts] = useState("");
+  const [showFilters, setShowFilters]       = useState(false);
+  // Drawer de chamada
+  const [drawerCall, setDrawerCall]         = useState<CallDetail | null>(null);
+  const [drawerLoading, setDrawerLoading]   = useState(false);
   // Edição inline de nome da lista
   const [editingListId, setEditingListId]   = useState<string | null>(null);
   const [editingListName, setEditingListName] = useState("");
@@ -1071,6 +1083,11 @@ export default function LeadsPage() {
     return () => clearTimeout(timer);
   }, [searchLead]);
 
+  // Recarregar quando filtros mudam
+  useEffect(() => {
+    if (selectedListId) loadLeads(searchLead);
+  }, [filterStatus.join(","), filterMinAttempts, filterMaxAttempts]);
+
   async function loadLists() {
     setPageError(null);
     try {
@@ -1097,11 +1114,16 @@ export default function LeadsPage() {
     setLoadingLeads(true);
     const params = new URLSearchParams({ limit: "50" });
     if (search.trim()) params.set("search", search.trim());
+    if (filterStatus.length > 0) params.set("status", filterStatus.join(","));
+    if (filterMinAttempts) params.set("min_attempts", filterMinAttempts);
+    if (filterMaxAttempts) params.set("max_attempts", filterMaxAttempts);
     const res  = await fetch(`/api/tenants/${tenantId}/lead-lists/${selectedListId}/leads?${params}`);
     const data = await res.json();
     setLeads(data.leads ?? []);
     // Manter o total sem busca — só atualiza quando não há search ativo
-    if (!search.trim()) setLeadsTotal(data.total ?? null);
+    if (!search.trim() && filterStatus.length === 0 && !filterMinAttempts && !filterMaxAttempts) {
+      setLeadsTotal(data.total ?? null);
+    }
     setLoadingLeads(false);
   }
 
@@ -1181,6 +1203,27 @@ export default function LeadsPage() {
     if (!res.ok) throw new Error(data.error ?? "Erro ao adicionar lead");
     showToast(`Lead ${fields.phone} adicionado com sucesso!`);
     loadLeads(searchLead);
+  }
+
+  async function openLeadCall(leadId: string) {
+    setDrawerLoading(true);
+    try {
+      // Buscar chamadas do lead (a mais recente primeiro)
+      const res = await fetch(`/api/tenants/${tenantId}/calls?leadId=${leadId}&page_size=1`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const calls = data.calls ?? [];
+      if (calls.length === 0) {
+        showToast("Nenhuma chamada registrada para este lead", "error");
+        return;
+      }
+      // Buscar detalhe completo
+      const detailRes = await fetch(`/api/tenants/${tenantId}/calls/${calls[0].id}`);
+      const detailData = await detailRes.json();
+      setDrawerCall(detailData.call ?? null);
+    } finally {
+      setDrawerLoading(false);
+    }
   }
 
   async function deleteLead(leadId: string, phone: string) {
@@ -1461,6 +1504,84 @@ export default function LeadsPage() {
                 </div>
               </div>
 
+              {/* Filtros avançados */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: showFilters ? 12 : 0 }}>
+                <button
+                  onClick={() => setShowFilters((p) => !p)}
+                  className="cx-filter-btn"
+                  style={{
+                    fontSize: 11,
+                    gap: 4,
+                    color: (filterStatus.length > 0 || filterMinAttempts || filterMaxAttempts)
+                      ? "var(--cyan)" : "var(--text-3)",
+                  }}
+                >
+                  <Filter style={{ width: 13, height: 13 }} />
+                  Filtros
+                  {(filterStatus.length > 0 || filterMinAttempts || filterMaxAttempts) && (
+                    <span className="badge badge-blue" style={{ fontSize: 9, padding: "1px 5px", marginLeft: 2 }}>
+                      {filterStatus.length + (filterMinAttempts ? 1 : 0) + (filterMaxAttempts ? 1 : 0)}
+                    </span>
+                  )}
+                </button>
+                {(filterStatus.length > 0 || filterMinAttempts || filterMaxAttempts) && (
+                  <button
+                    onClick={() => { setFilterStatus([]); setFilterMinAttempts(""); setFilterMaxAttempts(""); }}
+                    style={{ fontSize: 11, color: "var(--text-3)", display: "flex", alignItems: "center", gap: 3 }}
+                  >
+                    <X style={{ width: 12, height: 12 }} /> Limpar
+                  </button>
+                )}
+              </div>
+              {showFilters && (
+                <div className="gc" style={{ padding: "12px 16px", marginBottom: 12 }}>
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    {/* Status */}
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".5px", display: "block", marginBottom: 4 }}>Status</label>
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                        {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                          <button
+                            key={key}
+                            onClick={() => setFilterStatus((prev) =>
+                              prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key]
+                            )}
+                            className={`badge ${filterStatus.includes(key) ? cfg.badge : "badge-gray"}`}
+                            style={{
+                              cursor: "pointer",
+                              fontSize: 10,
+                              opacity: filterStatus.length === 0 || filterStatus.includes(key) ? 1 : 0.5,
+                              transition: "opacity .15s",
+                            }}
+                          >
+                            {cfg.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Tentativas */}
+                    <div>
+                      <label style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: ".5px", display: "block", marginBottom: 4 }}>Tentativas</label>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <input
+                          type="number" min="0" placeholder="min"
+                          className="form-input" style={{ width: 60, fontSize: 11, padding: "4px 8px" }}
+                          value={filterMinAttempts}
+                          onChange={(e) => setFilterMinAttempts(e.target.value)}
+                        />
+                        <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>
+                        <input
+                          type="number" min="0" placeholder="max"
+                          className="form-input" style={{ width: 60, fontSize: 11, padding: "4px 8px" }}
+                          value={filterMaxAttempts}
+                          onChange={(e) => setFilterMaxAttempts(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {loadingLeads ? (
                 <div className="gc" style={{ padding: "0" }}>
                   <div>
@@ -1581,14 +1702,25 @@ export default function LeadsPage() {
                               </td>
                               <td style={{ textAlign: "center" }}>{lead.attempt_count}</td>
                               <td>
-                                <button
-                                  onClick={() => deleteLead(lead.id, lead.phone_e164)}
-                                  className="leads-action-btn danger"
-                                  style={{ marginLeft: "auto" }}
-                                  title="Apagar lead"
-                                >
-                                  <Trash2 style={{ width: 14, height: 14 }} />
-                                </button>
+                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  {lead.attempt_count > 0 && (
+                                    <button
+                                      onClick={() => openLeadCall(lead.id)}
+                                      className="leads-action-btn"
+                                      title="Ver ultima chamada"
+                                      disabled={drawerLoading}
+                                    >
+                                      <Eye style={{ width: 14, height: 14 }} />
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => deleteLead(lead.id, lead.phone_e164)}
+                                    className="leads-action-btn danger"
+                                    title="Apagar lead"
+                                  >
+                                    <Trash2 style={{ width: 14, height: 14 }} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -1659,6 +1791,20 @@ export default function LeadsPage() {
             showToast(`${added} lead(s) incluído(s) em "${campaignName}"${skipped > 0 ? ` · ${skipped} duplicata(s) ignorada(s)` : ""}`);
           }}
         />
+      )}
+
+      {/* Drawer de chamada */}
+      <CallDetailDrawer
+        call={drawerCall}
+        onClose={() => setDrawerCall(null)}
+        isAdminOrOwner={false}
+      />
+
+      {drawerLoading && (
+        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 60, background: "var(--glass-bg-2)", padding: "10px 16px", borderRadius: 12, display: "flex", alignItems: "center", gap: 8, border: "1px solid var(--glass-border)" }}>
+          <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} />
+          <span style={{ fontSize: 12 }}>Carregando chamada...</span>
+        </div>
       )}
 
       {/* Toasts */}

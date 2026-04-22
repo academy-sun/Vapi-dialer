@@ -27,11 +27,13 @@ interface AssistantCard {
   expanded: boolean;
   config: Assistant | null;
   structuredOutputs: StructuredOutput[];
+  customFields: Array<{ name: string; type: string; description: string }>;
   allFields: string[];
   saving: boolean;
   editName: string;
   editFirstMessage: string;
   editSystemPrompt: string;
+  editCustomFields: Array<{ name: string; type: string; description: string }>;
   error: string;
   saved: boolean;
 }
@@ -83,11 +85,13 @@ export default function AssistantsClient() {
       expanded: false,
       config: null,
       structuredOutputs: [],
+      customFields: [],
       allFields: [],
       saving: false,
       editName: a.name ?? "",
       editFirstMessage: "",
       editSystemPrompt: "",
+      editCustomFields: [],
       error: "",
       saved: false,
     })));
@@ -120,10 +124,12 @@ export default function AssistantsClient() {
       loaded: true,
       config: a,
       structuredOutputs: data.structuredOutputs ?? [],
+      customFields: data.customFields ?? [],
       allFields: data.allFields ?? [],
       editName: (a.name as string) ?? c.name,
       editFirstMessage: (a.firstMessage as string) ?? "",
       editSystemPrompt: (a.systemPrompt as string) ?? "",
+      editCustomFields: data.customFields ?? [],
     } : c));
   }
 
@@ -143,6 +149,7 @@ export default function AssistantsClient() {
         name: card.editName,
         firstMessage: card.editFirstMessage,
         systemPrompt: card.editSystemPrompt,
+        customFields: card.editCustomFields,
       }),
     });
     if (res.ok) {
@@ -439,6 +446,91 @@ export default function AssistantsClient() {
                         </span>
                       </div>
                     )}
+
+                    {/* Custom fields (Structured Outputs) */}
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <div>
+                          <label className="form-label" style={{ marginBottom: 0 }}>Variáveis Estruturadas a Extrair</label>
+                          <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
+                            O assistente tentará extrair esses dados ao final de cada chamada.
+                          </p>
+                        </div>
+                        <button
+                          className="btn-icon"
+                          style={{ fontSize: 12, padding: "4px 8px" }}
+                          onClick={() => updateCard(card.id, { editCustomFields: [...card.editCustomFields, { name: "", type: "string", description: "" }] })}
+                        >
+                          + Adicionar
+                        </button>
+                      </div>
+                      
+                      {card.editCustomFields.length === 0 ? (
+                        <div style={{ padding: "16px", background: "var(--glass-bg)", borderRadius: "var(--radius)", textAlign: "center", fontSize: 12, color: "var(--text-3)", border: "1px solid var(--glass-border)" }}>
+                          Nenhuma variável configurada.
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {card.editCustomFields.map((field, idx) => (
+                            <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "var(--glass-bg)", padding: "12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--glass-border)" }}>
+                              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+                                <div style={{ display: "flex", gap: 8 }}>
+                                  <input
+                                    type="text"
+                                    className="form-input"
+                                    style={{ flex: 1, fontSize: 12 }}
+                                    placeholder="Nome (ex: vendeu_plano)"
+                                    value={field.name}
+                                    onChange={(e) => {
+                                      const newFields = [...card.editCustomFields];
+                                      newFields[idx].name = e.target.value.replace(/[^a-zA-Z0-9_]/g, ""); // basic sanitization
+                                      updateCard(card.id, { editCustomFields: newFields });
+                                    }}
+                                  />
+                                  <select
+                                    className="cx-select form-input"
+                                    style={{ width: "100px", fontSize: 12, height: "36px" }}
+                                    value={field.type}
+                                    onChange={(e) => {
+                                      const newFields = [...card.editCustomFields];
+                                      newFields[idx].type = e.target.value;
+                                      updateCard(card.id, { editCustomFields: newFields });
+                                    }}
+                                  >
+                                    <option value="string">Texto</option>
+                                    <option value="boolean">Sim/Não</option>
+                                    <option value="number">Número</option>
+                                  </select>
+                                </div>
+                                <input
+                                  type="text"
+                                  className="form-input"
+                                  style={{ fontSize: 12 }}
+                                  placeholder="Descrição ou instrução para a IA (ex: 'true se o cliente topou')"
+                                  value={field.description}
+                                  onChange={(e) => {
+                                    const newFields = [...card.editCustomFields];
+                                    newFields[idx].description = e.target.value;
+                                    updateCard(card.id, { editCustomFields: newFields });
+                                  }}
+                                />
+                              </div>
+                              <button
+                                className="btn-icon"
+                                style={{ color: "var(--text-3)", padding: "6px" }}
+                                title="Remover variável"
+                                onClick={() => {
+                                  const newFields = card.editCustomFields.filter((_, i) => i !== idx);
+                                  updateCard(card.id, { editCustomFields: newFields });
+                                }}
+                              >
+                                <X style={{ width: 14, height: 14 }} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
                     {/* Save button */}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 4 }}>

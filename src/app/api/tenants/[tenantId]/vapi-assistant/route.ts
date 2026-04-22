@@ -66,6 +66,15 @@ export async function GET(req: NextRequest, { params }: Params) {
     }
   }
 
+  // Parse customFields from analysisPlan.structuredDataSchema
+  const analysisPlan = (assistant.analysisPlan ?? {}) as Record<string, unknown>;
+  const extractedSchema = (analysisPlan.structuredDataSchema ?? {}) as Record<string, unknown>;
+  const props = (extractedSchema.properties ?? {}) as Record<string, unknown>;
+  const customFields = Object.keys(props).map(k => {
+    const p = props[k] as Record<string, string>;
+    return { name: k, type: p.type ?? "string", description: p.description ?? "" };
+  });
+
   // Extract voice info
   const voice = (assistant.voice ?? {}) as Record<string, unknown>;
 
@@ -88,7 +97,8 @@ export async function GET(req: NextRequest, { params }: Params) {
       },
     },
     structuredOutputs,
-    allFields: structuredOutputs.flatMap((so) => so.fields),
+    customFields,
+    allFields: [...structuredOutputs.flatMap((so) => so.fields), ...customFields.map(f => f.name)],
   });
 }
 
@@ -106,9 +116,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     firstMessage?: string;
     systemPrompt?: string;
     voice?: Record<string, unknown>;
+    customFields?: Array<{ name: string; type: string; description: string }>;
   };
 
-  const { action, assistantId, serverUrl, name, firstMessage, systemPrompt, voice } = body;
+  const { action, assistantId, serverUrl, name, firstMessage, systemPrompt, voice, customFields } = body;
   if (!assistantId) return NextResponse.json({ error: "assistantId obrigatório" }, { status: 400 });
 
   const apiKey = await getApiKey(tenantId);
@@ -179,6 +190,70 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (name !== undefined) patch.name = name;
   if (firstMessage !== undefined) patch.firstMessage = firstMessage;
   if (voice !== undefined) patch.voice = voice;
+  if (customFields !== undefined) {
+    const properties: Record<string, unknown> = {};
+    for (const f of customFields) {
+      if (f.name.trim() !== "") {
+        properties[f.name.trim()] = { type: f.type, description: f.description };
+      }
+    }
+
+    if (Object.keys(properties).length > 0) {
+      // Usar Structured Output (novo formato) em vez de Structured Data (deprecated)
+      const schema = { type: "object", properties };
+      const currentArtifactPlan = (currentData.artifactPlan ?? {}) as Record<string, unknown>;
+      const existingIds: string[] = Array.isArray(currentArtifactPlan.structuredOutputIds)
+        ? (currentArtifactPlan.structuredOutputIds as string[])
+        : [];
+      const existingId = existingIds[0] ?? null;
+
+      let structuredOutputId: string;
+      if (existingId) {
+        // Atualizar o Structured Output existente
+        const soRes = await fetch(`https://api.vapi.ai/structured-output/${existingId}`, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({ schema }),
+          signal,
+        });
+        if (!soRes.ok) {
+          const err = await soRes.text().catch(() => "");
+          return NextResponse.json({ error: `Vapi structured-output PATCH error: ${soRes.status} ${err.slice(0, 200)}` }, { status: 502 });
+        }
+        structuredOutputId = existingId;
+      } else {
+        // Criar novo Structured Output
+        const soRes = await fetch(`https://api.vapi.ai/structured-output`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ name: `${assistantId}-outputs`, schema }),
+          signal,
+        });
+        if (!soRes.ok) {
+          const err = await soRes.text().catch(() => "");
+          return NextResponse.json({ error: `Vapi structured-output POST error: ${soRes.status} ${err.slice(0, 200)}` }, { status: 502 });
+        }
+        const so = await soRes.json() as Record<string, unknown>;
+        structuredOutputId = so.id as string;
+      }
+
+      patch.artifactPlan = { ...currentArtifactPlan, structuredOutputIds: [structuredOutputId] };
+    } else {
+      // Sem campos — limpar Structured Output do assistente
+      const currentArtifactPlan = (currentData.artifactPlan ?? {}) as Record<string, unknown>;
+      patch.artifactPlan = { ...currentArtifactPlan, structuredOutputIds: [] };
+    }
+
+    // Limpar Structured Data deprecated (analysisPlan.structuredDataSchema)
+    const currentAnalysisPlan = (currentData.analysisPlan ?? {}) as Record<string, unknown>;
+    if (currentAnalysisPlan.structuredDataSchema || currentAnalysisPlan.structuredDataPrompt) {
+      patch.analysisPlan = {
+        ...currentAnalysisPlan,
+        structuredDataPrompt: null,
+        structuredDataSchema: null,
+      };
+    }
+  }
 
   if (systemPrompt !== undefined) {
     const currentModel = (currentData.model ?? {}) as Record<string, unknown>;

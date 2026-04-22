@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { parseCallbackTime } from "@/lib/callback-parser";
 
@@ -82,8 +82,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         : 0;
 
       if (elapsedSec <= 25) {
-        const VOICEMAIL_RE = /grave (sua )?mensagem|ap[oó]s o sinal|deixe (seu|sua) recado|caixa postal|n[aã]o est[aá] dispon[ií]vel/i;
-        const IVR_RE = /para falar com|disque|tecle|digite|op[cç][aã]o|ramal/i;
+        const VOICEMAIL_RE = /grave (sua )?mensagem|ap[oó]s o sinal|deixe (seu|sua) recado|caixa postal|n[aã]o est[aá] dispon[ií]vel|entreg[ao].*recado|recado.*entreg[ao]|assim que.*dispon[ií]vel|n[uú]mero.*n[aã]o.*dispon[ií]vel|fora de cobertura|fora da [aá]rea|no momento n[aã]o (posso|poss[ou]|est[aá])|tente.*mais tarde|est[aá] desligad|est[aá] fora do ar|n[aã]o foi poss[ií]vel completar|n[uú]mero n[aã]o pode ser completad|celular.*dispon[ií]vel|telefone.*dispon[ií]vel/i;
+        const IVR_RE = /para falar com|disque|tecle|digite|op[cç][aã]o|ramal|por favor aguarde|pressione|bem-?vindo a[oa]?|voc[eê] ligou para|atendimento autom[aá]tico|menu principal/i;
 
         if (VOICEMAIL_RE.test(transcriptText) || IVR_RE.test(transcriptText)) {
           const callId = call?.id as string | undefined;
@@ -269,10 +269,14 @@ async function handleEndOfCallReport(
   const endedReason         = (message.endedReason as string) ?? null;
   const cost                = (message.cost        as number) ?? null;
   const transcript          = (message.transcript  as string) ?? null;
-  const summary             = (message.analysis    as Record<string, unknown>)?.summary as string ?? null;
+  const analysis            = (message.analysis as Record<string, unknown>) ?? {};
+  const summary             = (analysis.summary as string) ?? null;
   const durationSeconds     = (message.durationSeconds as number) ?? null;
   const artifact            = (message.artifact as Record<string, unknown>) ?? {};
-  const structuredOutputs   = (artifact.structuredOutputs ?? null) as Record<string, unknown> | null;
+  // structuredOutputs can come from either artifact.structuredOutputs OR analysis.structuredData
+  const artifactSO          = (artifact.structuredOutputs ?? null) as Record<string, unknown> | null;
+  const analysisSO          = (analysis.structuredData ?? null) as Record<string, unknown> | null;
+  const structuredOutputs   = analysisSO || artifactSO;
   const recordingUrl        = (artifact.recordingUrl       ?? message.recordingUrl       ?? null) as string | null;
   const stereoRecordingUrl  = (artifact.stereoRecordingUrl ?? message.stereoRecordingUrl ?? null) as string | null;
   const startedAt           = (message.startedAt    as string) ?? null;
@@ -280,7 +284,8 @@ async function handleEndOfCallReport(
   const costBreakdown       = (message.costBreakdown as Record<string, unknown>) ?? null;
 
   // Dados completos para repassar ao webhook de saída
-  const callData = {
+  // machineDetected é preenchido após o fetch de existing (abaixo)
+  const callData: CallData = {
     vapiCallId,
     transcript,
     summary,
@@ -293,11 +298,14 @@ async function handleEndOfCallReport(
   // ── Idempotência: verificar se call_record já existe ──
   const { data: existing } = await service
     .from("call_records")
-    .select("id, lead_id, dial_queue_id, ended_reason")
+    .select("id, lead_id, dial_queue_id, ended_reason, machine_detected")
     .eq("vapi_call_id", vapiCallId)
     .single();
 
   if (existing?.ended_reason) return; // Já processado com sucesso — ignorar
+
+  // Propagar machine_detected para o callData (usado em updateLeadAfterCall)
+  if (existing?.machine_detected) callData.machineDetected = true;
 
   if (existing) {
     // ── Caso normal: worker criou o call_record, webhook finaliza ──
@@ -399,6 +407,7 @@ interface CallData {
   durationSeconds?:   number | null;
   structuredOutputs?: Record<string, unknown> | null;
   vapiMessage?:       Record<string, unknown>; // payload completo do end-of-call-report
+  machineDetected?:   boolean;                 // true se transcript detectou caixa postal/URA
 }
 
 async function updateLeadAfterCall(
@@ -427,7 +436,7 @@ async function updateLeadAfterCall(
       .from("leads")
       .update({ status: "callbackScheduled", last_outcome: endedReason })
       .eq("id", leadId);
-    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "callbackScheduled", service, callData);
+    scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "callbackScheduled", service, callData);
     return;
   }
 
@@ -461,13 +470,91 @@ async function updateLeadAfterCall(
     return;
   }
 
+  // ── 403 Forbidden (número bloqueado, SPAM, ou não autorizado pelo provedor) ──
+  // Erro permanente: tentar novamente não resolve — o provedor recusa a chamada.
+  // → Marcar como doNotCall para não desperdiçar recursos.
+  const isForbidden = endedReason != null && (
+    endedReason.includes("sip-403") ||
+    /^403$/.test(endedReason)
+  );
+
+  if (isForbidden) {
+    console.warn(
+      `[webhook] ⛔ 403 Forbidden (${endedReason}) | lead=${leadId}` +
+      ` — número bloqueado/proibido pelo provedor → doNotCall permanente`
+    );
+    await service
+      .from("leads")
+      .update({ status: "doNotCall", last_outcome: endedReason, next_attempt_at: null })
+      .eq("id", leadId);
+    scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "doNotCall", service, callData);
+    return;
+  }
+
+  // ── 480 Temporarily Unavailable (desligado, sem sinal, fora de área) ──
+  // Erro transitório de longa duração: o número ficará inacessível por horas.
+  // Retry de 3 min é ineficaz — usa retry_delay_minutes da fila (mínimo 30 min).
+  const isTemporarilyUnavailable = endedReason != null && (
+    endedReason.includes("sip-480") ||
+    /^480$/.test(endedReason)
+  );
+
+  if (isTemporarilyUnavailable) {
+    const { data: currentLead } = await service
+      .from("leads")
+      .select("attempt_count")
+      .eq("id", leadId)
+      .single();
+    const { data: queueFor480 } = await service
+      .from("dial_queues")
+      .select("max_attempts, retry_delay_minutes, allowed_days, allowed_time_window")
+      .eq("id", queueId)
+      .eq("tenant_id", tenantId)
+      .single();
+    const attempts    = currentLead?.attempt_count ?? 0;
+    const maxAttempts = (queueFor480?.max_attempts as number | null | undefined) ?? 3;
+
+    if (attempts >= maxAttempts) {
+      console.warn(
+        `[webhook] ⛔ 480 Unavailable (${endedReason}) | lead=${leadId}` +
+        ` — tentativas esgotadas (${attempts}/${maxAttempts}) → failed`
+      );
+      await service
+        .from("leads")
+        .update({ status: "failed", last_outcome: endedReason, next_attempt_at: null })
+        .eq("id", leadId);
+      scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
+    } else {
+      // Usar retry_delay_minutes da fila, mas no mínimo 30 min (não 3 min)
+      const configDelay = (queueFor480?.retry_delay_minutes as number | null | undefined) ?? 30;
+      const delayMin    = Math.max(30, configDelay);
+      const allowedDays = Array.isArray(queueFor480?.allowed_days) ? (queueFor480.allowed_days as number[]) : [];
+      const tw          = queueFor480?.allowed_time_window as TW | null ?? null;
+      const retryAt     = scheduleNextAttempt(new Date(), delayMin, allowedDays, tw, 30);
+      console.warn(
+        `[webhook] ⚠ 480 Unavailable (${endedReason}) | lead=${leadId}` +
+        ` — tentativa ${attempts}/${maxAttempts} | retry em ${delayMin}min (número temporariamente fora do ar)`
+      );
+      await service
+        .from("leads")
+        .update({
+          status:          "queued",
+          last_outcome:    endedReason,
+          next_attempt_at: retryAt,
+        })
+        .eq("id", leadId);
+    }
+    return;
+  }
+
   // ── Erros SIP ambíguos (503/408/500 do provedor) ──
   // Podem ser: SIP provider sobrecarregado (transitório) OU número inválido/indisponível (permanente).
   // → Conta como tentativa para evitar loop infinito em números inválidos.
   // → Retry rápido (3 min) para cobrir indisponibilidade transitória.
   // → Após max_attempts: failed (igual a qualquer outro não-atendimento).
+  // Nota: 403 e 480 são tratados acima com lógica própria.
   const isAmbiguousSip = endedReason != null && (
-    endedReason.includes("error-providerfault") ||
+    (endedReason.includes("error-providerfault") && !endedReason.includes("sip-403") && !endedReason.includes("sip-480")) ||
     endedReason.includes("error-sip-outbound") ||   // failed-to-connect e variantes
     endedReason.includes("sip-503") ||
     endedReason.includes("sip-408") ||
@@ -502,7 +589,7 @@ async function updateLeadAfterCall(
         .from("leads")
         .update({ status: "failed", last_outcome: endedReason, next_attempt_at: null })
         .eq("id", leadId);
-      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
+      scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
       const jitterMs = Math.floor(Math.random() * 13) * 60_000; // 0–12 min aleatório
       const retryAt  = new Date(Date.now() + 3 * 60_000 + jitterMs).toISOString();
@@ -542,13 +629,29 @@ async function updateLeadAfterCall(
     durationSeconds != null &&
     durationSeconds >= 1;
 
-  // assistant-ended-call com duração curta = caixa postal/URA detectada por nós via transcript
-  // e encerrada via controlUrl. O Vapi retorna "assistant-ended-call" nesse caso, mas
-  // NÃO é uma conversa real — deve voltar para retry como qualquer não-atendimento.
-  const voicemailDetectedByUs =
-    endedReason === "assistant-ended-call" &&
+  // Caixa postal/URA detectada via transcript (machine_detected = true no call_record).
+  // Dois sub-casos:
+  // 1) Nosso end-call chegou primeiro → Vapi retorna "assistant-ended-call" (duração curta)
+  // 2) A caixa postal desligou antes → Vapi retorna "customer-ended-call" (duração curta)
+  // Em ambos os casos NÃO é conversa real — deve voltar para retry.
+  const machineDetectedFlag = callData?.machineDetected === true;
+
+  // Caixa postal silenciosa: customer-ended-call com < 8s e sem fala do usuário no transcript.
+  // A caixa postal atendeu, ficou em silêncio e desligou — não há texto "User:" para detectar.
+  // Threshold conservador de 8s para não confundir com pessoa que atende e desliga rápido.
+  const transcript = callData?.transcript ?? "";
+  const userSpoke = /^User:/m.test(transcript);
+  const silentVoicemail =
+    endedReason === "customer-ended-call" &&
     durationSeconds != null &&
-    durationSeconds < 25;
+    durationSeconds < 8 &&
+    !userSpoke;
+
+  const voicemailDetectedByUs =
+    (endedReason === "assistant-ended-call" && durationSeconds != null && durationSeconds < 25) ||
+    (machineDetectedFlag && durationSeconds != null && durationSeconds < 35 &&
+      (endedReason === "customer-ended-call" || endedReason === "silence-timed-out" || endedReason === "assistant-ended-call")) ||
+    silentVoicemail;
 
   const isAnswered = endedReason != null && (ANSWERED_REASONS.has(endedReason) || silenceButAnswered) && !voicemailDetectedByUs;
 
@@ -558,7 +661,7 @@ async function updateLeadAfterCall(
       .from("leads")
       .update({ status: "completed", last_outcome: endedReason, next_attempt_at: null })
       .eq("id", leadId);
-    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "completed", service, callData);
+    scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "completed", service, callData);
   } else {
     // ── Não atendido, sem resposta, erro desconhecido, etc.
     // endedReason null também cai aqui — tratado como não-atendido.
@@ -590,7 +693,7 @@ async function updateLeadAfterCall(
         .from("leads")
         .update({ status: "failed", last_outcome: endedReason, next_attempt_at: null })
         .eq("id", leadId);
-      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
+      scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
       // Verificar se o limite diário foi atingido (contar call_records de hoje para este lead)
       let nextAt: string;
@@ -638,7 +741,7 @@ async function updateLeadAfterCall(
           next_attempt_at: nextAt,
         })
         .eq("id", leadId);
-      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "queued", service, callData);
+      scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "queued", service, callData);
     }
   }
 }
@@ -665,6 +768,7 @@ async function maybeOpenCircuitBreaker(
     endedReason.includes("error-providerfault") ||
     endedReason.includes("failed-to-connect") ||
     endedReason.includes("sip-403") ||
+    endedReason.includes("sip-480") ||
     endedReason.includes("sip-503") ||
     endedReason.includes("sip-500") ||
     endedReason.includes("sip-408");
@@ -683,6 +787,7 @@ async function maybeOpenCircuitBreaker(
       "ended_reason.ilike.%error-providerfault%," +
       "ended_reason.ilike.%failed-to-connect%," +
       "ended_reason.ilike.%sip-403%," +
+      "ended_reason.ilike.%sip-480%," +
       "ended_reason.ilike.%sip-503%," +
       "ended_reason.ilike.%sip-500%"
     );
@@ -724,6 +829,27 @@ async function maybeOpenCircuitBreaker(
 }
 
 // ── Outbound webhook: envia resultado rico da chamada para URL externa (n8n, Zapier, etc.) ──
+// Wrapper fire-and-forget: agenda o envio APÓS a resposta ao Vapi, para não travar o webhook
+// se o destino estiver lento/indisponível. Usa `after()` do Next para manter a função viva até o fim.
+function scheduleOutboundWebhook(
+  leadId:      string,
+  queueId:     string,
+  tenantId:    string,
+  endedReason: string | null,
+  leadStatus:  string,
+  service:     ReturnType<typeof createServiceClient>,
+  callData?:   CallData
+) {
+  after(async () => {
+    try {
+      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, leadStatus, service, callData);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[outbound-webhook] ✗ Exceção em after() | lead=${leadId} | erro=${msg}`);
+    }
+  });
+}
+
 async function fireOutboundWebhook(
   leadId:      string,
   queueId:     string,
@@ -858,25 +984,51 @@ async function fireOutboundWebhook(
     analysis,
   };
 
-  try {
-    const res = await fetch(queueInfo.webhook_url, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(payload),
-      signal:  AbortSignal.timeout(12_000), // 12s
-    });
+  // Retry com backoff: 3 tentativas com delays 0s → 3s → 10s, timeout de 15s por tentativa.
+  const body        = JSON.stringify(payload);
+  const maxAttempts = 3;
+  const backoffMs   = [0, 3_000, 10_000];
 
-    if (res.ok) {
-      console.log(`[outbound-webhook] ✓ Entregue | HTTP ${res.status} | url=${queueInfo.webhook_url}`);
-    } else {
-      const body = await res.text().catch(() => "");
-      console.error(
-        `[outbound-webhook] ✗ Destino retornou HTTP ${res.status} | url=${queueInfo.webhook_url} | body=${body.slice(0, 200)}`
-      );
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (backoffMs[attempt - 1] > 0) {
+      await new Promise((r) => setTimeout(r, backoffMs[attempt - 1]));
     }
 
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[outbound-webhook] ✗ Falha de rede | url=${queueInfo.webhook_url} | erro=${msg}`);
+    try {
+      const res = await fetch(queueInfo.webhook_url, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        signal:  AbortSignal.timeout(15_000),
+      });
+
+      if (res.ok) {
+        console.log(`[outbound-webhook] ✓ Entregue | HTTP ${res.status} | tentativa ${attempt}/${maxAttempts} | url=${queueInfo.webhook_url}`);
+        return;
+      }
+
+      // 4xx (exceto 408/429) não adianta retentar — destino rejeitou o payload.
+      if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+        const respBody = await res.text().catch(() => "");
+        console.error(
+          `[outbound-webhook] ✗ Destino rejeitou HTTP ${res.status} | url=${queueInfo.webhook_url} | body=${respBody.slice(0, 200)}`
+        );
+        return;
+      }
+
+      const respBody = await res.text().catch(() => "");
+      console.warn(
+        `[outbound-webhook] ⚠ HTTP ${res.status} na tentativa ${attempt}/${maxAttempts} | url=${queueInfo.webhook_url} | body=${respBody.slice(0, 200)}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[outbound-webhook] ⚠ Falha de rede na tentativa ${attempt}/${maxAttempts} | url=${queueInfo.webhook_url} | erro=${msg}`
+      );
+    }
   }
+
+  console.error(
+    `[outbound-webhook] ✗ Esgotadas ${maxAttempts} tentativas | url=${queueInfo.webhook_url} | lead=${leadId}`
+  );
 }

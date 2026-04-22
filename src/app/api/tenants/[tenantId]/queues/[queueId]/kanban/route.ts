@@ -21,10 +21,6 @@ interface CallRow {
   lead_id: string;
   ended_reason: string | null;
   duration_seconds: number | null;
-  success_evaluation: boolean | null;
-  interesse: string | null;
-  performance_score: number | null;
-  score: number | null;
   created_at: string;
 }
 
@@ -93,41 +89,32 @@ export async function GET(req: NextRequest, { params }: Params) {
   const maxAttempts = Math.max(1, queue.max_attempts ?? 1);
   const leadListId = queue.lead_list_id;
 
-  // Helper: fetch leads for a given attempt_count bucket
+  // Helper: fetch leads for a given strict column bucket
   async function fetchLeadsForColumn(
     index: number,
     leadOffset: number,
     leadLimit: number
   ): Promise<{ leads: LeadRow[]; total: number }> {
-    // index 0 => attempt_count = 0 (aguardando)
-    // index 1..N-1 => attempt_count = index
-    // index N (last) => attempt_count >= N (overflow absorbido na última coluna)
-    let base = service
-      .from("leads")
-      .select("id, phone_e164, data_json, status, attempt_count, last_outcome", { count: "exact" })
-      .eq("tenant_id", tenantId)
-      .eq("lead_list_id", leadListId)
-      .order("last_attempt_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .range(leadOffset, leadOffset + leadLimit - 1);
+    const { data, error } = await service.rpc("get_kanban_leads", {
+      p_tenant_id: tenantId,
+      p_lead_list_id: leadListId,
+      p_column_idx: index,
+      p_limit: leadLimit,
+      p_offset: leadOffset
+    });
 
-    if (index < maxAttempts) {
-      base = base.eq("attempt_count", index);
-    } else {
-      base = base.gte("attempt_count", index);
-    }
-
-    const { data, count, error } = await base;
     if (error) throw new Error(error.message);
-    return { leads: (data ?? []) as LeadRow[], total: count ?? 0 };
+    const leads = (data ?? []) as unknown as (LeadRow & { total_count: number })[];
+    const total = leads.length > 0 ? Number(leads[0].total_count) : 0;
+    return { leads, total };
   }
 
   // Helper: fetch latest call_record per lead (for this queue)
   async function fetchLastCalls(leadIds: string[]): Promise<Map<string, CallRow>> {
     if (leadIds.length === 0) return new Map();
     const { data, error } = await service
-      .from("call_records_flat")
-      .select("id, lead_id, ended_reason, duration_seconds, success_evaluation, interesse, performance_score, score, created_at")
+      .from("call_records")
+      .select("id, lead_id, ended_reason, duration_seconds, created_at")
       .eq("tenant_id", tenantId)
       .eq("dial_queue_id", queueId)
       .in("lead_id", leadIds)
@@ -154,23 +141,29 @@ export async function GET(req: NextRequest, { params }: Params) {
           id: c.id,
           ended_reason: c.ended_reason,
           duration_seconds: c.duration_seconds,
-          success_evaluation: c.success_evaluation,
-          interesse: c.interesse,
-          score: c.score ?? c.performance_score ?? null,
+          success_evaluation: null,
+          interesse: null,
+          score: null,
         } : null,
       };
     });
   }
 
   function labelForColumn(index: number): string {
-    if (index === 0) return "Aguardando";
-    return `Tentativa ${index}`;
+    switch (index) {
+      case 0: return "Novo Lead";
+      case 1: return "Tentativa de Conexão";
+      case 2: return "Tentativas Esgotadas";
+      case 3: return "Qualificado";
+      case 4: return "Desqualificado";
+      default: return "?";
+    }
   }
 
   // --- Modo expand: uma coluna específica ---
   if (columnParam !== null) {
     const colIndex = parseInt(columnParam);
-    if (Number.isNaN(colIndex) || colIndex < 0 || colIndex > maxAttempts) {
+    if (Number.isNaN(colIndex) || colIndex < 0 || colIndex > 4) {
       return NextResponse.json({ error: "column inválida" }, { status: 400 });
     }
     try {
@@ -182,7 +175,7 @@ export async function GET(req: NextRequest, { params }: Params) {
         total,
         leads: toCards(leads, callMap),
       };
-      return NextResponse.json({ maxAttempts, queueName: queue.name, column });
+      return NextResponse.json({ maxAttempts: 5, queueName: queue.name, column });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "erro";
       return NextResponse.json({ error: msg }, { status: 500 });
@@ -191,8 +184,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   // --- Modo inicial: todas as colunas com DEFAULT_LIMIT cada ---
   try {
-    // Coluna 0 (Aguardando) + 1..maxAttempts
-    const indices = Array.from({ length: maxAttempts + 1 }, (_, i) => i);
+    const indices = [0, 1, 2, 3, 4];
     const results = await Promise.all(
       indices.map((i) => fetchLeadsForColumn(i, 0, limit))
     );
@@ -207,7 +199,7 @@ export async function GET(req: NextRequest, { params }: Params) {
       leads: toCards(r.leads, callMap),
     }));
 
-    return NextResponse.json({ maxAttempts, queueName: queue.name, columns });
+    return NextResponse.json({ maxAttempts: 5, queueName: queue.name, columns });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "erro";
     return NextResponse.json({ error: msg }, { status: 500 });

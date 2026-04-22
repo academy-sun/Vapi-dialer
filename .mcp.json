@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "vercel": {
+      "type": "http",
+      "url": "https://mcp.vercel.com"
+    },
+    "vapi-docs": {
+      "command": "cmd",
+      "args": ["/c", "npx", "-y", "@vapi-ai/mcp-docs-server"],
+      "type": "stdio"
+    }
+  }
+}
