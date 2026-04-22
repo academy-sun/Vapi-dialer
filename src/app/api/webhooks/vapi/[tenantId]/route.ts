@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { parseCallbackTime } from "@/lib/callback-parser";
 
@@ -436,7 +436,7 @@ async function updateLeadAfterCall(
       .from("leads")
       .update({ status: "callbackScheduled", last_outcome: endedReason })
       .eq("id", leadId);
-    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "callbackScheduled", service, callData);
+    scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "callbackScheduled", service, callData);
     return;
   }
 
@@ -487,7 +487,7 @@ async function updateLeadAfterCall(
       .from("leads")
       .update({ status: "doNotCall", last_outcome: endedReason, next_attempt_at: null })
       .eq("id", leadId);
-    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "doNotCall", service, callData);
+    scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "doNotCall", service, callData);
     return;
   }
 
@@ -523,7 +523,7 @@ async function updateLeadAfterCall(
         .from("leads")
         .update({ status: "failed", last_outcome: endedReason, next_attempt_at: null })
         .eq("id", leadId);
-      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
+      scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
       // Usar retry_delay_minutes da fila, mas no mínimo 30 min (não 3 min)
       const configDelay = (queueFor480?.retry_delay_minutes as number | null | undefined) ?? 30;
@@ -589,7 +589,7 @@ async function updateLeadAfterCall(
         .from("leads")
         .update({ status: "failed", last_outcome: endedReason, next_attempt_at: null })
         .eq("id", leadId);
-      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
+      scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
       const jitterMs = Math.floor(Math.random() * 13) * 60_000; // 0–12 min aleatório
       const retryAt  = new Date(Date.now() + 3 * 60_000 + jitterMs).toISOString();
@@ -661,7 +661,7 @@ async function updateLeadAfterCall(
       .from("leads")
       .update({ status: "completed", last_outcome: endedReason, next_attempt_at: null })
       .eq("id", leadId);
-    await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "completed", service, callData);
+    scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "completed", service, callData);
   } else {
     // ── Não atendido, sem resposta, erro desconhecido, etc.
     // endedReason null também cai aqui — tratado como não-atendido.
@@ -693,7 +693,7 @@ async function updateLeadAfterCall(
         .from("leads")
         .update({ status: "failed", last_outcome: endedReason, next_attempt_at: null })
         .eq("id", leadId);
-      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
+      scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "failed", service, callData);
     } else {
       // Verificar se o limite diário foi atingido (contar call_records de hoje para este lead)
       let nextAt: string;
@@ -741,7 +741,7 @@ async function updateLeadAfterCall(
           next_attempt_at: nextAt,
         })
         .eq("id", leadId);
-      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, "queued", service, callData);
+      scheduleOutboundWebhook(leadId, queueId, tenantId, endedReason, "queued", service, callData);
     }
   }
 }
@@ -829,6 +829,27 @@ async function maybeOpenCircuitBreaker(
 }
 
 // ── Outbound webhook: envia resultado rico da chamada para URL externa (n8n, Zapier, etc.) ──
+// Wrapper fire-and-forget: agenda o envio APÓS a resposta ao Vapi, para não travar o webhook
+// se o destino estiver lento/indisponível. Usa `after()` do Next para manter a função viva até o fim.
+function scheduleOutboundWebhook(
+  leadId:      string,
+  queueId:     string,
+  tenantId:    string,
+  endedReason: string | null,
+  leadStatus:  string,
+  service:     ReturnType<typeof createServiceClient>,
+  callData?:   CallData
+) {
+  after(async () => {
+    try {
+      await fireOutboundWebhook(leadId, queueId, tenantId, endedReason, leadStatus, service, callData);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[outbound-webhook] ✗ Exceção em after() | lead=${leadId} | erro=${msg}`);
+    }
+  });
+}
+
 async function fireOutboundWebhook(
   leadId:      string,
   queueId:     string,
@@ -963,25 +984,51 @@ async function fireOutboundWebhook(
     analysis,
   };
 
-  try {
-    const res = await fetch(queueInfo.webhook_url, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(payload),
-      signal:  AbortSignal.timeout(12_000), // 12s
-    });
+  // Retry com backoff: 3 tentativas com delays 0s → 3s → 10s, timeout de 15s por tentativa.
+  const body        = JSON.stringify(payload);
+  const maxAttempts = 3;
+  const backoffMs   = [0, 3_000, 10_000];
 
-    if (res.ok) {
-      console.log(`[outbound-webhook] ✓ Entregue | HTTP ${res.status} | url=${queueInfo.webhook_url}`);
-    } else {
-      const body = await res.text().catch(() => "");
-      console.error(
-        `[outbound-webhook] ✗ Destino retornou HTTP ${res.status} | url=${queueInfo.webhook_url} | body=${body.slice(0, 200)}`
-      );
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (backoffMs[attempt - 1] > 0) {
+      await new Promise((r) => setTimeout(r, backoffMs[attempt - 1]));
     }
 
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[outbound-webhook] ✗ Falha de rede | url=${queueInfo.webhook_url} | erro=${msg}`);
+    try {
+      const res = await fetch(queueInfo.webhook_url, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        signal:  AbortSignal.timeout(15_000),
+      });
+
+      if (res.ok) {
+        console.log(`[outbound-webhook] ✓ Entregue | HTTP ${res.status} | tentativa ${attempt}/${maxAttempts} | url=${queueInfo.webhook_url}`);
+        return;
+      }
+
+      // 4xx (exceto 408/429) não adianta retentar — destino rejeitou o payload.
+      if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
+        const respBody = await res.text().catch(() => "");
+        console.error(
+          `[outbound-webhook] ✗ Destino rejeitou HTTP ${res.status} | url=${queueInfo.webhook_url} | body=${respBody.slice(0, 200)}`
+        );
+        return;
+      }
+
+      const respBody = await res.text().catch(() => "");
+      console.warn(
+        `[outbound-webhook] ⚠ HTTP ${res.status} na tentativa ${attempt}/${maxAttempts} | url=${queueInfo.webhook_url} | body=${respBody.slice(0, 200)}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(
+        `[outbound-webhook] ⚠ Falha de rede na tentativa ${attempt}/${maxAttempts} | url=${queueInfo.webhook_url} | erro=${msg}`
+      );
+    }
   }
+
+  console.error(
+    `[outbound-webhook] ✗ Esgotadas ${maxAttempts} tentativas | url=${queueInfo.webhook_url} | lead=${leadId}`
+  );
 }
