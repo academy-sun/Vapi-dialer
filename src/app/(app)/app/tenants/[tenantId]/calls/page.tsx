@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/browser";
 import {
   RefreshCw,
   X,
@@ -85,17 +84,10 @@ export default function CallsPage() {
   const isAdminOrOwner = userRole === "owner" || userRole === "admin";
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(async ({ data }) => {
-      if (!data.user) return;
-      const { data: m } = await supabase
-        .from("memberships")
-        .select("role")
-        .eq("tenant_id", tenantId)
-        .eq("user_id", data.user.id)
-        .single();
-      if (m) setUserRole(m.role);
-    });
+    fetch(`/api/tenants/${tenantId}/me`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.role) setUserRole(data.role); })
+      .catch(() => { /* mantém default "member" */ });
   }, [tenantId]);
 
   useEffect(() => {
