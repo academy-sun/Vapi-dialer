@@ -1798,6 +1798,7 @@ export default function LeadsPage() {
         call={drawerCall}
         onClose={() => setDrawerCall(null)}
         isAdminOrOwner={false}
+        tenantId={tenantId}
       />
 
       {drawerLoading && (

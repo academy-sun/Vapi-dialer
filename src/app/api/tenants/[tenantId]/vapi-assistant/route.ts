@@ -66,12 +66,16 @@ export async function GET(req: NextRequest, { params }: Params) {
     }
   }
 
-  // Parse customFields from analysisPlan.structuredDataSchema
+  // customFields vem do Structured Output novo (artifactPlan.structuredOutputIds[0]).
+  // Fallback para o formato legado (analysisPlan.structuredDataSchema) em assistentes
+  // que ainda não foram migrados. O PATCH sempre escreve no novo formato.
+  const primarySoSchema = structuredOutputs[0]?.schema as Record<string, unknown> | undefined;
   const analysisPlan = (assistant.analysisPlan ?? {}) as Record<string, unknown>;
-  const extractedSchema = (analysisPlan.structuredDataSchema ?? {}) as Record<string, unknown>;
-  const props = (extractedSchema.properties ?? {}) as Record<string, unknown>;
-  const customFields = Object.keys(props).map(k => {
-    const p = props[k] as Record<string, string>;
+  const legacySchema = (analysisPlan.structuredDataSchema ?? {}) as Record<string, unknown>;
+  const sourceSchema = primarySoSchema ?? legacySchema;
+  const props = (sourceSchema.properties ?? {}) as Record<string, unknown>;
+  const customFields = Object.keys(props).map((k) => {
+    const p = (props[k] ?? {}) as Record<string, string>;
     return { name: k, type: p.type ?? "string", description: p.description ?? "" };
   });
 

@@ -692,6 +692,7 @@ export default function CallsPage() {
         call={selected}
         onClose={() => setSelected(null)}
         isAdminOrOwner={isAdminOrOwner}
+        tenantId={tenantId}
       />
 
       {/* Toasts */}
