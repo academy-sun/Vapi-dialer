@@ -2,7 +2,7 @@
 import { useState } from "react";
 import {
   PhoneCall, X, Mic, ExternalLink, ChevronDown, ChevronUp,
-  Star, CheckCircle2, XCircle,
+  Star, CheckCircle2, XCircle, Send, Loader2, AlertTriangle, Check,
 } from "lucide-react";
 import {
   type Call, type CallDetail,
@@ -130,9 +130,110 @@ interface CallDetailDrawerProps {
   call: CallDetail | null;
   onClose: () => void;
   isAdminOrOwner: boolean;
+  tenantId: string;
 }
 
-export default function CallDetailDrawer({ call, onClose, isAdminOrOwner }: CallDetailDrawerProps) {
+type ResendState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ok"; status: number; url: string }
+  | { kind: "error"; message: string };
+
+function ResendWebhookPanel({ tenantId, callRecordId }: { tenantId: string; callRecordId: string }) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [state, setState] = useState<ResendState>({ kind: "idle" });
+
+  async function send() {
+    setState({ kind: "loading" });
+    try {
+      const res = await fetch(`/api/tenants/${tenantId}/calls/${callRecordId}/resend-webhook`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(url.trim() ? { webhookUrl: url.trim() } : {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setState({ kind: "ok", status: data.status ?? res.status, url: data.url ?? "" });
+      } else {
+        setState({ kind: "error", message: data.error ?? `HTTP ${res.status}` });
+      }
+    } catch (err) {
+      setState({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  return (
+    <div style={{ paddingTop: 8, borderTop: '1px solid var(--glass-border)' }}>
+      <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Send style={{ width: 12, height: 12 }} /> Webhook de saída
+      </p>
+
+      {!open ? (
+        <button
+          onClick={() => { setOpen(true); setState({ kind: "idle" }); }}
+          className="btn btn-secondary"
+          style={{ fontSize: 12, padding: '6px 12px', width: '100%', justifyContent: 'center' }}
+        >
+          <Send style={{ width: 14, height: 14 }} /> Reenviar webhook desta chamada
+        </button>
+      ) : (
+        <div style={{ background: 'var(--glass-bg)', borderRadius: 12, padding: 12, border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 500 }}>
+            URL do webhook (opcional — em branco usa a URL da fila)
+          </label>
+          <input
+            type="url"
+            className="form-input"
+            style={{ fontSize: 12, padding: '6px 10px' }}
+            placeholder="https://..."
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            disabled={state.kind === "loading"}
+          />
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={send}
+              disabled={state.kind === "loading"}
+              className="btn btn-primary"
+              style={{ fontSize: 12, padding: '6px 12px', flex: 1, justifyContent: 'center' }}
+            >
+              {state.kind === "loading" ? (
+                <><Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} /> Enviando…</>
+              ) : (
+                <><Send style={{ width: 14, height: 14 }} /> Enviar agora</>
+              )}
+            </button>
+            <button
+              onClick={() => { setOpen(false); setUrl(""); setState({ kind: "idle" }); }}
+              className="btn btn-secondary"
+              style={{ fontSize: 12, padding: '6px 12px' }}
+              disabled={state.kind === "loading"}
+            >
+              Cancelar
+            </button>
+          </div>
+
+          {state.kind === "ok" && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11, color: 'var(--green)', background: 'rgba(34,197,94,0.08)', borderRadius: 8, padding: '8px 10px', border: '1px solid rgba(34,197,94,0.2)' }}>
+              <Check style={{ width: 14, height: 14, flexShrink: 0, marginTop: 1 }} />
+              <span>Entregue com HTTP {state.status}{state.url ? ` em ${state.url}` : ""}</span>
+            </div>
+          )}
+          {state.kind === "error" && (
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 11, color: 'var(--red)', background: 'var(--red-lo)', borderRadius: 8, padding: '8px 10px', border: '1px solid rgba(232,0,45,0.25)' }}>
+              <AlertTriangle style={{ width: 14, height: 14, flexShrink: 0, marginTop: 1 }} />
+              <span>{state.message}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function CallDetailDrawer({ call, onClose, isAdminOrOwner, tenantId }: CallDetailDrawerProps) {
   const [showTranscript, setShowTranscript] = useState(false);
 
   if (!call) return null;
@@ -290,6 +391,11 @@ export default function CallDetailDrawer({ call, onClose, isAdminOrOwner }: Call
                 </pre>
               )}
             </div>
+          )}
+
+          {/* Reenviar webhook (admin/owner) */}
+          {isAdminOrOwner && (
+            <ResendWebhookPanel tenantId={tenantId} callRecordId={call.id} />
           )}
 
           {/* Vapi ID */}

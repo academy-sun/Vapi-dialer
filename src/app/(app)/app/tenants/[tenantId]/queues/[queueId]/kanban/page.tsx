@@ -675,6 +675,7 @@ export default function KanbanPage() {
         call={drawerCall}
         onClose={() => setDrawerCall(null)}
         isAdminOrOwner={isAdminOrOwner}
+        tenantId={tenantId}
       />
 
       {drawerLoading && (
