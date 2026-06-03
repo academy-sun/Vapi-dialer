@@ -559,9 +559,9 @@ export default function CallsPage() {
               <tr>
                 <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Phone style={{ width: 14, height: 14 }} />Telefone</span></th>
                 <th>Nome</th>
-                <th>Resultado</th>
+                <th>Status</th>
                 <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Timer style={{ width: 14, height: 14 }} />Duração</span></th>
-                <th>Interesse</th>
+                <th>Resultado</th>
                 <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Star style={{ width: 14, height: 14 }} />Score</span></th>
                 {isAdminOrOwner && <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><DollarSign style={{ width: 14, height: 14 }} />Custo</span></th>}
                 <th>Próx. Tentativa</th>
