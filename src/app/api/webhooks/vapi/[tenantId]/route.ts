@@ -273,10 +273,13 @@ async function handleEndOfCallReport(
   const summary             = (analysis.summary as string) ?? null;
   const durationSeconds     = (message.durationSeconds as number) ?? null;
   const artifact            = (message.artifact as Record<string, unknown>) ?? {};
-  // structuredOutputs can come from either artifact.structuredOutputs OR analysis.structuredData
+  // structuredOutputs vem de artifact.structuredOutputs (Structured Output novo,
+  // { id: { result: {...} } }) — formato padrão dos assistentes atuais.
+  // analysis.structuredData (formato plano) é legado de assistentes antigos e
+  // serve apenas de fallback; o artifact tem prioridade.
   const artifactSO          = (artifact.structuredOutputs ?? null) as Record<string, unknown> | null;
   const analysisSO          = (analysis.structuredData ?? null) as Record<string, unknown> | null;
-  const structuredOutputs   = analysisSO || artifactSO;
+  const structuredOutputs   = artifactSO || analysisSO;
   const recordingUrl        = (artifact.recordingUrl       ?? message.recordingUrl       ?? null) as string | null;
   const stereoRecordingUrl  = (artifact.stereoRecordingUrl ?? message.stereoRecordingUrl ?? null) as string | null;
   const startedAt           = (message.startedAt    as string) ?? null;

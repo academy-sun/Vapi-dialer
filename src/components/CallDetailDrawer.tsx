@@ -51,7 +51,7 @@ function EvaluationPanel({ call }: { call: CallDetail }) {
   const result: Record<string, unknown> = {};
   if (call.outputs_flat) Object.assign(result, call.outputs_flat);
 
-  if (call.interesse) result["Interesse"] = call.interesse;
+  if (call.interesse) result["Resultado"] = call.interesse;
   if (call.success_evaluation != null) result["Avaliação"] = call.success_evaluation ? "Sim" : "Não";
   if (call.resumo) result["resumo"] = call.resumo;
   if (call.pontos_melhoria) result["Pontos Melhoria"] = call.pontos_melhoria;
