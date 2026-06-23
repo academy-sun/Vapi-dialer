@@ -102,7 +102,14 @@ export async function GET(req: NextRequest, { params }: Params) {
     },
     structuredOutputs,
     customFields,
-    allFields: [...structuredOutputs.flatMap((so) => so.fields), ...customFields.map(f => f.name)],
+    // Dedup: customFields é derivado de structuredOutputs[0].schema, então concatenar
+    // ambos duplicaria os campos do 1º Structured Output. Usar os campos dos SOs quando
+    // existirem (única fonte de verdade); senão cair no schema legado via customFields.
+    allFields: Array.from(new Set(
+      structuredOutputs.length > 0
+        ? structuredOutputs.flatMap((so) => so.fields)
+        : customFields.map((f) => f.name)
+    )),
   });
 }
 

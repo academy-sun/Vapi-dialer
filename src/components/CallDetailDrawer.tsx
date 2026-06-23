@@ -51,7 +51,7 @@ function EvaluationPanel({ call }: { call: CallDetail }) {
   const result: Record<string, unknown> = {};
   if (call.outputs_flat) Object.assign(result, call.outputs_flat);
 
-  if (call.interesse) result["Interesse"] = call.interesse;
+  if (call.interesse) result["Resultado"] = call.interesse;
   if (call.success_evaluation != null) result["Avaliação"] = call.success_evaluation ? "Sim" : "Não";
   if (call.resumo) result["resumo"] = call.resumo;
   if (call.pontos_melhoria) result["Pontos Melhoria"] = call.pontos_melhoria;
@@ -393,10 +393,8 @@ export default function CallDetailDrawer({ call, onClose, isAdminOrOwner, tenant
             </div>
           )}
 
-          {/* Reenviar webhook (admin/owner) */}
-          {isAdminOrOwner && (
-            <ResendWebhookPanel tenantId={tenantId} callRecordId={call.id} />
-          )}
+          {/* Reenviar webhook (liberado para todos os usuários do tenant) */}
+          <ResendWebhookPanel tenantId={tenantId} callRecordId={call.id} />
 
           {/* Vapi ID */}
           <div style={{ paddingTop: 8, borderTop: '1px solid var(--glass-border)' }}>
