@@ -6,16 +6,13 @@ type Params = { params: Promise<{ tenantId: string; callRecordId: string }> };
 
 // POST /api/tenants/:tenantId/calls/:callRecordId/resend-webhook
 // Reenvia o webhook de saída de uma chamada específica.
-// Acesso: somente owner/admin (incluindo admin global do sistema).
+// Acesso: qualquer membro do tenant (incluindo admin global do sistema).
 // Body opcional: { webhookUrl?: string } — sobrescreve a URL configurada na fila.
 export async function POST(req: NextRequest, { params }: Params) {
   const { tenantId, callRecordId } = await params;
 
-  const { membership, response } = await requireTenantAccess(tenantId);
+  const { response } = await requireTenantAccess(tenantId);
   if (response) return response;
-  if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-    return NextResponse.json({ error: "Acesso restrito a administradores" }, { status: 403 });
-  }
 
   let body: { webhookUrl?: string } = {};
   try {

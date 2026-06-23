@@ -393,10 +393,8 @@ export default function CallDetailDrawer({ call, onClose, isAdminOrOwner, tenant
             </div>
           )}
 
-          {/* Reenviar webhook (admin/owner) */}
-          {isAdminOrOwner && (
-            <ResendWebhookPanel tenantId={tenantId} callRecordId={call.id} />
-          )}
+          {/* Reenviar webhook (liberado para todos os usuários do tenant) */}
+          <ResendWebhookPanel tenantId={tenantId} callRecordId={call.id} />
 
           {/* Vapi ID */}
           <div style={{ paddingTop: 8, borderTop: '1px solid var(--glass-border)' }}>

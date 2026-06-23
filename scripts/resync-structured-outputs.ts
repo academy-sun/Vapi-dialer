@@ -38,7 +38,11 @@ const VAPI_BASE_URL        = process.env.VAPI_BASE_URL ?? "https://api.vapi.ai";
 const DAYS        = Math.max(1, parseInt(process.env.RESYNC_DAYS ?? "7"));
 const TENANT_ID   = process.env.RESYNC_TENANT_ID?.trim() || null;
 const DRY_RUN     = /^(1|true)$/i.test(process.env.RESYNC_DRY_RUN ?? "");
-const CONCURRENCY = Math.max(1, Math.min(20, parseInt(process.env.RESYNC_CONCURRENCY ?? "5")));
+const CONCURRENCY = Math.max(1, Math.min(20, parseInt(process.env.RESYNC_CONCURRENCY ?? "2")));
+const DELAY_MS    = Math.max(0, parseInt(process.env.RESYNC_DELAY_MS ?? "350"));   // pausa entre lotes
+const MAX_RETRIES = Math.max(0, parseInt(process.env.RESYNC_MAX_RETRIES ?? "5"));  // retries no 429
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !ENCRYPTION_KEY_B64) {
   console.error("✗ Variáveis obrigatórias ausentes: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ENCRYPTION_KEY_BASE64");
@@ -151,17 +155,32 @@ async function main() {
     const vapiKey = await getVapiKey(rec.tenant_id);
     if (!vapiKey) { skipped++; return; }
 
-    let res: Response;
-    try {
-      res = await fetch(`${VAPI_BASE_URL}/call/${rec.vapi_call_id}`, {
-        headers: { Authorization: `Bearer ${vapiKey}` },
-        signal: AbortSignal.timeout(15_000),
-      });
-    } catch (err) {
-      console.warn(`  [${rec.vapi_call_id}] erro de rede: ${err instanceof Error ? err.message : String(err)}`);
-      errors++; return;
+    let res: Response | null = null;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        res = await fetch(`${VAPI_BASE_URL}/call/${rec.vapi_call_id}`, {
+          headers: { Authorization: `Bearer ${vapiKey}` },
+          signal: AbortSignal.timeout(15_000),
+        });
+      } catch (err) {
+        if (attempt === MAX_RETRIES) {
+          console.warn(`  [${rec.vapi_call_id}] erro de rede: ${err instanceof Error ? err.message : String(err)}`);
+          errors++; return;
+        }
+        await sleep(500 * (attempt + 1));
+        continue;
+      }
+      // 429: respeitar Retry-After (ou backoff exponencial) e tentar de novo
+      if (res.status === 429 && attempt < MAX_RETRIES) {
+        const ra = parseInt(res.headers.get("retry-after") ?? "");
+        const waitMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(8000, 500 * 2 ** attempt);
+        await sleep(waitMs);
+        continue;
+      }
+      break;
     }
 
+    if (!res) { errors++; return; }
     if (res.status === 404) { skipped++; return; }
     if (!res.ok) { console.warn(`  [${rec.vapi_call_id}] Vapi HTTP ${res.status}`); errors++; return; }
 
@@ -185,9 +204,10 @@ async function main() {
     updated++;
   }
 
-  // Pool de concorrência simples
+  // Pool de concorrência com pausa entre lotes (respeita rate limit da Vapi)
   for (let i = 0; i < candidates.length; i += CONCURRENCY) {
     await Promise.all(candidates.slice(i, i + CONCURRENCY).map(processOne));
+    if (DELAY_MS > 0 && i + CONCURRENCY < candidates.length) await sleep(DELAY_MS);
   }
 
   console.log(`\n── Resumo ──────────────────────────────`);

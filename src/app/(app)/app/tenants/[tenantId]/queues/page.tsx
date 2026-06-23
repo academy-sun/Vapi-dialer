@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -1050,6 +1050,17 @@ function LeadsTab({
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────────
+// ── Divisor de seção (Ativas / Encerradas) ────────────────────────────────────
+function SectionDivider({ label, count }: { label: string; count: number }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "8px 2px 0" }}>
+      <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-3)" }}>{label}</span>
+      <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-3)", background: "var(--glass-bg-2)", borderRadius: "999px", padding: "1px 8px" }}>{count}</span>
+      <div style={{ flex: 1, height: "1px", background: "var(--glass-border)" }} />
+    </div>
+  );
+}
+
 export default function CampaignsPage() {
   const { tenantId } = useParams<{ tenantId: string }>();
   const [queues,       setQueues]       = useState<Queue[]>([]);
@@ -1265,6 +1276,14 @@ export default function CampaignsPage() {
     }
   }
 
+  // Separa campanhas encerradas manualmente (status "stopped") das demais.
+  // As encerradas vão para uma seção própria; as outras (rascunho, ativa, pausada,
+  // ou esgotadas mas ainda rodando) ficam em "Ativas".
+  const activeQueues  = queues.filter((q) => q.status !== "stopped");
+  const endedQueues   = queues.filter((q) => q.status === "stopped");
+  const orderedQueues = [...activeQueues, ...endedQueues];
+  const showSections  = endedQueues.length > 0;
+
   return (
     <div>
       {/* ── Header ── */}
@@ -1317,14 +1336,21 @@ export default function CampaignsPage() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {queues.map((q) => {
+          {orderedQueues.map((q, _qIdx) => {
             const prog      = progress[q.id];
             const statusCfg = STATUS_CONFIG[q.status] ?? { label: q.status, badge: "badge-gray" };
             const isExpanded = expandedId === q.id;
             const tab = activeTab[q.id] ?? "overview";
+            const ended = q.status === "stopped";
+            const showActiveHeader = showSections && !ended && _qIdx === 0;
+            const showEndedHeader  = showSections && ended &&
+              (_qIdx === 0 || orderedQueues[_qIdx - 1].status !== "stopped");
 
             return (
-              <div key={q.id} className="gc" style={{ overflow: "hidden", transition: "box-shadow .2s" }}>
+              <Fragment key={q.id}>
+                {showActiveHeader && <SectionDivider label="Ativas" count={activeQueues.length} />}
+                {showEndedHeader && <SectionDivider label="Encerradas" count={endedQueues.length} />}
+              <div className="gc" style={{ overflow: "hidden", transition: "box-shadow .2s" }}>
                 {/* ── Campaign header ── */}
                 <div style={{ padding: "20px" }}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "16px" }}>
@@ -1699,6 +1725,7 @@ export default function CampaignsPage() {
                   </div>
                 )}
               </div>
+              </Fragment>
             );
           })}
         </div>
