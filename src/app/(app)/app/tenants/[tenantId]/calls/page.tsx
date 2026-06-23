@@ -78,6 +78,7 @@ export default function CallsPage() {
   const [sortBy, setSortBy] = useState<"created_at" | "cost" | "duration" | "score">("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [userRole, setUserRole] = useState<string>("member");
+  const [isSystemAdmin, setIsSystemAdmin] = useState(false);
   const [pageSize, setPageSize] = useState(15);
   const [currentPage, setCurrentPage] = useState(1);
   const { toasts, show: showToast } = useToast();
@@ -90,6 +91,15 @@ export default function CallsPage() {
       .then((data) => { if (data?.role) setUserRole(data.role); })
       .catch(() => { /* mantém default "member" */ });
   }, [tenantId]);
+
+  // Admin global do sistema (equipe MX3, via ADMIN_EMAILS) — usado para liberar
+  // dados sensíveis de custo. NÃO confundir com owner/admin do tenant (o cliente).
+  useEffect(() => {
+    fetch("/api/me")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d?.isAdmin) setIsSystemAdmin(true); })
+      .catch(() => { /* mantém false */ });
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -176,7 +186,9 @@ export default function CallsPage() {
           "Resultado":   c.interesse ?? (c.success_evaluation == null ? "" : c.success_evaluation ? "Sucesso" : "Fracasso"),
           "Score":       c.score ?? c.performance_score ?? "",
         };
-        if (isAdminOrOwner) row["Custo (USD)"] = c.cost ?? "";
+        // Custo só sai para a equipe MX3 (admin global) — nunca para o cliente,
+        // pois o custo interno difere do valor cobrado do cliente.
+        if (isSystemAdmin) row["Custo (USD)"] = c.cost ?? "";
         row["Resumo"]     = c.resumo ?? c.summary ?? "";
         row["ID Chamada"] = c.vapi_call_id;
         // Estrutura de dados da chamada (structured output achatado) — uma coluna por campo
