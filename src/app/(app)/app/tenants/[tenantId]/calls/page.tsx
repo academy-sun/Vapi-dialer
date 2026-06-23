@@ -84,6 +84,9 @@ export default function CallsPage() {
   const { toasts, show: showToast } = useToast();
 
   const isAdminOrOwner = userRole === "owner" || userRole === "admin";
+  // Custo é dado interno (difere do valor cobrado do cliente) — só a equipe MX3
+  // (admin global) pode ver, nunca o owner/admin do tenant.
+  const canSeeCost = isSystemAdmin;
 
   useEffect(() => {
     fetch(`/api/tenants/${tenantId}/me`)
@@ -188,7 +191,7 @@ export default function CallsPage() {
         };
         // Custo só sai para a equipe MX3 (admin global) — nunca para o cliente,
         // pois o custo interno difere do valor cobrado do cliente.
-        if (isSystemAdmin) row["Custo (USD)"] = c.cost ?? "";
+        if (canSeeCost) row["Custo (USD)"] = c.cost ?? "";
         row["Resumo"]     = c.resumo ?? c.summary ?? "";
         row["ID Chamada"] = c.vapi_call_id;
         // Estrutura de dados da chamada (structured output achatado) — uma coluna por campo
@@ -300,7 +303,7 @@ export default function CallsPage() {
             {totalCalls > 0 && (
               <>
                 {totalCalls.toLocaleString("pt-BR")} chamadas
-                {isAdminOrOwner && ` · Custo: $${totalCost.toFixed(4)}`}
+                {canSeeCost && ` · Custo: $${totalCost.toFixed(4)}`}
                 {totalDurSec > 0 && ` · Tempo total: ${formatDuration(totalDurSec)}`}
               </>
             )}
@@ -541,7 +544,7 @@ export default function CallsPage() {
       {!loading && sortedCalls.length > 0 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 500 }}>Ordenar por:</span>
-          {(["created_at", "duration", "score", ...(isAdminOrOwner ? ["cost"] : [])] as ("created_at" | "duration" | "score" | "cost")[]).map((col) => {
+          {(["created_at", "duration", "score", ...(canSeeCost ? ["cost"] : [])] as ("created_at" | "duration" | "score" | "cost")[]).map((col) => {
             const labels: Record<string, string> = { created_at: "Data", duration: "Duração", score: "Score", cost: "Custo" };
             const active = sortBy === col;
             return (
@@ -616,7 +619,7 @@ export default function CallsPage() {
                 <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Timer style={{ width: 14, height: 14 }} />Duração</span></th>
                 <th>Resultado</th>
                 <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Star style={{ width: 14, height: 14 }} />Score</span></th>
-                {isAdminOrOwner && <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><DollarSign style={{ width: 14, height: 14 }} />Custo</span></th>}
+                {canSeeCost && <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><DollarSign style={{ width: 14, height: 14 }} />Custo</span></th>}
                 <th>Próx. Tentativa</th>
                 <th><span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Calendar style={{ width: 14, height: 14 }} />Data</span></th>
               </tr>
@@ -657,7 +660,7 @@ export default function CallsPage() {
                     <td className="mono" style={{ color: 'var(--text-2)', fontSize: 13 }}>
                       {score != null ? String(score) : "—"}
                     </td>
-                    {isAdminOrOwner && (
+                    {canSeeCost && (
                       <td className="mono" style={{ color: 'var(--text-2)', fontSize: 13 }}>
                         {call.cost != null ? `$${call.cost.toFixed(4)}` : "—"}
                       </td>
