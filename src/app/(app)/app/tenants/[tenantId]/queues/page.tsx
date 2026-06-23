@@ -1050,14 +1050,29 @@ function LeadsTab({
 }
 
 // ── Main page ──────────────────────────────────────────────────────────────────
-// ── Divisor de seção (Ativas / Encerradas) ────────────────────────────────────
-function SectionDivider({ label, count }: { label: string; count: number }) {
+// ── Cabeçalho de seção recolhível (Ativas / Encerradas) ────────────────────────
+function SectionHeader({
+  label, count, color, open, onToggle,
+}: {
+  label: string; count: number; color: string; open: boolean; onToggle: () => void;
+}) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "8px 2px 0" }}>
-      <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: "var(--text-3)" }}>{label}</span>
-      <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-3)", background: "var(--glass-bg-2)", borderRadius: "999px", padding: "1px 8px" }}>{count}</span>
-      <div style={{ flex: 1, height: "1px", background: "var(--glass-border)" }} />
-    </div>
+    <button
+      onClick={onToggle}
+      style={{
+        display: "flex", alignItems: "center", gap: "10px", width: "100%",
+        padding: "12px 16px", borderRadius: "var(--radius-sm)",
+        background: "var(--glass-bg-2)", border: "1px solid var(--glass-border)",
+        cursor: "pointer", textAlign: "left", transition: "background .15s",
+      }}
+    >
+      {open
+        ? <ChevronDown style={{ width: "18px", height: "18px", color: "var(--text-3)", flexShrink: 0 }} />
+        : <ChevronRight style={{ width: "18px", height: "18px", color: "var(--text-3)", flexShrink: 0 }} />}
+      <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-1)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+      <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-2)", background: "var(--glass-bg)", borderRadius: "999px", padding: "2px 9px" }}>{count}</span>
+    </button>
   );
 }
 
@@ -1068,6 +1083,8 @@ export default function CampaignsPage() {
   const [showCreate,   setShowCreate]   = useState(false);
   const [editingQueue, setEditingQueue] = useState<Queue | null>(null);
   const [expandedId,   setExpandedId]  = useState<string | null>(null);
+  const [activeOpen,   setActiveOpen]  = useState(true);
+  const [endedOpen,    setEndedOpen]   = useState(false);
   const [activeTab,    setActiveTab]   = useState<Record<string, "overview" | "leads">>({});
   const [progress,     setProgress]    = useState<Record<string, Progress>>({});
   const [loading,      setLoading]     = useState(true);
@@ -1282,7 +1299,6 @@ export default function CampaignsPage() {
   const activeQueues  = queues.filter((q) => q.status !== "stopped");
   const endedQueues   = queues.filter((q) => q.status === "stopped");
   const orderedQueues = [...activeQueues, ...endedQueues];
-  const showSections  = endedQueues.length > 0;
 
   return (
     <div>
@@ -1342,14 +1358,22 @@ export default function CampaignsPage() {
             const isExpanded = expandedId === q.id;
             const tab = activeTab[q.id] ?? "overview";
             const ended = q.status === "stopped";
-            const showActiveHeader = showSections && !ended && _qIdx === 0;
-            const showEndedHeader  = showSections && ended &&
+            const sectionOpen = ended ? endedOpen : activeOpen;
+            const showActiveHeader = !ended && _qIdx === 0;
+            const showEndedHeader  = ended &&
               (_qIdx === 0 || orderedQueues[_qIdx - 1].status !== "stopped");
 
             return (
               <Fragment key={q.id}>
-                {showActiveHeader && <SectionDivider label="Ativas" count={activeQueues.length} />}
-                {showEndedHeader && <SectionDivider label="Encerradas" count={endedQueues.length} />}
+                {showActiveHeader && (
+                  <SectionHeader label="Ativas" count={activeQueues.length} color="var(--green)"
+                    open={activeOpen} onToggle={() => setActiveOpen((v) => !v)} />
+                )}
+                {showEndedHeader && (
+                  <SectionHeader label="Encerradas" count={endedQueues.length} color="var(--text-3)"
+                    open={endedOpen} onToggle={() => setEndedOpen((v) => !v)} />
+                )}
+                {sectionOpen && (
               <div className="gc" style={{ overflow: "hidden", transition: "box-shadow .2s" }}>
                 {/* ── Campaign header ── */}
                 <div style={{ padding: "20px" }}>
@@ -1725,6 +1749,7 @@ export default function CampaignsPage() {
                   </div>
                 )}
               </div>
+                )}
               </Fragment>
             );
           })}

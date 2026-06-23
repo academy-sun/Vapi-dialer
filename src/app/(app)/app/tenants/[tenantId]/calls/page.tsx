@@ -21,6 +21,7 @@ import {
   Loader2,
   Target,
   AlertOctagon,
+  Download,
 } from "lucide-react";
 import CallDetailDrawer, { InteresseBadge } from "@/components/CallDetailDrawer";
 import {
@@ -161,6 +162,40 @@ export default function CallsPage() {
     }
   }
 
+  async function exportToExcel() {
+    if (sortedCalls.length === 0) { showToast("Nenhuma chamada para exportar", "error"); return; }
+    try {
+      const XLSX = await import("xlsx");
+      const rows = sortedCalls.map((c) => {
+        const row: Record<string, unknown> = {
+          "Telefone":    c.lead_phone ?? "",
+          "Nome":        c.lead_name ?? "",
+          "Data":        new Date(c.created_at).toLocaleString("pt-BR"),
+          "Duração (s)": c.duration_seconds ?? "",
+          "Status":      getReasonLabel(c.ended_reason),
+          "Resultado":   c.interesse ?? (c.success_evaluation == null ? "" : c.success_evaluation ? "Sucesso" : "Fracasso"),
+          "Score":       c.score ?? c.performance_score ?? "",
+        };
+        if (isAdminOrOwner) row["Custo (USD)"] = c.cost ?? "";
+        row["Resumo"]     = c.resumo ?? c.summary ?? "";
+        row["ID Chamada"] = c.vapi_call_id;
+        // Estrutura de dados da chamada (structured output achatado) — uma coluna por campo
+        const so = c.outputs_flat ?? {};
+        for (const [k, v] of Object.entries(so)) {
+          row[k] = v != null && typeof v === "object" ? JSON.stringify(v) : (v as string | number | boolean | null);
+        }
+        return row;
+      });
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Chamadas");
+      XLSX.writeFile(wb, `chamadas_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      showToast(`${rows.length} chamadas exportadas!`);
+    } catch {
+      showToast("Erro ao exportar planilha", "error");
+    }
+  }
+
   async function openDetail(callId: string) {
     const res = await fetch(`/api/tenants/${tenantId}/calls/${callId}`);
     const data = await res.json();
@@ -259,10 +294,16 @@ export default function CallsPage() {
             )}
           </p>
         </div>
-        <button onClick={() => loadCalls(true)} className="btn btn-secondary" disabled={refreshing}>
-          <RefreshCw style={{ width: 16, height: 16, animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-          Atualizar
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={exportToExcel} className="btn btn-secondary" disabled={sortedCalls.length === 0} title="Exporta as chamadas conforme os filtros aplicados">
+            <Download style={{ width: 16, height: 16 }} />
+            Exportar Excel
+          </button>
+          <button onClick={() => loadCalls(true)} className="btn btn-secondary" disabled={refreshing}>
+            <RefreshCw style={{ width: 16, height: 16, animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
+            Atualizar
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
