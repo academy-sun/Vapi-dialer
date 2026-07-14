@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   PhoneCall, X, Mic, ExternalLink, ChevronDown, ChevronUp,
   Star, CheckCircle2, XCircle, Send, Loader2, AlertTriangle, Check,
@@ -131,6 +131,66 @@ interface CallDetailDrawerProps {
   onClose: () => void;
   isAdminOrOwner: boolean;
   tenantId: string;
+}
+
+function RecordingPlayer({ callRecordId, tenantId, hasStereo }: { callRecordId: string; tenantId: string; hasStereo: boolean }) {
+  const [monoUrl,   setMonoUrl]   = useState<string | null>(null);
+  const [stereoUrl, setStereoUrl] = useState<string | null>(null);
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const base = `/api/tenants/${tenantId}/calls/${callRecordId}/recording`;
+        const [monoRes, stereoRes] = await Promise.all([
+          fetch(`${base}?type=mono`),
+          hasStereo ? fetch(`${base}?type=stereo`) : Promise.resolve(null),
+        ]);
+
+        if (cancelled) return;
+
+        if (!monoRes.ok) { setError(true); setLoading(false); return; }
+        const { url: mono } = await monoRes.json();
+        const stereo = stereoRes?.ok ? (await stereoRes.json()).url : null;
+
+        if (!cancelled) { setMonoUrl(mono); setStereoUrl(stereo); setLoading(false); }
+      } catch {
+        if (!cancelled) { setError(true); setLoading(false); }
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [callRecordId, tenantId, hasStereo]);
+
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-3)", padding: "8px 0" }}>
+      <Loader2 style={{ width: 14, height: 14, animation: "spin 1s linear infinite" }} /> Carregando gravação…
+    </div>
+  );
+
+  if (error || !monoUrl) return (
+    <div style={{ fontSize: 12, color: "var(--text-3)", padding: "6px 0" }}>Gravação indisponível</div>
+  );
+
+  return (
+    <div style={{ background: "var(--glass-bg)", borderRadius: 12, padding: 12, border: "1px solid var(--glass-border)", display: "flex", flexDirection: "column", gap: 8 }}>
+      <audio controls src={monoUrl} style={{ width: "100%", height: 36 }} />
+      <div style={{ display: "flex", gap: 12 }}>
+        <a href={monoUrl} target="_blank" rel="noopener noreferrer"
+          style={{ fontSize: 12, color: "var(--red)", display: "flex", alignItems: "center", gap: 4, textDecoration: "none" }}>
+          <ExternalLink style={{ width: 12, height: 12 }} /> Mono
+        </a>
+        {stereoUrl && (
+          <a href={stereoUrl} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 12, color: "var(--red)", display: "flex", alignItems: "center", gap: 4, textDecoration: "none" }}>
+            <ExternalLink style={{ width: 12, height: 12 }} /> Estéreo
+          </a>
+        )}
+      </div>
+    </div>
+  );
 }
 
 type ResendState =
@@ -349,29 +409,11 @@ export default function CallDetailDrawer({ call, onClose, isAdminOrOwner, tenant
               <p style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Mic style={{ width: 14, height: 14 }} /> Gravação
               </p>
-              <div style={{ background: 'var(--glass-bg)', borderRadius: 12, padding: 12, border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <audio controls src={call.recording_url} style={{ width: '100%', height: 36 }} />
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <a
-                    href={call.recording_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
-                  >
-                    <ExternalLink style={{ width: 12, height: 12 }} /> Mono
-                  </a>
-                  {call.stereo_recording_url && (
-                    <a
-                      href={call.stereo_recording_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ fontSize: 12, color: 'var(--red)', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
-                    >
-                      <ExternalLink style={{ width: 12, height: 12 }} /> Estéreo
-                    </a>
-                  )}
-                </div>
-              </div>
+              <RecordingPlayer
+                callRecordId={call.id}
+                tenantId={tenantId}
+                hasStereo={!!call.stereo_recording_url}
+              />
             </div>
           )}
 
