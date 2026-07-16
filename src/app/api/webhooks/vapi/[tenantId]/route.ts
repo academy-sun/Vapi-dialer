@@ -69,6 +69,18 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const msgType = message.type;
 
+  // LOG TEMPORÁRIO — remover após diagnóstico do novo formato Vapi
+  if (msgType === "end-of-call-report") {
+    console.log(
+      "[webhook-debug] end-of-call-report payload keys:", JSON.stringify(Object.keys(message)),
+      "| endedReason:", message.endedReason,
+      "| durationSeconds:", message.durationSeconds,
+      "| artifact keys:", message.artifact ? JSON.stringify(Object.keys(message.artifact as object)) : "null",
+      "| analysis keys:", message.analysis ? JSON.stringify(Object.keys(message.analysis as object)) : "null",
+      "| call keys:", message.call ? JSON.stringify(Object.keys(message.call as object)) : "null",
+    );
+  }
+
   // ── transcript (detecção de caixa postal / URA em tempo real) ──
   if (msgType === "transcript") {
     const transcriptText = message.transcript as string | undefined;
