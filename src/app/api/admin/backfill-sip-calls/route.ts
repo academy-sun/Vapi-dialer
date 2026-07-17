@@ -15,8 +15,17 @@ const BATCH_LIMIT    = 300; // máx por chamada (evita timeout Vercel)
 //   offset    — paginação (default 0)
 //   dryRun    — "true" para preview sem gravar (default false)
 export async function POST(req: NextRequest) {
-  const { response } = await requireAdmin();
-  if (response) return response;
+  // Aceita autenticação via header x-admin-secret (para uso em Postman/scripts)
+  // ou via sessão Supabase (uso normal no painel admin).
+  const secret = req.headers.get("x-admin-secret");
+  if (secret) {
+    if (!process.env.ADMIN_SECRET || secret !== process.env.ADMIN_SECRET) {
+      return NextResponse.json({ error: "Secret inválido" }, { status: 401 });
+    }
+  } else {
+    const { response } = await requireAdmin();
+    if (response) return response;
+  }
 
   const url      = new URL(req.url);
   const tenantId = url.searchParams.get("tenantId") ?? null;
