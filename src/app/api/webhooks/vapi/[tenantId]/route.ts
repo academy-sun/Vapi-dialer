@@ -271,7 +271,6 @@ async function handleEndOfCallReport(
   const transcript          = (message.transcript  as string) ?? null;
   const analysis            = (message.analysis as Record<string, unknown>) ?? {};
   const summary             = (analysis.summary as string) ?? null;
-  const durationSeconds     = (message.durationSeconds as number) ?? null;
   const artifact            = (message.artifact as Record<string, unknown>) ?? {};
   // structuredOutputs vem de artifact.structuredOutputs (Structured Output novo,
   // { id: { result: {...} } }) — formato padrão dos assistentes atuais.
@@ -282,8 +281,14 @@ async function handleEndOfCallReport(
   const structuredOutputs   = artifactSO || analysisSO;
   const recordingUrl        = (artifact.recordingUrl       ?? message.recordingUrl       ?? null) as string | null;
   const stereoRecordingUrl  = (artifact.stereoRecordingUrl ?? message.stereoRecordingUrl ?? null) as string | null;
-  const startedAt           = (message.startedAt    as string) ?? null;
-  const endedAt             = (message.endedAt      as string) ?? null;
+  // Vapi v2 (≥ mar/2026): startedAt/endedAt migraram para message.call; durationSeconds foi removido.
+  const startedAt           = ((message.startedAt ?? call?.startedAt) as string) ?? null;
+  const endedAt             = ((message.endedAt   ?? call?.endedAt  ) as string) ?? null;
+  let durationSeconds       = (message.durationSeconds as number | null) ?? null;
+  if (durationSeconds == null && startedAt && endedAt) {
+    const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime();
+    if (ms > 0) durationSeconds = ms / 1000;
+  }
   const costBreakdown       = (message.costBreakdown as Record<string, unknown>) ?? null;
 
   // Dados completos para repassar ao webhook de saída
@@ -448,8 +453,8 @@ async function updateLeadAfterCall(
   // → Retry sem contar tentativa (desfaz o increment do worker).
   const isTrueVapiFault = endedReason != null && (
     endedReason.includes("error-vapifault") ||   // falha de serviço Vapi (Deepgram, LLM, etc.)
-    endedReason.startsWith("pipeline-error") ||  // erro no pipeline de processamento Vapi
-    endedReason.startsWith("transport-error")    // falha DTLS/WebRTC no Vapi (ex: transport-error-dtls-failed)
+    endedReason.includes("pipeline-error") ||    // erro no pipeline de processamento Vapi
+    endedReason.includes("transport-error")      // falha DTLS/WebRTC no Vapi (ex: transport-error-dtls-failed)
   );
 
   if (isTrueVapiFault) {
@@ -619,41 +624,47 @@ async function updateLeadAfterCall(
   // Qualquer outra razão (inclusive desconhecidas) cai no fluxo de não-atendido
   // para respeitar max_attempts e nunca marcar como concluído por engano.
   const ANSWERED_REASONS = new Set([
-    "customer-ended-call",     // cliente desligou normalmente
-    "assistant-ended-call",    // assistente encerrou intencionalmente
-    "exceeded-max-duration",   // ligação chegou ao limite de tempo (estava em curso)
+    // v1 (pré-mar/2026)
+    "customer-ended-call",
+    "assistant-ended-call",
+    "exceeded-max-duration",
+    // v2 (≥ mar/2026): SIP provider confirmou encerramento normal da chamada
+    "call.in-progress.sip-completed-call",
+    "call.in-progress.exceeded-max-duration",
   ]);
 
   // silence-timed-out com duração >= 1s = chamada foi atendida (gerou custo real).
   // O cliente atendeu mas ficou em silêncio ou caiu. Tratamos como concluído para não
   // gerar retry indesejado. Duração 0 (sem conexão real) continua no fluxo de retry.
   const silenceButAnswered =
-    endedReason === "silence-timed-out" &&
+    (endedReason === "silence-timed-out" || endedReason === "call.in-progress.silence-timed-out") &&
     durationSeconds != null &&
     durationSeconds >= 1;
 
   // Caixa postal/URA detectada via transcript (machine_detected = true no call_record).
   // Dois sub-casos:
-  // 1) Nosso end-call chegou primeiro → Vapi retorna "assistant-ended-call" (duração curta)
-  // 2) A caixa postal desligou antes → Vapi retorna "customer-ended-call" (duração curta)
+  // 1) Nosso end-call chegou primeiro → Vapi retorna "assistant-ended-call" / v2: sip-completed-call (duração curta)
+  // 2) A caixa postal desligou antes → Vapi retorna "customer-ended-call" / v2: sip-completed-call (duração curta)
   // Em ambos os casos NÃO é conversa real — deve voltar para retry.
   const machineDetectedFlag = callData?.machineDetected === true;
 
-  // Caixa postal silenciosa: customer-ended-call com < 8s e sem fala do usuário no transcript.
+  // Caixa postal silenciosa: chamada encerrada com < 8s e sem fala do usuário no transcript.
   // A caixa postal atendeu, ficou em silêncio e desligou — não há texto "User:" para detectar.
   // Threshold conservador de 8s para não confundir com pessoa que atende e desliga rápido.
   const transcript = callData?.transcript ?? "";
   const userSpoke = /^User:/m.test(transcript);
+  const isCallCompleted = endedReason === "customer-ended-call" || endedReason === "call.in-progress.sip-completed-call";
+  const isAssistantEnded = endedReason === "assistant-ended-call";
   const silentVoicemail =
-    endedReason === "customer-ended-call" &&
+    isCallCompleted &&
     durationSeconds != null &&
     durationSeconds < 8 &&
     !userSpoke;
 
   const voicemailDetectedByUs =
-    (endedReason === "assistant-ended-call" && durationSeconds != null && durationSeconds < 25) ||
+    (isAssistantEnded && durationSeconds != null && durationSeconds < 25) ||
     (machineDetectedFlag && durationSeconds != null && durationSeconds < 35 &&
-      (endedReason === "customer-ended-call" || endedReason === "silence-timed-out" || endedReason === "assistant-ended-call")) ||
+      (isCallCompleted || endedReason === "silence-timed-out" || endedReason === "call.in-progress.silence-timed-out" || isAssistantEnded)) ||
     silentVoicemail;
 
   const isAnswered = endedReason != null && (ANSWERED_REASONS.has(endedReason) || silenceButAnswered) && !voicemailDetectedByUs;
