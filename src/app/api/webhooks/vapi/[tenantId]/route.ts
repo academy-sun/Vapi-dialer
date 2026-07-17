@@ -310,7 +310,11 @@ async function handleEndOfCallReport(
     .eq("vapi_call_id", vapiCallId)
     .single();
 
-  if (existing?.ended_reason) return; // Já processado com sucesso — ignorar
+  // Idempotência: ignorar se já processado com um motivo definitivo.
+  // Exceção: "call.in-progress.sip-completed-call" é um relatório prematuro do SIP layer —
+  // o Vapi envia um segundo end-of-call-report real ~10s depois com os dados completos.
+  const isPreliminarySip = existing?.ended_reason === "call.in-progress.sip-completed-call";
+  if (existing?.ended_reason && !isPreliminarySip) return;
 
   // Propagar machine_detected para o callData (usado em updateLeadAfterCall)
   if (existing?.machine_detected) callData.machineDetected = true;
