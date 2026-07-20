@@ -217,6 +217,13 @@ export default function CallsPage() {
     setSelected(data.call);
   }
 
+  // Mesma prioridade do InteresseBadge: success_evaluation primeiro, depois interesse texto
+  function getEffectiveResult(c: Call): string | null {
+    if (c.success_evaluation === true) return "Sucesso";
+    if (c.success_evaluation === false) return "Fracasso";
+    return c.interesse ?? null;
+  }
+
   const filteredCalls = calls.filter((c) => {
     const matchReason = filterReasons.length === 0 || (c.ended_reason !== null && filterReasons.includes(c.ended_reason));
     const matchPhone  = !searchPhone
@@ -225,12 +232,12 @@ export default function CallsPage() {
     const matchCallId = !searchCallId || c.vapi_call_id.toLowerCase().includes(searchCallId.trim().toLowerCase());
     let matchInteresse = true;
     if (filterInteresse !== "all") {
-      const val = c.interesse;
+      const effective = getEffectiveResult(c);
       if (filterInteresse === "none") {
-        matchInteresse = val === undefined || val === null;
+        matchInteresse = effective === null;
       } else {
-        matchInteresse = val !== undefined && val !== null &&
-          String(val).toLowerCase() === filterInteresse.toLowerCase();
+        matchInteresse = effective !== null &&
+          effective.toLowerCase() === filterInteresse.toLowerCase();
       }
     }
     return matchReason && matchPhone && matchCallId && matchInteresse;
@@ -271,16 +278,15 @@ export default function CallsPage() {
     return acc;
   }, [calls]);
 
-  // Valores únicos do campo de interesse/critério de sucesso presentes nos dados
+  // Valores únicos de resultado efetivo (mesma lógica do badge) para o dropdown de filtro
   const uniqueInteresseValues = useMemo(() => {
     const seen = new Set<string>();
     for (const call of calls) {
-      if (call.interesse && typeof call.interesse === "string" && call.interesse.trim() !== "") {
-        seen.add(call.interesse.trim());
-      }
+      const v = getEffectiveResult(call);
+      if (v) seen.add(v);
     }
     return Array.from(seen).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [calls]);
+  }, [calls]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div>
