@@ -59,9 +59,28 @@ export async function GET(req: NextRequest, { params }: Params) {
     ? (campaignsRaw ?? []).filter((q) => q.assistant_id === assistantId).map((q) => q.id)
     : null;
 
-  const filterAssistantCfg = assistantId ? (assistantConfigMap.get(assistantId) ?? null) : null;
-  const contextSuccessField = filterAssistantCfg?.success_field ?? configuredSuccessField;
-  const contextSuccessValue = filterAssistantCfg?.success_value ?? configuredSuccessValue;
+  let contextSuccessField = configuredSuccessField;
+  let contextSuccessValue = configuredSuccessValue;
+
+  if (assistantId) {
+    const cfg = assistantConfigMap.get(assistantId) ?? null;
+    contextSuccessField = cfg?.success_field ?? configuredSuccessField;
+    contextSuccessValue = cfg?.success_value ?? configuredSuccessValue;
+  } else if (!contextSuccessField) {
+    // Sem filtro e sem config global: infere a partir dos assistentes configurados.
+    // Se todos usam o mesmo critério, aplica automaticamente.
+    const allConfigs = Array.from(assistantConfigMap.values()).filter((c) => c.success_field);
+    if (allConfigs.length > 0) {
+      const first = allConfigs[0];
+      const allSame = allConfigs.every(
+        (c) => c.success_field === first.success_field && c.success_value === first.success_value
+      );
+      if (allSame) {
+        contextSuccessField = first.success_field;
+        contextSuccessValue = first.success_value;
+      }
+    }
+  }
 
   if (filteredQueueIds && filteredQueueIds.length === 0) {
     return NextResponse.json({
