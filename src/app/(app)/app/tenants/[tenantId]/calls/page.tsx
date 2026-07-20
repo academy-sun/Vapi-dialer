@@ -134,6 +134,11 @@ export default function CallsPage() {
         params.set("sort_by", colMap[sortBy] ?? "created_at");
         params.set("sort_dir", sortDir);
       }
+      // Filtro de resultado server-side: busca em todos os registros, não só nos 5000 carregados
+      if (filterInteresse === "Sucesso")  params.set("result", "sucesso");
+      else if (filterInteresse === "Fracasso") params.set("result", "fracasso");
+      else if (filterInteresse === "none")     params.set("result", "none");
+      else if (filterInteresse !== "all")      params.set("result", filterInteresse);
 
       const res = await fetch(`/api/tenants/${tenantId}/calls?${params}`);
       if (!res.ok) { setPageError("Falha ao carregar chamadas."); setLoading(false); setRefreshing(false); return; }
@@ -147,7 +152,7 @@ export default function CallsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [tenantId, filterQueue, shortDurationMode, maxDuration, sortBy, sortDir, showToast]);
+  }, [tenantId, filterQueue, filterInteresse, shortDurationMode, maxDuration, sortBy, sortDir, showToast]);
 
   useEffect(() => { loadCalls(); }, [loadCalls]);
 

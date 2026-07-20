@@ -4,7 +4,8 @@ import { createServiceClient } from "@/lib/supabase/service";
 
 type Params = { params: Promise<{ tenantId: string }> };
 
-// GET /api/tenants/:tenantId/calls?queueId=&leadId=&sort_by=&sort_dir=&max_duration=&answered_only=&page=&page_size=
+// GET /api/tenants/:tenantId/calls?queueId=&leadId=&sort_by=&sort_dir=&max_duration=&answered_only=&result=&page=&page_size=
+// result: "sucesso" | "fracasso" | "none" | "<valor do campo interesse>"
 export async function GET(req: NextRequest, { params }: Params) {
   const { tenantId } = await params;
   const { response } = await requireTenantAccess(tenantId);
@@ -15,6 +16,7 @@ export async function GET(req: NextRequest, { params }: Params) {
   const leadId       = url.searchParams.get("leadId");
   const maxDuration  = url.searchParams.get("max_duration") ? parseInt(url.searchParams.get("max_duration")!) : null;
   const answeredOnly = url.searchParams.get("answered_only") === "true";
+  const resultFilter = url.searchParams.get("result");
 
   const ALLOWED_SORT = ["created_at", "cost", "duration_seconds"] as const;
   type SortCol = typeof ALLOWED_SORT[number];
@@ -64,6 +66,10 @@ export async function GET(req: NextRequest, { params }: Params) {
     if (leadId)        q = q.eq("lead_id", leadId);
     if (answeredOnly)  q = q.in("ended_reason", ["customer-ended-call", "assistant-ended-call"]);
     if (maxDuration != null) q = q.lte("duration_seconds", maxDuration);
+    if (resultFilter === "sucesso")  q = q.eq("success_evaluation", true);
+    else if (resultFilter === "fracasso") q = q.eq("success_evaluation", false);
+    else if (resultFilter === "none")    q = q.is("success_evaluation", null).is("interesse", null);
+    else if (resultFilter)               q = q.eq("interesse", resultFilter);
     return q;
   }
 
