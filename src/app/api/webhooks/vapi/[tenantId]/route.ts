@@ -924,10 +924,15 @@ async function fireOutboundWebhook(
   const summary           = (analysis.summary ?? callData?.summary ?? null) as string | null;
 
   // Timing & duration
-  const startedAt       = (msg.startedAt       ?? null) as string | null;
-  const endedAt         = (msg.endedAt         ?? null) as string | null;
-  const durationSeconds = (msg.durationSeconds ?? null) as number | null;
+  // Vapi v2 (≥ mar/2026): startedAt/endedAt migraram para message.call; durationSeconds foi removido.
+  const startedAt       = (msg.startedAt ?? call.startedAt ?? null) as string | null;
+  const endedAt         = (msg.endedAt   ?? call.endedAt   ?? null) as string | null;
+  let   durationSeconds = (msg.durationSeconds ?? null) as number | null;
   const durationMinutes = (msg.durationMinutes ?? null) as number | null;
+  if (durationSeconds == null && startedAt && endedAt) {
+    const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime();
+    if (ms > 0) durationSeconds = ms / 1000;
+  }
 
   // Cost
   const cost          = (msg.cost ?? callData?.cost ?? null) as number | null;
