@@ -1028,6 +1028,13 @@ async function updateMinutesCache(supabase: SupabaseClient): Promise<void> {
           .update({ status: "paused" })
           .eq("tenant_id", conn.tenant_id)
           .eq("status", "running");
+      } else if (conn.minutes_blocked && usedMinutes < conn.contracted_minutes) {
+        // Novo mês: uso zerou, desbloqueia automaticamente
+        updates.minutes_blocked = false;
+        console.log(
+          `[worker] ✅ Tenant ${tName(conn.tenant_id)} desbloqueado — novo mês` +
+          ` (${usedMinutes}/${conn.contracted_minutes} min usados)`
+        );
       }
 
       await supabase
