@@ -390,13 +390,27 @@ async function initiateVapiCall(
   }
 
   // customer: apenas campos aceitos pelo Vapi (number, name, extension)
-  const nameValue =
-    customerData.name ??
-    customerData.Name ??
-    customerData.nome ??
-    customerData.first_name ??
-    customerData.primeiro_nome ??
-    null;
+  // Usa primeiro-não-vazio em vez de ??: listas geradas a partir de chamadas
+  // podem gravar `nome: ""`, e com ?? o encadeamento pararia no valor vazio,
+  // fazendo a chamada sair sem nome mesmo havendo outro campo preenchido.
+  const firstNonEmpty = (...vals: unknown[]): string | null => {
+    for (const v of vals) {
+      if (v === null || v === undefined) continue;
+      const s = String(v).trim();
+      if (s) return s;
+    }
+    return null;
+  };
+
+  const nameValue = firstNonEmpty(
+    customerData.name,
+    customerData.Name,
+    customerData.nome,
+    customerData.first_name,
+    customerData.primeiro_nome,
+    customerData.cliente,
+    customerData.razao_social,
+  );
 
   // Vapi exige name <= 40 chars
   let safeName = nameValue ? String(nameValue).trim() : undefined;

@@ -7,6 +7,7 @@ export interface Call {
   summary: string | null;
   duration_seconds: number | null;
   created_at: string;
+  lead_id: string | null;
   lead_phone: string | null;
   lead_name: string | null;
   interesse: string | null;
