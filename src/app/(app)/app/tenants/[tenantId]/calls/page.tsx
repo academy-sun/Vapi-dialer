@@ -160,9 +160,16 @@ export default function CallsPage() {
     if (!retrabalhoName.trim()) return;
     setRetrabalhoLoading(true);
     try {
+      // Envia o lead_id para que a API copie o data_json original (com todas as
+      // variáveis extras do cliente). O nome vai apenas como fallback e nunca
+      // como string vazia — "nome": "" quebraria a resolução de nome no worker.
       const leads = filteredCalls
         .filter((c) => c.lead_phone)
-        .map((c) => ({ phone_e164: c.lead_phone!, data_json: { nome: c.lead_name ?? "" } }));
+        .map((c) => ({
+          phone_e164: c.lead_phone!,
+          lead_id:    c.lead_id,
+          data_json:  c.lead_name?.trim() ? { nome: c.lead_name.trim() } : {},
+        }));
       const res = await fetch(`/api/tenants/${tenantId}/lead-lists/from-calls`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

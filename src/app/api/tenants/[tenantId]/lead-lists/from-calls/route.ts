@@ -6,6 +6,7 @@ type Params = { params: Promise<{ tenantId: string }> };
 
 interface LeadInput {
   phone_e164: string;
+  lead_id?: string | null;
   data_json?: Record<string, string>;
 }
 
@@ -48,6 +49,40 @@ export async function POST(req: NextRequest, { params }: Params) {
     return true;
   });
 
+  // Recuperar o data_json original dos leads de origem. Sem isso a lista de
+  // retrabalho nasceria só com o nome e o assistente perderia todas as variáveis
+  // extras do cliente (ex.: "cliente", "titulo", "empresa").
+  const originIds = unique
+    .map((l) => l.lead_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+  const originData = new Map<string, Record<string, unknown>>();
+  for (let i = 0; i < originIds.length; i += 500) {
+    const { data: origins } = await service
+      .from("leads")
+      .select("id, data_json")
+      .eq("tenant_id", tenantId)
+      .in("id", originIds.slice(i, i + 500));
+    origins?.forEach((o) =>
+      originData.set(o.id as string, (o.data_json ?? {}) as Record<string, unknown>)
+    );
+  }
+
+  // Base = data_json do lead original; o que veio da tela apenas preenche chaves
+  // ausentes. Valores vazios são descartados: gravar `nome: ""` impediria o
+  // fallback de nome no worker, que trata a chave como preenchida.
+  const isBlank = (v: unknown) =>
+    v === null || v === undefined || (typeof v === "string" && v.trim() === "");
+
+  const buildDataJson = (l: LeadInput): Record<string, unknown> => {
+    const merged: Record<string, unknown> = { ...(l.lead_id ? originData.get(l.lead_id) ?? {} : {}) };
+    for (const [k, v] of Object.entries(l.data_json ?? {})) {
+      if (isBlank(v)) continue;
+      if (isBlank(merged[k])) merged[k] = typeof v === "string" ? v.trim() : v;
+    }
+    return merged;
+  };
+
   // Inserir em lotes de 100
   let inserted = 0;
   for (let i = 0; i < unique.length; i += 100) {
@@ -55,7 +90,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       tenant_id:    tenantId,
       lead_list_id: list.id,
       phone_e164:   l.phone_e164,
-      data_json:    l.data_json ?? {},
+      data_json:    buildDataJson(l),
       status:       "new",
     }));
     const { error: insErr } = await service.from("leads").insert(batch);

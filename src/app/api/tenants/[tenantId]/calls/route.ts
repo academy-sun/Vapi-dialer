@@ -37,7 +37,7 @@ export async function GET(req: NextRequest, { params }: Params) {
     id: string; vapi_call_id: string; status: string | null;
     ended_reason: string | null; cost: number | null; summary: string | null;
     duration_seconds: number | null; created_at: string;
-    lead_phone: string | null; lead_name: string | null;
+    lead_id: string | null; lead_phone: string | null; lead_name: string | null;
     interesse: string | null; performance_score: number | null; success_evaluation: boolean | null;
     resumo: string | null; pontos_melhoria: string | null; objecoes: string | null;
     motivos_falha: string | null; proximo_passo: string | null; score: number | null;
@@ -46,11 +46,11 @@ export async function GET(req: NextRequest, { params }: Params) {
   };
 
   const FULL_SELECT = `id, vapi_call_id, status, ended_reason, cost, summary, duration_seconds, created_at,
-       lead_phone, lead_name, interesse, performance_score, success_evaluation,
+       lead_id, lead_phone, lead_name, interesse, performance_score, success_evaluation,
        resumo, pontos_melhoria, objecoes, motivos_falha, proximo_passo, score, outputs_flat,
        leads:lead_id (next_attempt_at)`;
   const SAFE_SELECT = `id, vapi_call_id, status, ended_reason, cost, summary, duration_seconds, created_at,
-       lead_phone, lead_name, interesse, performance_score,
+       lead_id, lead_phone, lead_name, interesse, performance_score,
        resumo, pontos_melhoria, objecoes, motivos_falha, proximo_passo, score, outputs_flat,
        leads:lead_id (next_attempt_at)`;
 
